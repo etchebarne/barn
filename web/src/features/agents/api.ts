@@ -49,3 +49,36 @@ export function useRetryAgent(agentId: string) {
     },
   })
 }
+
+export type Memory = Schemas["Memory"]
+
+/** An agent's saved memories. Refetched whenever the details sheet opens. */
+export function useMemories(agentId: string) {
+  return useQuery({
+    queryKey: queryKeys.memories(agentId),
+    queryFn: () => unwrap(api.GET("/agents/{agentId}/memories", { params: { path: { agentId } } })),
+    staleTime: 0,
+  })
+}
+
+/** Deletes a memory, removing it from the list right away and restoring it if that fails. */
+export function useDeleteMemory(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.memories(agentId)
+  return useMutation({
+    mutationFn: (memoryId: string) =>
+      unwrap(
+        api.DELETE("/agents/{agentId}/memories/{memoryId}", {
+          params: { path: { agentId, memoryId } },
+        }),
+      ),
+    onMutate: async (memoryId) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      const previous = queryClient.getQueryData<Memory[]>(key)
+      queryClient.setQueryData<Memory[]>(key, (list) => list?.filter((m) => m.id !== memoryId))
+      return { previous }
+    },
+    onError: (_error, _id, context) => queryClient.setQueryData(key, context?.previous),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+  })
+}

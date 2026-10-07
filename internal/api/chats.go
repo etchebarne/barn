@@ -351,3 +351,37 @@ func btoi(b bool) int {
 	}
 	return 0
 }
+
+func (s *Server) ListMemories(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx := r.Context()
+	if _, err := s.store.GetAgent(ctx, agentID); errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	} else if err != nil {
+		internalError(w, err)
+		return
+	}
+	memories, err := s.store.Memories(ctx, agentID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	out := make([]gen.Memory, 0, len(memories))
+	for _, m := range memories {
+		out = append(out, gen.Memory{Id: m.ID, Text: m.Text, CreatedAt: store.Time(m.CreatedAt)})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) DeleteMemory(w http.ResponseWriter, r *http.Request, agentID, memoryID string) {
+	err := s.store.DeleteMemory(r.Context(), agentID, memoryID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "memory not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

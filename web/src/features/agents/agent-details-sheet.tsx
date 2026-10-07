@@ -16,6 +16,7 @@ import type { Agent } from "@/lib/api-client"
 import { AgentAvatar } from "./agent-avatar"
 import { useAgentsById, useUpdateAgent } from "./api"
 import { useAgentDetailsStore } from "./details-store"
+import { MemoriesSection } from "./memories-section"
 
 /** Model setting: changes apply as soon as a model is picked. */
 function ModelField({ agent, inputRef }: { agent: Agent; inputRef?: Ref<HTMLInputElement> }) {
@@ -101,10 +102,13 @@ export function AgentDetailsSheet() {
             </div>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-            <FieldGroup>
-              {/* Key by agent so switching agents never shows another agent's pending choice. */}
-              <ModelField key={shown.id} agent={shown} inputRef={modelInputRef} />
-            </FieldGroup>
+            <div className="flex flex-col gap-8">
+              <FieldGroup>
+                {/* Key by agent so switching agents never shows another agent's pending choice. */}
+                <ModelField key={shown.id} agent={shown} inputRef={modelInputRef} />
+              </FieldGroup>
+              <MemoriesSection key={`memories-${shown.id}`} agent={shown} />
+            </div>
           </div>
         </SheetContent>
       )}

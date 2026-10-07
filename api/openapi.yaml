@@ -252,6 +252,45 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "502": { $ref: "#/components/responses/Error" }
 
+  /agents/{agentId}/memories:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listMemories
+      tags: [agents]
+      description: The durable memories an agent saved, oldest first.
+      responses:
+        "200":
+          description: Memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Memory" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/memories/{memoryId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: memoryId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteMemory
+      tags: [agents]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /agents/{agentId}/retry:
     parameters:
       - name: agentId
@@ -462,6 +501,14 @@ components:
         trustMode: { type: string, enum: [ask, trusted] }
         isAdmin: { type: boolean }
         activity: { $ref: "#/components/schemas/AgentActivity" }
+        createdAt: { type: string, format: date-time }
+
+    Memory:
+      type: object
+      required: [id, text, createdAt]
+      properties:
+        id: { type: string }
+        text: { type: string }
         createdAt: { type: string, format: date-time }
 
     UpdateAgentRequest:

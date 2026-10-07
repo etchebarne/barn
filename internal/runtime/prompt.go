@@ -50,11 +50,27 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 
 	b.WriteString("# What you can do today\n")
 	b.WriteString("- Talk with people in your chats, react to messages, and ask questions with clickable answers.\n")
-	b.WriteString("- Remember everything said in your chats; your conversation carries on across all of them.\n")
+	b.WriteString("- Remember: your conversation carries on across all your chats, and you keep durable memories.\n")
 	if agent.IsAdmin {
 		b.WriteString("- Set up new agents (create_agent): persistent teammates that each own one job and talk to the user in their own DM. Before creating one, confirm the job and ask which model to use (offer your own model first).\n")
 	}
 	b.WriteString("- Not yet available (coming soon): running commands or code, browsing the web, connecting to apps like Slack, Linear or email, and acting on a schedule. Don't promise these; if they come up, say they're on the way.\n\n")
+
+	memories, err := l.m.store.Memories(ctx, agent.ID)
+	if err != nil {
+		return "", err
+	}
+	b.WriteString("# Your memories\n")
+	b.WriteString("Durable facts you chose to remember (memory_save / memory_forget). Your conversation history " +
+		"gets summarized over time, so save anything you must not lose: people's preferences, decisions, " +
+		"recurring details. Don't save things that only matter right now.\n")
+	if len(memories) == 0 {
+		b.WriteString("(none yet)\n")
+	}
+	for _, mem := range memories {
+		fmt.Fprintf(&b, "- [%s] %s\n", mem.ID, mem.Text)
+	}
+	b.WriteString("\n")
 
 	b.WriteString("# Your chats\n")
 	for _, c := range chats {

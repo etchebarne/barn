@@ -18,6 +18,9 @@ type Config struct {
 
 	// Base URL of the OpenCode Go API. The API key itself is configured in the app.
 	OpenCodeBaseURL string
+
+	// CompactAtTokens is when agents' context gets compacted (0 = default).
+	CompactAtTokens int
 }
 
 func Load() (Config, error) {
@@ -31,6 +34,11 @@ func Load() (Config, error) {
 	var err error
 	if c.SecureCookies, err = envBool("BARN_SECURE_COOKIES", false); err != nil {
 		return c, err
+	}
+	if v := os.Getenv("BARN_COMPACT_AT_TOKENS"); v != "" {
+		if c.CompactAtTokens, err = strconv.Atoi(v); err != nil || c.CompactAtTokens < 1000 {
+			return c, fmt.Errorf("BARN_COMPACT_AT_TOKENS must be a number ≥ 1000")
+		}
 	}
 	for o := range strings.SplitSeq(os.Getenv("BARN_ALLOWED_ORIGINS"), ",") {
 		if o = strings.TrimSpace(o); o != "" {

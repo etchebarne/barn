@@ -38,6 +38,9 @@ type Manager struct {
 	bus   *bus.Bus
 	llm   ChatModel
 
+	// CompactAtTokens overrides DefaultCompactAtTokens (set before Start).
+	CompactAtTokens int
+
 	mu       sync.Mutex
 	ctx      context.Context
 	loops    map[string]*loop
@@ -71,6 +74,13 @@ func (m *Manager) Start(ctx context.Context) error {
 		m.AddAgent(a.ID)
 	}
 	return nil
+}
+
+func (m *Manager) compactAt() int {
+	if m.CompactAtTokens > 0 {
+		return m.CompactAtTokens
+	}
+	return DefaultCompactAtTokens
 }
 
 // Wait blocks until all loops have exited.

@@ -81,6 +81,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 
 	spoke, nudged := false, false
 	for range maxSteps {
+		l.maybeCompact(ctx, agent)
 		req, err := l.request(ctx, agent)
 		if err != nil {
 			log.Error("build request", "err", err)
@@ -197,8 +198,16 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 	if err != nil {
 		return model.Request{}, err
 	}
-	msgs := make([]model.Message, 0, len(entries)+1)
+	summary, err := l.m.store.ContextSummary(ctx, agent.ID)
+	if err != nil {
+		return model.Request{}, err
+	}
+	msgs := make([]model.Message, 0, len(entries)+2)
 	msgs = append(msgs, model.Text("system", system))
+	if summary != "" {
+		msgs = append(msgs, model.Text("user", "<context_summary>\nA summary of your earlier conversations, "+
+			"written by you when they were trimmed from your context:\n\n"+summary+"\n</context_summary>"))
+	}
 	for _, e := range entries {
 		var m model.Message
 		if err := json.Unmarshal(e.Entry, &m); err != nil {

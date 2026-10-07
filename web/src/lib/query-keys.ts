@@ -8,6 +8,7 @@ export const queryKeys = {
   providerSettings: ["settings", "provider"] as const,
   models: ["models"] as const,
   agents: ["agents"] as const,
+  memories: (agentId: string) => ["agents", agentId, "memories"] as const,
   chats: ["chats"] as const,
   messages: (chatId: string) => ["chats", chatId, "messages"] as const,
 }

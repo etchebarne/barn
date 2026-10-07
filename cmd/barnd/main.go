@@ -64,6 +64,7 @@ func run() error {
 	b := bus.New()
 	llm := model.New(cfg.OpenCodeBaseURL, "barn/"+strings.TrimPrefix(version, "v"), set.APIKey)
 	rt := runtime.New(st, b, llm)
+	rt.CompactAtTokens = cfg.CompactAtTokens
 	srv := api.New(st, b, rt, llm, set, api.Options{
 		SecureCookies:  cfg.SecureCookies,
 		AllowedOrigins: cfg.AllowedOrigins,

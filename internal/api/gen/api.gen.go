@@ -388,6 +388,13 @@ type MarkReadRequest struct {
 	LastMessageId string `json:"lastMessageId"`
 }
 
+// Memory defines model for Memory.
+type Memory struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Id        string    `json:"id"`
+	Text      string    `json:"text"`
+}
+
 // Message defines model for Message.
 type Message struct {
 	Author MessageAuthor `json:"author"`
@@ -949,6 +956,12 @@ type ServerInterface interface {
 	// (PATCH /agents/{agentId})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (GET /agents/{agentId}/memories)
+	ListMemories(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (DELETE /agents/{agentId}/memories/{memoryId})
+	DeleteMemory(w http.ResponseWriter, r *http.Request, agentId string, memoryId string)
+
 	// (POST /agents/{agentId}/retry)
 	RetryAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
@@ -1038,6 +1051,67 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMemories operation middleware
+func (siw *ServerInterfaceWrapper) ListMemories(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMemories(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMemory operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMemory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "memoryId" -------------
+	var memoryId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "memoryId", r.PathValue("memoryId"), &memoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "memoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMemory(w, r, agentId, memoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1506,6 +1580,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/read", wrapper.MarkChatRead)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/memories", wrapper.ListMemories)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/memories/{memoryId}", wrapper.DeleteMemory)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/answer", wrapper.AnswerPrompt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/dismiss", wrapper.DismissPrompt)

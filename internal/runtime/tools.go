@@ -19,6 +19,8 @@ const (
 	toolReact       = "react"
 	toolAskUser     = "ask_user"
 	toolListModels  = "list_models"
+	toolRemember    = "memory_save"
+	toolForget      = "memory_forget"
 	toolCreateAgent = "create_agent"
 )
 
@@ -91,6 +93,28 @@ var (
 			"additionalProperties": false
 		}`)
 
+	rememberTool = function(toolRemember,
+		"Save a durable memory: a fact or preference you must not lose (your chat history gets "+
+			"summarized over time). One short, self-contained sentence, e.g. \"Martin prefers replies in lowercase.\"",
+		`{
+			"type": "object",
+			"properties": {
+				"text": {"type": "string", "description": "The memory, one short sentence."},
+				"chat_id": {"type": "string", "description": "Optional: the chat where you learned it."}
+			},
+			"required": ["text"],
+			"additionalProperties": false
+		}`)
+
+	forgetTool = function(toolForget,
+		"Delete one of your memories (when it's wrong or no longer true). Use the id shown in your memories.",
+		`{
+			"type": "object",
+			"properties": {"memory_id": {"type": "string"}},
+			"required": ["memory_id"],
+			"additionalProperties": false
+		}`)
+
 	listModelsTool = function(toolListModels,
 		"List the model ids available from the user's OpenCode Go subscription.",
 		`{"type": "object", "properties": {}, "additionalProperties": false}`)
@@ -114,7 +138,7 @@ var (
 
 // toolsFor returns the tools an agent may use.
 func toolsFor(agent store.Agent) []model.Tool {
-	tools := []model.Tool{sendMessageTool, reactTool, askUserTool}
+	tools := []model.Tool{sendMessageTool, reactTool, askUserTool, rememberTool, forgetTool}
 	if agent.IsAdmin {
 		tools = append(tools, listModelsTool, createAgentTool)
 	}
@@ -129,6 +153,10 @@ func toolLabel(name string) string {
 		return "reacting"
 	case toolAskUser:
 		return "asking a question"
+	case toolRemember:
+		return "making a note"
+	case toolForget:
+		return "updating my notes"
 	case toolListModels:
 		return "checking models"
 	case toolCreateAgent:
@@ -151,6 +179,19 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 		return l.react(ctx, agent, args)
 	case toolAskUser:
 		return l.askUser(ctx, agent, args)
+	case toolRemember:
+		return l.remember(ctx, agent, args)
+	case toolForget:
+		var a struct {
+			MemoryID string `json:"memory_id"`
+		}
+		if err := json.Unmarshal(args, &a); err != nil {
+			return toolError("invalid arguments: %v", err), false
+		}
+		if err := l.m.store.DeleteMemory(ctx, agent.ID, a.MemoryID); err != nil {
+			return toolError("no memory with id %q", a.MemoryID), false
+		}
+		return toolOK(map[string]string{"forgot": a.MemoryID}), true
 	case toolListModels:
 		models, err := l.m.llm.Models(ctx)
 		if err != nil {
@@ -197,6 +238,34 @@ func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (
 		return toolError("failed to send the message"), false
 	}
 	return toolOK(map[string]string{"message_id": msg.ID}), true
+}
+
+const maxMemoryLength = 500
+
+func (l *loop) remember(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
+	var args struct {
+		Text   string `json:"text"`
+		ChatID string `json:"chat_id"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return toolError("invalid arguments: %v", err), false
+	}
+	text := strings.TrimSpace(args.Text)
+	if text == "" || utf8.RuneCountInString(text) > maxMemoryLength {
+		return toolError("a memory must be 1–%d characters", maxMemoryLength), false
+	}
+	var source *string
+	if args.ChatID != "" {
+		if _, err := l.memberChat(ctx, agent, args.ChatID); err == nil {
+			source = &args.ChatID
+		}
+	}
+	mem, err := l.m.store.AddMemory(ctx, agent.ID, text, source)
+	if err != nil {
+		logger(agent.ID).Error("memory_save", "err", err)
+		return toolError("failed to save the memory"), false
+	}
+	return toolOK(map[string]string{"memory_id": mem.ID}), true
 }
 
 func (l *loop) react(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {

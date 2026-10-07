@@ -210,6 +210,44 @@ export interface paths {
         patch: operations["updateAgent"];
         trace?: never;
     };
+    "/agents/{agentId}/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The durable memories an agent saved, oldest first. */
+        get: operations["listMemories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/memories/{memoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMemory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/retry": {
         parameters: {
             query?: never;
@@ -349,6 +387,12 @@ export interface components {
             trustMode: "ask" | "trusted";
             isAdmin: boolean;
             activity: components["schemas"]["AgentActivity"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        Memory: {
+            id: string;
+            text: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -903,6 +947,53 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    listMemories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     retryAgent: {
