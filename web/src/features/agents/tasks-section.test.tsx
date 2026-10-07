@@ -30,7 +30,7 @@ function renderList(tasks: Task[], handlers = {}) {
   return render(
     <TooltipProvider>
       <TaskList
-        agentName="barn"
+        agentName="openbot"
         tasks={tasks}
         now={now}
         onToggle={vi.fn<(task: Task, enabled: boolean) => void>()}
@@ -44,7 +44,9 @@ function renderList(tasks: Task[], handlers = {}) {
 describe("TaskList", () => {
   it("explains how to create tasks when there are none", () => {
     renderList([])
-    expect(screen.getByText(/No tasks yet\. Ask barn to do something on a schedule/)).toBeVisible()
+    expect(
+      screen.getByText(/No tasks yet\. Ask openbot to do something on a schedule/),
+    ).toBeVisible()
   })
 
   it("shows the schedule and next run of an active task", () => {

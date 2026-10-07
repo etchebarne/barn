@@ -5,8 +5,8 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vitest/config"
 
-// The Go backend (barnd) listens here during development. Override with BARN_BACKEND_URL.
-const BACKEND = process.env.BARN_BACKEND_URL ?? "http://127.0.0.1:8080"
+// The Go backend (openbotd) listens here during development. Override with OPENBOT_BACKEND_URL.
+const BACKEND = process.env.OPENBOT_BACKEND_URL ?? "http://127.0.0.1:8080"
 
 export default defineConfig({
   plugins: [

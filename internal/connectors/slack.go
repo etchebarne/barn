@@ -13,7 +13,7 @@ import (
 )
 
 // Slack: post and read messages through the Web API; receive mentions and DMs over Socket Mode
-// (a websocket barn opens to Slack, so no public URL is needed).
+// (a websocket openbot opens to Slack, so no public URL is needed).
 type Slack struct{}
 
 func (Slack) Name() string        { return "slack" }

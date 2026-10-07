@@ -1,4 +1,4 @@
-// Package store is barnd's SQLite persistence layer.
+// Package store is openbotd's SQLite persistence layer.
 package store
 
 import (
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -30,7 +31,10 @@ type Store struct {
 
 // Open opens (creating if needed) the database in dataDir and applies pending migrations.
 func Open(ctx context.Context, dataDir string) (*Store, error) {
-	path := filepath.Join(dataDir, "barn.db")
+	path := filepath.Join(dataDir, "openbot.db")
+	if err := adoptLegacyDB(dataDir, path); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "busy_timeout(5000)")
@@ -50,6 +54,26 @@ func Open(ctx context.Context, dataDir string) (*Store, error) {
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// adoptLegacyDB renames the database from before the project was renamed (barn.db, with its
+// WAL and shared-memory files) so an existing install keeps its data.
+func adoptLegacyDB(dataDir, path string) error {
+	legacy := filepath.Join(dataDir, "barn.db")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		return nil
+	}
+	for _, suffix := range []string{"-wal", "-shm", ""} { // the main file last
+		if _, err := os.Stat(legacy + suffix); err == nil {
+			if err := os.Rename(legacy+suffix, path+suffix); err != nil {
+				return fmt.Errorf("adopting %s: %w", legacy+suffix, err)
+			}
+		}
+	}
+	return nil
+}
 
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx,

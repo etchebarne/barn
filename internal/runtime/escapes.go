@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // fixEscapes undoes a common model mistake: double-escaping text inside tool arguments, so a

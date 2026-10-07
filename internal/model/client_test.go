@@ -22,14 +22,14 @@ func TestChatSendsProviderHeaders(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "barn/1.2.3", func(context.Context) (string, error) { return "secret", nil })
-	if _, err := c.Chat(context.Background(), Request{Session: "barn-agent-abc", Model: "m"}); err != nil {
+	c := New(srv.URL, "openbot/1.2.3", func(context.Context) (string, error) { return "secret", nil })
+	if _, err := c.Chat(context.Background(), Request{Session: "openbot-agent-abc", Model: "m"}); err != nil {
 		t.Fatal(err)
 	}
 	for header, want := range map[string]string{
 		"Authorization":      "Bearer secret",
-		"User-Agent":         "barn/1.2.3",
-		"X-Opencode-Session": "barn-agent-abc",
+		"User-Agent":         "openbot/1.2.3",
+		"X-Opencode-Session": "openbot-agent-abc",
 	} {
 		if got.Get(header) != want {
 			t.Errorf("%s = %q, want %q", header, got.Get(header), want)
@@ -43,7 +43,7 @@ func TestVerifyKey(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": "big"}, {"id": "small-flash"}}})
 			return
 		}
-		if !strings.HasPrefix(r.Header.Get("X-Opencode-Session"), "barn-verify-") {
+		if !strings.HasPrefix(r.Header.Get("X-Opencode-Session"), "openbot-verify-") {
 			http.Error(w, `{"error":{"message":"Request is missing x-opencode-session"}}`, http.StatusBadRequest)
 			return
 		}
@@ -62,7 +62,7 @@ func TestVerifyKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "barn/test", nil)
+	c := New(srv.URL, "openbot/test", nil)
 	if err := c.VerifyKey(context.Background(), "good"); err != nil {
 		t.Fatalf("good key: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestChatRetriesTransientFailures(t *testing.T) {
 		})
 	}))
 	defer srv.Close()
-	c := New(srv.URL, "barn/test", func(context.Context) (string, error) { return "k", nil })
+	c := New(srv.URL, "openbot/test", func(context.Context) (string, error) { return "k", nil })
 	c.RetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
 
 	if _, err := c.Chat(context.Background(), Request{Model: "m"}); err != nil || calls.Load() != 3 {

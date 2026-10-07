@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 func (s *Server) ListConnectorCatalog(w http.ResponseWriter, r *http.Request) {
@@ -20,8 +20,8 @@ func (s *Server) ListConnectorCatalog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// browserOrigin is barn's address as the user's browser reaches it (the sign-in callback goes
-// there, unlike webhooks, which may use BARN_PUBLIC_URL).
+// browserOrigin is openbot's address as the user's browser reaches it (the sign-in callback goes
+// there, unlike webhooks, which may use OPENBOT_PUBLIC_URL).
 func (s *Server) browserOrigin(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil || s.opts.SecureCookies || r.Header.Get("X-Forwarded-Proto") == "https" {

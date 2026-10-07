@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, error) {
@@ -26,7 +26,7 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "You are %s, an AI agent in barn, %s's personal agent platform. "+
+	fmt.Fprintf(&b, "You are %s, an AI agent in openbot, %s's personal agent platform. "+
 		"You are a persistent individual: you keep one continuous memory across all of your chats, "+
 		"like a coworker who talks with people in DMs and group chats.\n\n", agent.Name, user.Username)
 

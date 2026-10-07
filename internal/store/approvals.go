@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/ids"
+	"github.com/etchebarne/openbot/internal/ids"
 )
 
 // ApprovalRule is an action the user always allows an agent to take without asking.

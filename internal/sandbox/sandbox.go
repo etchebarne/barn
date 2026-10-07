@@ -22,10 +22,10 @@ var dockerfile []byte
 
 // DefaultImage is built from the embedded Dockerfile when it's missing. Bump the tag when the
 // Dockerfile changes.
-const DefaultImage = "barn-sandbox:2"
+const DefaultImage = "openbot-sandbox:2"
 
 // ErrUnavailable means Docker isn't usable on this server.
-var ErrUnavailable = errors.New("sandboxes aren't available on this server (Docker isn't installed or barn can't use it)")
+var ErrUnavailable = errors.New("sandboxes aren't available on this server (Docker isn't installed or openbot can't use it)")
 
 type Options struct {
 	Image     string // defaults to DefaultImage
@@ -72,7 +72,7 @@ func New(opts Options) *Manager {
 // Available reports whether Docker is usable.
 func (m *Manager) Available() bool { return m.docker != "" }
 
-func containerName(sandboxID string) string { return "barn-sbx-" + strings.ToLower(sandboxID) }
+func containerName(sandboxID string) string { return "openbot-sbx-" + strings.ToLower(sandboxID) }
 
 func (m *Manager) run(ctx context.Context, stdin []byte, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, m.docker, args...)
@@ -149,7 +149,7 @@ func (m *Manager) Ensure(ctx context.Context, sandboxID string) error {
 	}
 	args := []string{"run", "-d", "--name", name,
 		"--hostname", "sandbox",
-		"--label", "barn.sandbox=" + sandboxID,
+		"--label", "openbot.sandbox=" + sandboxID,
 		"--restart", "unless-stopped",
 		"--memory", m.opts.Memory, "--cpus", m.opts.CPUs, "--pids-limit", strconv.Itoa(m.opts.PIDs),
 		"-v", name + ":/home/agent",

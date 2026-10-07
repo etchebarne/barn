@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/model"
+	"github.com/etchebarne/openbot/internal/model"
 )
 
 func TestCompactionCut(t *testing.T) {

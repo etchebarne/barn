@@ -35,7 +35,7 @@ export function SetupForm({ onDone }: { onDone: () => void }) {
       <CardHeader>
         <CardTitle>Create your account</CardTitle>
         <CardDescription>
-          barn is single-user. This account is the only one, so pick a strong password.
+          openbot is single-user. This account is the only one, so pick a strong password.
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -1,10 +1,10 @@
 openapi: 3.0.3
 info:
-  title: barn API
+  title: openbot API
   version: 0.1.0
   description: |
-    HTTP API for barnd. Authenticated with a session cookie (`barn_session`).
-    Mutating requests must send `X-Barn-CSRF: 1` (checked together with the Origin header).
+    HTTP API for openbotd. Authenticated with a session cookie (`openbot_session`).
+    Mutating requests must send `X-Openbot-CSRF: 1` (checked together with the Origin header).
 
     Realtime updates are delivered over a WebSocket at `GET /api/ws`; each frame is a JSON
     `WsEvent` (see components). The WebSocket is not described as an operation because
@@ -714,7 +714,7 @@ paths:
         agentIds), a connect card in chat (messageId) or reconnecting a connection
         (connectorId). Send the user to authorizeUrl. They come back to /oauth/callback, which
         finishes and redirects into the app. When pasteBack is true the server wouldn't accept
-        barn's address: the user lands on an error page and pastes its address into
+        openbot's address: the user lands on an error page and pastes its address into
         /connectors/sign-in/complete.
       requestBody:
         required: true
@@ -736,7 +736,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "502":
-          description: barn couldn't reach the server
+          description: openbot couldn't reach the server
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -760,7 +760,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "502":
-          description: barn couldn't reach the server
+          description: openbot couldn't reach the server
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -881,7 +881,7 @@ paths:
       operationId: connectPrompt
       tags: [chats]
       description: |
-        Accept a connection an agent proposed (a prompt of kind connect). barn checks the
+        Accept a connection an agent proposed (a prompt of kind connect). openbot checks the
         credentials with the app, saves the connection with the proposed agents' access, marks
         the prompt answered (broadcast as message.updated) and tells the agent. Credentials go
         straight to the connection and are never shown to the agent. To decline, answer the
@@ -910,7 +910,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "502":
-          description: barn couldn't reach the app
+          description: openbot couldn't reach the app
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -986,7 +986,7 @@ components:
     session:
       type: apiKey
       in: cookie
-      name: barn_session
+      name: openbot_session
 
   parameters:
     ChatId:
@@ -1118,7 +1118,7 @@ components:
           type: string
           minLength: 1
           maxLength: 64
-          description: Starter agent name; defaults to "barn"
+          description: Starter agent name; defaults to "openbot"
 
     CompleteOnboardingResponse:
       type: object
@@ -1312,7 +1312,7 @@ components:
           type: string
           nullable: true
           description: |
-            A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
+            A secret openbot generated for the service's webhook settings (e.g. GitHub's), shown so
             the user can copy it there
         signIn:
           type: string
@@ -1636,7 +1636,7 @@ components:
         appType:
           type: string
           nullable: true
-          description: Connector type (see /connectors/types); null for barn's own actions
+          description: Connector type (see /connectors/types); null for openbot's own actions
         appName: { type: string, nullable: true, description: The connection's name }
         title: { type: string, description: 'What the action is, e.g. "Slack message"' }
         verb: { type: string, description: 'Label for the approve button, e.g. "Send message"' }

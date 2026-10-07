@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/etchebarne/barn/internal/ids"
+	"github.com/etchebarne/openbot/internal/ids"
 )
 
 // ConnectorAccount is one authenticated account on an external service.

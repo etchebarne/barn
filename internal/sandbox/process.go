@@ -36,7 +36,7 @@ func (m *Manager) Start(ctx context.Context, sandboxID, command string, env map[
 	}
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
-	p := &Process{m: m, sandboxID: sandboxID, pidFile: "/tmp/barn-proc-" + hex.EncodeToString(b) + ".pid",
+	p := &Process{m: m, sandboxID: sandboxID, pidFile: "/tmp/openbot-proc-" + hex.EncodeToString(b) + ".pid",
 		stderr: &tail{max: 8 << 10}, done: make(chan struct{})}
 
 	args := []string{"exec", "-i", "-w", "/home/agent"}

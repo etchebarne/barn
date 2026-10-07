@@ -8,7 +8,7 @@ import { useConnectors } from "./api"
 import { signInReturnMessage, type SignInReturnParams } from "./signin"
 
 /**
- * After barn's OAuth callback redirects back (`?connected=…` or `?signin_error=…`): toast
+ * After openbot's OAuth callback redirects back (`?connected=…` or `?signin_error=…`): toast
  * once, refresh connections, then `clear()` the params from the URL.
  */
 export function useSignInReturn(params: SignInReturnParams, clear: () => void) {

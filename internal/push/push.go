@@ -13,8 +13,8 @@ import (
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 type Notifier struct {
@@ -29,7 +29,7 @@ type Notifier struct {
 
 // New loads the VAPID key pair, generating and storing it on first use.
 func New(ctx context.Context, st *store.Store, box *secrets.Box) (*Notifier, error) {
-	n := &Notifier{store: st, Subject: "https://github.com/etchebarne/barn", Client: http.DefaultClient}
+	n := &Notifier{store: st, Subject: "https://github.com/etchebarne/openbot", Client: http.DefaultClient}
 	public, err := st.GetSetting(ctx, store.SettingVAPIDPublic)
 	if errors.Is(err, store.ErrNotFound) {
 		private, pub, err := webpush.GenerateVAPIDKeys()

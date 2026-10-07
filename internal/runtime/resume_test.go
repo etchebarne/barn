@@ -6,9 +6,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/bus"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/bus"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func calls(names ...string) model.Message {

@@ -15,8 +15,8 @@ function escapeRegExp(text: string) {
 
 /**
  * Splits `text` into plain strings and `@Name` mentions of `targets`. A mention must start the
- * text or follow a non-word character (so `martin@barn.dev` stays plain), and must not run into
- * more word characters (`@barnyard` isn't `@barn`). Longer names win (`@Ops Bot` over `@Ops`).
+ * text or follow a non-word character (so `martin@openbot.dev` stays plain), and must not run into
+ * more word characters (`@openbotyard` isn't `@openbot`). Longer names win (`@Ops Bot` over `@Ops`).
  */
 export function splitMentions(text: string, targets: MentionTarget[]): MentionSegment[] {
   const named = targets.filter((t) => t.name.trim() !== "")

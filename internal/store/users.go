@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/etchebarne/barn/internal/ids"
+	"github.com/etchebarne/openbot/internal/ids"
 )
 
 type User struct {

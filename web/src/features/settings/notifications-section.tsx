@@ -15,11 +15,11 @@ const PUSH_STATE_KEY = ["push", "state"] as const
 const DESCRIPTIONS: Record<PushState, string> = {
   unsupported:
     typeof window !== "undefined" && !window.isSecureContext
-      ? "Notifications need barn to be opened over HTTPS (for example with Tailscale Serve)."
-      : "This browser can't show notifications from barn.",
+      ? "Notifications need openbot to be opened over HTTPS (for example with Tailscale Serve)."
+      : "This browser can't show notifications from openbot.",
   unavailable: "Notifications aren't set up on the server.",
   blocked:
-    "Notifications are blocked for barn. Allow them in your browser's site settings, then reload.",
+    "Notifications are blocked for openbot. Allow them in your browser's site settings, then reload.",
   off: "Off for this device.",
   on: "On for this device. Agents with notifications enabled will reach you here.",
 }
@@ -51,7 +51,7 @@ export function NotificationsSection() {
     <SettingsSection
       id="notifications"
       title="Notifications"
-      description="Get a notification when an agent messages you and barn isn't open."
+      description="Get a notification when an agent messages you and openbot isn't open."
     >
       {state.isPending ? (
         <Skeleton className="h-10 w-full" />
@@ -102,7 +102,7 @@ export function NotificationsSection() {
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        On iPhone and iPad, add barn to your Home Screen (Share → Add to Home Screen) and open it
+        On iPhone and iPad, add openbot to your Home Screen (Share → Add to Home Screen) and open it
         from there to get notifications.
       </p>
     </SettingsSection>

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/connectors/oauthtest"
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/connectors/oauthtest"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func TestOAuthSignIn(t *testing.T) {
@@ -29,7 +29,7 @@ func TestOAuthSignIn(t *testing.T) {
 		t.Fatalf("expected sign_in_required, got %v", err)
 	}
 
-	// The server refuses barn's plain-http address, so barn falls back to the loopback
+	// The server refuses openbot's plain-http address, so openbot falls back to the loopback
 	// redirect and the user pastes the address back.
 	authURL, pasteBack, err := m.BeginOAuth(ctx, OAuthRequest{MCPURL: srv.URL + "/mcp", RedirectURI: "http://100.64.0.1:8080/oauth/callback",
 		Name: "Linear", AgentIDs: []string{agent.ID}})
@@ -116,7 +116,7 @@ func TestParseCallback(t *testing.T) {
 	if err != nil || code != "c1" || state != "s1" {
 		t.Fatalf("got %q %q %v", code, state, err)
 	}
-	for host, want := range map[string]bool{"localhost:5173": true, "127.0.0.1": true, "[::1]:80": true, "100.114.128.31:8080": false, "barn.ts.net": false} {
+	for host, want := range map[string]bool{"localhost:5173": true, "127.0.0.1": true, "[::1]:80": true, "100.114.128.31:8080": false, "openbot.ts.net": false} {
 		if IsLoopback(host) != want {
 			t.Errorf("IsLoopback(%q) != %v", host, want)
 		}

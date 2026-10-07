@@ -1,4 +1,4 @@
-// Package config loads barnd configuration from environment variables.
+// Package config loads openbotd configuration from environment variables.
 package config
 
 import (
@@ -22,7 +22,7 @@ type Config struct {
 	// CompactAtTokens is when agents' context gets compacted (0 = default).
 	CompactAtTokens int
 
-	// PublicURL is where external services reach barnd (webhook URLs), e.g. a Tailscale Funnel
+	// PublicURL is where external services reach openbotd (webhook URLs), e.g. a Tailscale Funnel
 	// or reverse-proxy URL. Empty: the host the browser used.
 	PublicURL string
 
@@ -33,28 +33,28 @@ type Config struct {
 
 func Load() (Config, error) {
 	c := Config{
-		Addr:            env("BARN_ADDR", "127.0.0.1:8080"),
-		DataDir:         env("BARN_DATA_DIR", "./data"),
-		WebDir:          env("BARN_WEB_DIR", ""),
-		OpenCodeBaseURL: env("BARN_OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1"),
-		Sandboxes:       env("BARN_SANDBOX", "docker"),
-		PublicURL:       os.Getenv("BARN_PUBLIC_URL"),
-		SandboxImage:    os.Getenv("BARN_SANDBOX_IMAGE"),
+		Addr:            env("OPENBOT_ADDR", "127.0.0.1:8080"),
+		DataDir:         env("OPENBOT_DATA_DIR", "./data"),
+		WebDir:          env("OPENBOT_WEB_DIR", ""),
+		OpenCodeBaseURL: env("OPENBOT_OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1"),
+		Sandboxes:       env("OPENBOT_SANDBOX", "docker"),
+		PublicURL:       getenv("OPENBOT_PUBLIC_URL"),
+		SandboxImage:    getenv("OPENBOT_SANDBOX_IMAGE"),
 	}
 	if c.Sandboxes != "docker" && c.Sandboxes != "off" {
-		return c, fmt.Errorf("BARN_SANDBOX must be docker or off")
+		return c, fmt.Errorf("OPENBOT_SANDBOX must be docker or off")
 	}
 
 	var err error
-	if c.SecureCookies, err = envBool("BARN_SECURE_COOKIES", false); err != nil {
+	if c.SecureCookies, err = envBool("OPENBOT_SECURE_COOKIES", false); err != nil {
 		return c, err
 	}
-	if v := os.Getenv("BARN_COMPACT_AT_TOKENS"); v != "" {
+	if v := getenv("OPENBOT_COMPACT_AT_TOKENS"); v != "" {
 		if c.CompactAtTokens, err = strconv.Atoi(v); err != nil || c.CompactAtTokens < 1000 {
-			return c, fmt.Errorf("BARN_COMPACT_AT_TOKENS must be a number ≥ 1000")
+			return c, fmt.Errorf("OPENBOT_COMPACT_AT_TOKENS must be a number ≥ 1000")
 		}
 	}
-	for o := range strings.SplitSeq(os.Getenv("BARN_ALLOWED_ORIGINS"), ",") {
+	for o := range strings.SplitSeq(getenv("OPENBOT_ALLOWED_ORIGINS"), ",") {
 		if o = strings.TrimSpace(o); o != "" {
 			c.AllowedOrigins = append(c.AllowedOrigins, o)
 		}
@@ -62,15 +62,24 @@ func Load() (Config, error) {
 	return c, nil
 }
 
+// getenv reads OPENBOT_<name>, falling back to the name from before the project was renamed
+// (BARN_<name>) so existing configs keep working.
+func getenv(key string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return os.Getenv("BARN_" + strings.TrimPrefix(key, "OPENBOT_"))
+}
+
 func env(key, def string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
+	if v := getenv(key); v != "" {
 		return v
 	}
 	return def
 }
 
 func envBool(key string, def bool) (bool, error) {
-	v := os.Getenv(key)
+	v := getenv(key)
 	if v == "" {
 		return def, nil
 	}

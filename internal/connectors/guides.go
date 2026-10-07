@@ -5,16 +5,16 @@ import (
 	"net/url"
 )
 
-// slackManifest describes the Slack app barn needs: the bot scopes its tools use, Socket Mode
+// slackManifest describes the Slack app openbot needs: the bot scopes its tools use, Socket Mode
 // (so no public URL is needed) and the events that wake agents.
 var slackManifest = map[string]any{
 	"display_information": map[string]any{
-		"name":             "barn",
-		"description":      "Your barn agents in Slack",
+		"name":             "openbot",
+		"description":      "Your openbot agents in Slack",
 		"background_color": "#1d1d1f",
 	},
 	"features": map[string]any{
-		"bot_user": map[string]any{"display_name": "barn", "always_online": true},
+		"bot_user": map[string]any{"display_name": "openbot", "always_online": true},
 		"app_home": map[string]any{"messages_tab_enabled": true, "messages_tab_read_only_enabled": false},
 	},
 	"oauth_config": map[string]any{
@@ -23,7 +23,7 @@ var slackManifest = map[string]any{
 				"app_mentions:read", "chat:write", "channels:history", "channels:read",
 				"groups:history", "groups:read", "im:history", "users:read",
 			},
-			// Posting as the user: messages show as them, with "Sent using barn".
+			// Posting as the user: messages show as them, with "Sent using openbot".
 			"user": []string{"chat:write", "channels:read", "groups:read", "im:read", "mpim:read"},
 		},
 	},
@@ -43,7 +43,7 @@ func slackManifestJSON() string {
 func (Slack) Setup() Setup {
 	compact, _ := json.Marshal(slackManifest)
 	return Setup{Steps: []SetupStep{
-		{Text: "Create barn's Slack app. The link opens Slack with everything filled in (permissions, " +
+		{Text: "Create openbot's Slack app. The link opens Slack with everything filled in (permissions, " +
 			"Socket Mode, events): pick your workspace, then click Next and Create.",
 			Link: &SetupLink{Label: "Create Slack app", URL: "https://api.slack.com/apps?new_app=1&manifest_json=" + url.QueryEscape(string(compact))},
 			Copy: &SetupCopy{Label: "Copy app manifest (if Slack shows an empty form, choose “From a manifest” and paste it)", Text: slackManifestJSON()}},
@@ -58,8 +58,8 @@ func (Slack) Setup() Setup {
 
 func (GitHub) Setup() Setup {
 	q := url.Values{
-		"name":          {"barn"},
-		"description":   {"Lets barn agents read and manage issues and pull requests."},
+		"name":          {"openbot"},
+		"description":   {"Lets openbot agents read and manage issues and pull requests."},
 		"issues":        {"write"},
 		"pull_requests": {"write"},
 		"metadata":      {"read"},
@@ -84,7 +84,7 @@ func (GitHub) GeneratedSecret() string { return "webhook_secret" }
 func (Linear) Setup() Setup {
 	return Setup{
 		Steps: []SetupStep{
-			{Text: "Open Linear's security settings. Under Personal API keys, click New API key, name it barn, " +
+			{Text: "Open Linear's security settings. Under Personal API keys, click New API key, name it openbot, " +
 				"and create it.",
 				Link: &SetupLink{Label: "Open Linear settings", URL: "https://linear.app/settings/account/security"}},
 			{Text: "Copy the key (starts with lin_api_) into API key below."},
@@ -101,7 +101,7 @@ func (Linear) Setup() Setup {
 func (Render) Setup() Setup {
 	return Setup{
 		Steps: []SetupStep{
-			{Text: "Open your Render account settings and, under API Keys, click Create API Key and name it barn.",
+			{Text: "Open your Render account settings and, under API Keys, click Create API Key and name it openbot.",
 				Link: &SetupLink{Label: "Open Render settings", URL: "https://dashboard.render.com/u/settings#api-keys"}},
 			{Text: "Copy the key (starts with rnd_) into API key below."},
 		},

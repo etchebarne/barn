@@ -11,7 +11,7 @@ import { QUICK_REACTIONS, userReacted, type Reaction } from "@/lib/reactions"
 
 import { useToggleReaction } from "./api"
 
-/** "barn", "barn and Tracker", "barn, Tracker and you". */
+/** "openbot", "openbot and Tracker", "openbot, Tracker and you". */
 export function reactorNames(reaction: Reaction, agents: Map<string, Agent>): string {
   const names = reaction.by.map((author) =>
     author.kind !== "agent"

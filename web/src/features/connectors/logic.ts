@@ -152,7 +152,7 @@ export function toggleGrant(agentIds: string[], agentId: string, on: boolean): s
   return [...next].toSorted()
 }
 
-/** "Used by: barn, Tracker" or "No agents yet". */
+/** "Used by: openbot, Tracker" or "No agents yet". */
 export function usedByLabel(agentIds: string[], agents: Map<string, Agent>): string {
   const names = agentIds.flatMap((id) => {
     const name = agents.get(id)?.name

@@ -50,9 +50,9 @@ const github: ConnectorType = {
         copy: null,
       },
       {
-        text: "Or create barn's GitHub app from this manifest.",
+        text: "Or create openbot's GitHub app from this manifest.",
         link: null,
-        copy: { label: "App manifest", text: '{"name":"barn","very":"long"}' },
+        copy: { label: "App manifest", text: '{"name":"openbot","very":"long"}' },
       },
     ],
     eventSteps: [
@@ -72,7 +72,7 @@ const connector: Connector = {
   config: {},
   credentialsSet: ["token"],
   agentIds: [],
-  webhookUrl: "https://barn.example/hooks/github/k1",
+  webhookUrl: "https://openbot.example/hooks/github/k1",
   webhookSecret: "whsec_7f3a9c1e5b",
   signIn: null,
   createdAt: "2026-10-01T00:00:00Z",

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 type Settings struct {

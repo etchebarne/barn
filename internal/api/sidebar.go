@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func categoryView(c store.SidebarCategory) gen.SidebarCategory {

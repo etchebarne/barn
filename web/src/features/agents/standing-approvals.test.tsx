@@ -31,7 +31,7 @@ function serve(list: StandingApproval[]) {
   )
 }
 
-function renderSection(agent = makeAgent({ name: "barn" })) {
+function renderSection(agent = makeAgent({ name: "openbot" })) {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -77,17 +77,17 @@ describe("Allowed without asking", () => {
     renderSection()
     expect(
       await screen.findByText(
-        "Nothing yet. When barn asks for approval, choose Always allow, or tell it what it can do without asking.",
+        "Nothing yet. When openbot asks for approval, choose Always allow, or tell it what it can do without asking.",
       ),
     ).toBeVisible()
   })
 
   it("notes that trusted mode already skips approvals", async () => {
     serve([slack])
-    renderSection(makeAgent({ name: "barn", trustMode: "trusted" }))
+    renderSection(makeAgent({ name: "openbot", trustMode: "trusted" }))
     expect(await screen.findByText(slack.label)).toBeVisible()
     expect(
-      screen.getByText(/Trusted mode is on, so barn already skips all approvals/),
+      screen.getByText(/Trusted mode is on, so openbot already skips all approvals/),
     ).toBeVisible()
   })
 })

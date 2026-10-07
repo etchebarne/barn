@@ -1,5 +1,5 @@
 -- Actions the user always allows for an agent, without asking ("Always allow" on a card).
--- action is "tool:<name>" for barn's own tools or "connector:<account id>:<tool>" for apps.
+-- action is "tool:<name>" for openbot's own tools or "connector:<account id>:<tool>" for apps.
 -- match is a JSON object of argument values the call must have (e.g. {"channel": "#alerts"});
 -- {} allows the action whatever its arguments.
 CREATE TABLE approval_rules (

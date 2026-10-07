@@ -4,8 +4,8 @@ package view
 import (
 	"strings"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func Message(m store.Message) gen.Message {

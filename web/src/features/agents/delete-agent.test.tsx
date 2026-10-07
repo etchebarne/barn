@@ -110,13 +110,15 @@ describe("Delete agent", () => {
   })
 
   it("shows the last-admin 409 inline and keeps the agent", async () => {
-    deleteResponds(409, "barn needs at least one admin agent, so this one can't be deleted")
+    deleteResponds(409, "openbot needs at least one admin agent, so this one can't be deleted")
     const { client } = await renderDangerZone()
     await userEvent.click(screen.getByRole("button", { name: "Delete agent" }))
     await userEvent.click(screen.getByRole("button", { name: "Delete" }))
 
     expect(
-      await screen.findByText("barn needs at least one admin agent, so this one can't be deleted"),
+      await screen.findByText(
+        "openbot needs at least one admin agent, so this one can't be deleted",
+      ),
     ).toBeVisible()
     expect(client.getQueryData<Agent[]>(queryKeys.agents)).toHaveLength(2)
     expect(toast.success).not.toHaveBeenCalled()

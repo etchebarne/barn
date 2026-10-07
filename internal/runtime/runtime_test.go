@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etchebarne/barn/internal/bus"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/bus"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // fakeModel replays scripted responses and records the requests it received.
@@ -91,7 +91,7 @@ func setup(t *testing.T, responses ...func(model.Request) model.Message) fixture
 		t.Fatal(err)
 	}
 	agent, chatID, err := st.CreateAgentWithDM(ctx, store.Agent{
-		Name: "barn", Instructions: "Be helpful.", Model: "test-model", Language: "auto", TrustMode: "ask",
+		Name: "openbot", Instructions: "Be helpful.", Model: "test-model", Language: "auto", TrustMode: "ask",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -376,7 +376,7 @@ func TestCreateAgent(t *testing.T) {
 		last := req.Messages[len(req.Messages)-1]
 		if strings.HasPrefix(sys, "You are Notes,") {
 			// The new agent: introduce itself once, in its own DM.
-			if strings.Contains(last.Text(), "You were just created by barn") {
+			if strings.Contains(last.Text(), "You were just created by openbot") {
 				// Its DM is listed in its own system prompt; it may run before the creator's
 				// tool result is processed.
 				dm := regexp.MustCompile(`chat_id (\S+): DM`).FindStringSubmatch(sys)

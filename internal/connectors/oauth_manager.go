@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // Sign-ins in progress live in memory: they're short (minutes) and single-use.
@@ -27,15 +27,15 @@ var oauth = oauthState{flows: map[string]*OAuthFlow{}, refreshMu: map[string]*sy
 // OAuthRequest starts a sign-in to an MCP server.
 type OAuthRequest struct {
 	MCPURL      string
-	RedirectURI string // barn's callback as the browser reaches it
+	RedirectURI string // openbot's callback as the browser reaches it
 	Name        string
 	AgentIDs    []string
 	MessageID   string // a connect card this answers
 	AccountID   string // a connection this reconnects
 }
 
-// BeginOAuth registers barn with the server's authorization server and returns the URL to
-// send the user to. pasteBack means the server wouldn't accept barn's address, so the user
+// BeginOAuth registers openbot with the server's authorization server and returns the URL to
+// send the user to. pasteBack means the server wouldn't accept openbot's address, so the user
 // will land on an error page whose address they paste back (see CompleteOAuth).
 func (m *Manager) BeginOAuth(ctx context.Context, req OAuthRequest) (authURL string, pasteBack bool, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

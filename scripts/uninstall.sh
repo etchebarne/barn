@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# barn uninstaller.
+# openbot uninstaller.
 #
-#   curl -fsSL https://raw.githubusercontent.com/etchebarne/barn/main/scripts/uninstall.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/etchebarne/openbot/main/scripts/uninstall.sh | bash
 #
-# Removes the barn service, binary, and config. Your data (/var/lib/barn: database and
-# encryption key) and the barn system user are kept unless you pass --purge.
+# Removes the openbot service, binary, and config. Your data (/var/lib/openbot: database and
+# encryption key) and the openbot system user are kept unless you pass --purge.
 #
 # Options (pass after `bash -s --` when piping, e.g. `| bash -s -- --purge`):
-#   --purge     Also delete all data and the barn system user (asks for confirmation)
+#   --purge     Also delete all data and the openbot system user (asks for confirmation)
 #   --yes       Don't ask for confirmation
 #   -h, --help  Show this help
 set -euo pipefail
 
-BIN=/usr/local/bin/barnd
-CONF_DIR=/etc/barn
-DATA_DIR=/var/lib/barn
-UNIT=/etc/systemd/system/barn.service
-SERVICE_USER=barn
+BIN=/usr/local/bin/openbotd
+CONF_DIR=/etc/openbot
+DATA_DIR=/var/lib/openbot
+UNIT=/etc/systemd/system/openbot.service
+SERVICE_USER=openbot
 
 bold=$'\e[1m' red=$'\e[31m' green=$'\e[32m' reset=$'\e[0m'
 [ -t 1 ] || { bold='' red='' green='' reset=''; }
@@ -26,15 +26,15 @@ die() { printf '%serror:%s %s\n' "$red" "$reset" "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-barn uninstaller.
+openbot uninstaller.
 
-  curl -fsSL https://raw.githubusercontent.com/etchebarne/barn/main/scripts/uninstall.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/etchebarne/openbot/main/scripts/uninstall.sh | bash
 
-Removes the barn service, binary, and config. Your data (/var/lib/barn: database and
-encryption key) and the barn system user are kept unless you pass --purge.
+Removes the openbot service, binary, and config. Your data (/var/lib/openbot: database and
+encryption key) and the openbot system user are kept unless you pass --purge.
 
 Options (pass after `bash -s --` when piping, e.g. `| bash -s -- --purge`):
-  --purge     Also delete all data and the barn system user (asks for confirmation)
+  --purge     Also delete all data and the openbot system user (asks for confirmation)
   --yes       Don't ask for confirmation
   -h, --help  Show this help
 EOF
@@ -61,19 +61,19 @@ confirm() {
 remove_sandboxes() {
   local purge=$1 ids volumes images
   command -v docker >/dev/null 2>&1 || return 0
-  ids=$(as_root docker ps -aq --filter label=barn.sandbox 2>/dev/null) || return 0
+  ids=$(as_root docker ps -aq --filter label=openbot.sandbox 2>/dev/null) || return 0
   if [ -n "$ids" ]; then
     # shellcheck disable=SC2086 # one id per word
     as_root docker rm -f $ids >/dev/null
-    ok "Removed barn's sandbox containers"
+    ok "Removed openbot's sandbox containers"
   fi
   if $purge; then
-    volumes=$(as_root docker volume ls -q --filter name=barn-sbx- 2>/dev/null) || true
+    volumes=$(as_root docker volume ls -q --filter name=openbot-sbx- 2>/dev/null) || true
     if [ -n "$volumes" ]; then
       # shellcheck disable=SC2086
       as_root docker volume rm -f $volumes >/dev/null
     fi
-    images=$(as_root docker image ls -q barn-sandbox 2>/dev/null | sort -u) || true
+    images=$(as_root docker image ls -q openbot-sandbox 2>/dev/null | sort -u) || true
     if [ -n "$images" ]; then
       # shellcheck disable=SC2086
       as_root docker rmi -f $images >/dev/null 2>&1 || true
@@ -98,24 +98,24 @@ main() {
   fi
 
   if $purge && ! $yes; then
-    printf '%sThis permanently deletes all barn data in %s:%s\n' "$red" "$DATA_DIR" "$reset"
+    printf '%sThis permanently deletes all openbot data in %s:%s\n' "$red" "$DATA_DIR" "$reset"
     printf 'your account, agents, chats, memories, sandbox files, and stored credentials.\n'
     confirm "Delete everything?" || die "aborted; nothing was removed"
   fi
 
-  if [ -f "$UNIT" ] || systemctl list-unit-files barn.service >/dev/null 2>&1; then
-    info "Stopping and removing the barn service"
-    as_root systemctl disable --now barn 2>/dev/null || true
+  if [ -f "$UNIT" ] || systemctl list-unit-files openbot.service >/dev/null 2>&1; then
+    info "Stopping and removing the openbot service"
+    as_root systemctl disable --now openbot 2>/dev/null || true
     as_root rm -f "$UNIT"
     as_root systemctl daemon-reload
-    as_root systemctl reset-failed barn 2>/dev/null || true
+    as_root systemctl reset-failed openbot 2>/dev/null || true
   fi
 
   remove_sandboxes "$purge"
 
   as_root rm -f "$BIN"
   as_root rm -rf "$CONF_DIR"
-  ok "Removed the barn service, binary, and config"
+  ok "Removed the openbot service, binary, and config"
 
   if $purge; then
     as_root rm -rf "$DATA_DIR"
@@ -125,7 +125,7 @@ main() {
     ok "Deleted $DATA_DIR and the $SERVICE_USER user"
   elif [ -d "$DATA_DIR" ] || as_root test -d "$DATA_DIR"; then
     echo
-    echo "Your data is still in $DATA_DIR. Reinstalling barn will pick it up again."
+    echo "Your data is still in $DATA_DIR. Reinstalling openbot will pick it up again."
     echo "To delete it too, rerun with --purge."
   fi
 }

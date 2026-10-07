@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func TestFindMentions(t *testing.T) {
@@ -53,7 +53,7 @@ type groupFixture struct {
 	log  []string // "<agent>: <what it saw>"
 }
 
-// setupGroup creates agents A and B (besides the fixture's barn) in a group, all answered by
+// setupGroup creates agents A and B (besides the fixture's openbot) in a group, all answered by
 // script(agentName, lastUserText) which returns what to post ("" to stay silent).
 func setupGroup(t *testing.T, script func(name, seen string) string) *groupFixture {
 	t.Helper()

@@ -26,7 +26,7 @@ describe("theme", () => {
     const store = await freshStore()
     store.getState().setPreference("dark")
 
-    expect(window.localStorage.getItem("barn:theme")).toBe("dark")
+    expect(window.localStorage.getItem("openbot:theme")).toBe("dark")
     expect(document.documentElement.classList.contains("dark")).toBe(true)
     expect(store.getState().resolved).toBe("dark")
 
@@ -35,10 +35,10 @@ describe("theme", () => {
   })
 
   it("reads the saved preference on startup and ignores garbage", async () => {
-    window.localStorage.setItem("barn:theme", "dark")
+    window.localStorage.setItem("openbot:theme", "dark")
     expect((await freshStore()).getState().preference).toBe("dark")
 
-    window.localStorage.setItem("barn:theme", "purple")
+    window.localStorage.setItem("openbot:theme", "purple")
     expect((await freshStore()).getState().preference).toBe("system")
   })
 

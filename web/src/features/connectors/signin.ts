@@ -37,7 +37,7 @@ export const defaultSignInDeps: SignInDeps = {
 
 /**
  * Sends the browser to the app's sign-in page. Normally in this tab (the app redirects back
- * to barn). When the app won't redirect to barn's address ("paste back"), the page opens in a
+ * to openbot). When the app won't redirect to openbot's address ("paste back"), the page opens in a
  * new tab and the user pastes the address they land on. Returns which happened.
  */
 export function launchSignIn(
@@ -52,7 +52,7 @@ export function launchSignIn(
   return "redirect"
 }
 
-/** Query params barn's OAuth callback redirects with. */
+/** Query params openbot's OAuth callback redirects with. */
 export type SignInReturnParams = { connected?: string; signin_error?: string; connector?: string }
 
 /** Reads the sign-in return params from a route's raw search. */

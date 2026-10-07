@@ -14,7 +14,7 @@ import { catalogQueryOptions, type CatalogApp, type SignInDeps } from "./signin"
 const ROW =
   "flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-transform duration-(--duration-press) ease-out-quint outline-none select-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.99]"
 
-/** "Sign in with": apps barn connects to with a sign-in instead of API keys. */
+/** "Sign in with": apps openbot connects to with a sign-in instead of API keys. */
 export function CatalogList({ onPick }: { onPick: (app: CatalogApp) => void }) {
   const { data: apps, isPending, error } = useQuery(catalogQueryOptions)
   if (isPending) return <Skeleton className="h-14 w-full rounded-xl" />

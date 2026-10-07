@@ -1,6 +1,6 @@
 import { cn } from "cn"
 
-/** The barn wordmark with its small roof glyph. */
+/** The openbot wordmark with its small roof glyph. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
@@ -21,7 +21,7 @@ export function BrandMark({ className }: { className?: string }) {
         <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
         <path d="M9 21v-6h6v6" />
       </svg>
-      barn
+      openbot
     </span>
   )
 }

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/ids"
+	"github.com/etchebarne/openbot/internal/ids"
 )
 
 type Chat struct {
@@ -77,7 +77,7 @@ type Prompt struct {
 // ActionPreview is what an approval card shows: the app, what the action is, its arguments
 // and the label for the approve button.
 type ActionPreview struct {
-	AppType string         `json:"appType,omitempty"` // connector type; empty for barn's own actions
+	AppType string         `json:"appType,omitempty"` // connector type; empty for openbot's own actions
 	AppName string         `json:"appName,omitempty"`
 	Title   string         `json:"title"`
 	Verb    string         `json:"verb"`

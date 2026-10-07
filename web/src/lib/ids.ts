@@ -1,6 +1,6 @@
 /**
  * A random UUID (v4). `crypto.randomUUID` only exists in secure contexts (HTTPS or localhost),
- * and barn is often opened over plain http on a Tailscale address, so fall back to
+ * and openbot is often opened over plain http on a Tailscale address, so fall back to
  * `getRandomValues`, which works everywhere.
  */
 export function randomId(): string {

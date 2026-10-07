@@ -1,4 +1,4 @@
-// Package api implements barnd's HTTP API (see api/openapi.yaml) and WebSocket endpoint.
+// Package api implements openbotd's HTTP API (see api/openapi.yaml) and WebSocket endpoint.
 package api
 
 import (
@@ -11,28 +11,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/attachments"
-	"github.com/etchebarne/barn/internal/auth"
-	"github.com/etchebarne/barn/internal/bus"
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/push"
-	"github.com/etchebarne/barn/internal/runtime"
-	"github.com/etchebarne/barn/internal/settings"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/attachments"
+	"github.com/etchebarne/openbot/internal/auth"
+	"github.com/etchebarne/openbot/internal/bus"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/push"
+	"github.com/etchebarne/openbot/internal/runtime"
+	"github.com/etchebarne/openbot/internal/settings"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 const (
-	sessionCookie = "barn_session"
+	sessionCookie = "openbot_session"
 	sessionTTL    = 30 * 24 * time.Hour
-	csrfHeader    = "X-Barn-CSRF"
+	csrfHeader    = "X-Openbot-CSRF"
 )
 
 type Options struct {
 	SecureCookies  bool
 	AllowedOrigins []string
-	// PublicURL is where external services reach barnd (for webhook URLs); empty: the request's host.
+	// PublicURL is where external services reach openbotd (for webhook URLs); empty: the request's host.
 	PublicURL string
 	// Web is the built web app to serve at /. Nil serves the API only.
 	Web fs.FS
@@ -145,7 +145,7 @@ func (s *Server) sessionUser(r *http.Request) (store.User, bool) {
 }
 
 // csrf requires a custom header on mutating API requests. Browsers can't send custom headers
-// cross-origin without a CORS preflight, which barnd never approves.
+// cross-origin without a CORS preflight, which openbotd never approves.
 func (s *Server) csrf(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

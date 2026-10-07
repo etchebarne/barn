@@ -110,7 +110,7 @@ func mcpInitialize(ctx context.Context, c mcpConn) error {
 	if err := c.rpc(ctx, "initialize", map[string]any{
 		"protocolVersion": mcpProtocol,
 		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]string{"name": "barn", "version": "1"},
+		"clientInfo":      map[string]string{"name": "openbot", "version": "1"},
 	}, &init); err != nil {
 		return err
 	}

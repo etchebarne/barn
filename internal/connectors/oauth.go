@@ -18,18 +18,18 @@ import (
 
 // Sign-in for MCP servers, following the MCP authorization spec: the server answers 401 and
 // points at its protected-resource metadata (RFC 9728), which names an authorization server
-// (RFC 8414). barn registers itself there (dynamic client registration, RFC 7591), sends the
+// (RFC 8414). openbot registers itself there (dynamic client registration, RFC 7591), sends the
 // user to the authorize page with PKCE, and exchanges the code for tokens it refreshes.
 
-// LoopbackRedirect is the redirect used when a server won't accept barn's own (plain http)
+// LoopbackRedirect is the redirect used when a server won't accept openbot's own (plain http)
 // address. Nothing listens there: the browser shows an error page and the user pastes its
-// address back into barn.
+// address back into openbot.
 const LoopbackRedirect = "http://127.0.0.1:8789/oauth/callback"
 
 // ErrSignInRequired means an MCP server wants the user to sign in rather than a pasted key.
 var ErrSignInRequired = errors.New("this server uses sign-in")
 
-// OAuthTokens is what barn keeps (encrypted) for a signed-in connection.
+// OAuthTokens is what openbot keeps (encrypted) for a signed-in connection.
 type OAuthTokens struct {
 	AccessToken   string `json:"access_token"`
 	RefreshToken  string `json:"refresh_token,omitempty"`
@@ -68,7 +68,7 @@ func discoverOAuth(ctx context.Context, mcpURL string) (*oauthServer, error) {
 	// metadata.
 	s := &mcpSession{url: u.String()}
 	resp, err := s.post(ctx, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{
-		"protocolVersion": mcpProtocol, "capabilities": map[string]any{}, "clientInfo": map[string]string{"name": "barn", "version": "1"},
+		"protocolVersion": mcpProtocol, "capabilities": map[string]any{}, "clientInfo": map[string]string{"name": "openbot", "version": "1"},
 	}})
 	if err != nil {
 		return nil, fmt.Errorf("reaching %s: %w", u.Host, err)
@@ -173,13 +173,13 @@ func getJSON(ctx context.Context, u string, out any) error {
 // errRedirectRejected means the authorization server won't register this redirect URI.
 var errRedirectRejected = errors.New("redirect URI rejected")
 
-// registerClient registers barn with the authorization server (dynamic client registration).
+// registerClient registers openbot with the authorization server (dynamic client registration).
 func registerClient(ctx context.Context, server *oauthServer, redirectURI string) (clientID, clientSecret string, err error) {
 	if server.RegistrationEndpoint == "" {
-		return "", "", userErr("this server needs an app registered by hand, so barn can't sign in to it automatically yet")
+		return "", "", userErr("this server needs an app registered by hand, so openbot can't sign in to it automatically yet")
 	}
 	body := map[string]any{
-		"client_name":                "barn",
+		"client_name":                "openbot",
 		"redirect_uris":              []string{redirectURI},
 		"grant_types":                []string{"authorization_code", "refresh_token"},
 		"response_types":             []string{"code"},
@@ -199,7 +199,7 @@ func registerClient(ctx context.Context, server *oauthServer, redirectURI string
 		return "", "", errRedirectRejected
 	}
 	if status/100 != 2 || out.ClientID == "" {
-		return "", "", userErr("registering barn failed (%d): %s", status, firstNonEmpty(out.Description, out.Error))
+		return "", "", userErr("registering openbot failed (%d): %s", status, firstNonEmpty(out.Description, out.Error))
 	}
 	return out.ClientID, out.ClientSecret, nil
 }
@@ -239,8 +239,8 @@ type OAuthFlow struct {
 	AccountID string // an existing connection to reconnect
 }
 
-// beginOAuth discovers the server, registers barn and builds the authorize URL. redirectURI
-// is barn's own callback; when the server rejects it (plain http on a non-loopback address),
+// beginOAuth discovers the server, registers openbot and builds the authorize URL. redirectURI
+// is openbot's own callback; when the server rejects it (plain http on a non-loopback address),
 // the loopback redirect is used and the user pastes the result back.
 func beginOAuth(ctx context.Context, mcpURL, redirectURI string) (*OAuthFlow, string, error) {
 	server, err := discoverOAuth(ctx, mcpURL)
@@ -255,7 +255,7 @@ func beginOAuth(ctx context.Context, mcpURL, redirectURI string) (*OAuthFlow, st
 		flow.ClientID, flow.ClientSecret, err = registerClient(ctx, server, LoopbackRedirect)
 	}
 	if errors.Is(err, errRedirectRejected) {
-		return nil, "", userErr("%s won't accept barn's address for sign-in", hostOf(mcpURL))
+		return nil, "", userErr("%s won't accept openbot's address for sign-in", hostOf(mcpURL))
 	}
 	if err != nil {
 		return nil, "", err

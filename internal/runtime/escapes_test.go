@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/model"
+	"github.com/etchebarne/openbot/internal/model"
 )
 
 func TestFixEscapes(t *testing.T) {

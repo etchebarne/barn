@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# barn installer for Linux servers (systemd).
+# openbot installer for Linux servers (systemd).
 #
-#   curl -fsSL https://raw.githubusercontent.com/etchebarne/barn/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/etchebarne/openbot/main/scripts/install.sh | bash
 #
-# Installs (or upgrades) barnd as a systemd service:
-#   /usr/local/bin/barnd          the server (web app included)
-#   /etc/barn/barn.env            configuration (kept on upgrade)
-#   /var/lib/barn                 data: database and encryption key (kept on upgrade)
+# Installs (or upgrades) openbotd as a systemd service:
+#   /usr/local/bin/openbotd          the server (web app included)
+#   /etc/openbot/openbot.env            configuration (kept on upgrade)
+#   /var/lib/openbot                 data: database and encryption key (kept on upgrade)
 #
 # Options (pass after `bash -s --` when piping, e.g. `| bash -s -- --tailscale`):
 #   --version <tag>   Install a specific release (default: latest)
@@ -17,14 +17,14 @@
 #   -h, --help        Show this help
 set -euo pipefail
 
-REPO="etchebarne/barn"
+REPO="etchebarne/openbot"
 PORT=8080
-BIN=/usr/local/bin/barnd
-CONF_DIR=/etc/barn
-CONF="$CONF_DIR/barn.env"
-DATA_DIR=/var/lib/barn
-UNIT=/etc/systemd/system/barn.service
-SERVICE_USER=barn
+BIN=/usr/local/bin/openbotd
+CONF_DIR=/etc/openbot
+CONF="$CONF_DIR/openbot.env"
+DATA_DIR=/var/lib/openbot
+UNIT=/etc/systemd/system/openbot.service
+SERVICE_USER=openbot
 
 TMP_DIRS=()
 cleanup() { [ ${#TMP_DIRS[@]} -eq 0 ] || rm -rf "${TMP_DIRS[@]}"; }
@@ -38,14 +38,14 @@ die() { printf '%serror:%s %s\n' "$red" "$reset" "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-barn installer for Linux servers (systemd).
+openbot installer for Linux servers (systemd).
 
-  curl -fsSL https://raw.githubusercontent.com/etchebarne/barn/main/scripts/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/etchebarne/openbot/main/scripts/install.sh | bash
 
-Installs (or upgrades) barnd as a systemd service:
-  /usr/local/bin/barnd          the server (web app included)
-  /etc/barn/barn.env            configuration (kept on upgrade)
-  /var/lib/barn                 data: database and encryption key (kept on upgrade)
+Installs (or upgrades) openbotd as a systemd service:
+  /usr/local/bin/openbotd          the server (web app included)
+  /etc/openbot/openbot.env            configuration (kept on upgrade)
+  /var/lib/openbot                 data: database and encryption key (kept on upgrade)
 
 Options (pass after `bash -s --` when piping, e.g. `| bash -s -- --tailscale`):
   --version <tag>   Install a specific release (default: latest)
@@ -108,7 +108,7 @@ detect_arch() {
   case "$(uname -m)" in
     x86_64 | amd64) echo amd64 ;;
     aarch64 | arm64) echo arm64 ;;
-    *) die "unsupported architecture $(uname -m) (barn supports amd64 and arm64)" ;;
+    *) die "unsupported architecture $(uname -m) (openbot supports amd64 and arm64)" ;;
   esac
 }
 
@@ -144,15 +144,15 @@ install_binary() {
   local version="$1" arch="$2" tmp
   tmp=$(mktemp -d)
   TMP_DIRS+=("$tmp")
-  local name="barn_${version}_linux_${arch}"
-  local base="${BARN_DOWNLOAD_URL:-https://github.com/$REPO/releases/download/$version}"
-  info "Downloading barn $version ($arch)"
+  local name="openbot_${version}_linux_${arch}"
+  local base="${OPENBOT_DOWNLOAD_URL:-https://github.com/$REPO/releases/download/$version}"
+  info "Downloading openbot $version ($arch)"
   curl -fsSL -o "$tmp/$name.tar.gz" "$base/$name.tar.gz" || die "download failed: $base/$name.tar.gz"
   curl -fsSL -o "$tmp/checksums.txt" "$base/checksums.txt" || die "couldn't download checksums"
   (cd "$tmp" && grep " $name.tar.gz\$" checksums.txt | sha256sum -c --quiet -) ||
     die "checksum verification failed"
   tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
-  as_root install -m 0755 "$tmp/$name/barnd" "$BIN"
+  as_root install -m 0755 "$tmp/$name/openbotd" "$BIN"
   ok "Installed $BIN ($("$BIN" --version))"
 }
 
@@ -168,14 +168,58 @@ ensure_user() {
   fi
 }
 
+# openbot used to be called barn. An existing barn install moves over: its service stops, its
+# data and config move to the new places (settings renamed BARN_* -> OPENBOT_*), its system
+# user is renamed, and each sandbox's files are copied to the new volume name.
+migrate_from_barn() {
+  local old_unit=/etc/systemd/system/barn.service old_data=/var/lib/barn old_conf=/etc/barn/barn.env
+  as_root test -e "$old_unit" || as_root test -d "$old_data" || return 0
+  info "Moving your barn install over to openbot"
+  if as_root test -e "$old_unit"; then
+    as_root systemctl disable --now barn 2>/dev/null || true
+    as_root rm -f "$old_unit" /usr/local/bin/barnd
+    as_root systemctl daemon-reload
+  fi
+  if id barn >/dev/null 2>&1 && ! id "$SERVICE_USER" >/dev/null 2>&1; then
+    as_root usermod -l "$SERVICE_USER" -d "$DATA_DIR" barn
+    as_root groupmod -n "$SERVICE_USER" barn 2>/dev/null || true
+  fi
+  if as_root test -d "$old_data" && ! as_root test -e "$DATA_DIR"; then
+    as_root mv "$old_data" "$DATA_DIR" # openbotd renames barn.db to openbot.db on start
+  fi
+  if as_root test -f "$old_conf" && ! as_root test -f "$CONF"; then
+    as_root install -d -m 0750 -o root -g "$SERVICE_USER" "$CONF_DIR"
+    as_root sed -e 's/^\(# *\)\{0,1\}BARN_/\1OPENBOT_/' -e "s|$old_data|$DATA_DIR|g" -e 's/\bbarn\b/openbot/g' "$old_conf" |
+      as_root tee "$CONF" >/dev/null
+    as_root chmod 0640 "$CONF"
+    as_root chown root:"$SERVICE_USER" "$CONF"
+    as_root rm -rf /etc/barn
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    local ids volumes v
+    ids=$(as_root docker ps -aq --filter label=barn.sandbox 2>/dev/null) || true
+    if [ -n "$ids" ]; then
+      # shellcheck disable=SC2086 # one id per word
+      as_root docker rm -f $ids >/dev/null
+    fi
+    volumes=$(as_root docker volume ls -q --filter name=barn-sbx- 2>/dev/null) || true
+    for v in $volumes; do
+      as_root docker volume create "openbot-sbx-${v#barn-sbx-}" >/dev/null
+      as_root docker run --rm -v "$v:/from" -v "openbot-sbx-${v#barn-sbx-}:/to" debian:bookworm-slim \
+        sh -c 'cp -a /from/. /to/' >/dev/null 2>&1 && as_root docker volume rm "$v" >/dev/null
+    done
+  fi
+  ok "Moved barn's data, settings and sandboxes to openbot"
+}
+
 write_config() {
   local addr="$1"
   as_root install -d -m 0750 -o root -g "$SERVICE_USER" "$CONF_DIR"
   as_root install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_USER" "$DATA_DIR"
   if as_root test -f "$CONF"; then
     if [ -n "$addr" ]; then
-      as_root sed -i "s|^BARN_ADDR=.*|BARN_ADDR=$addr|" "$CONF"
-      ok "Updated BARN_ADDR in $CONF"
+      as_root sed -i "s|^OPENBOT_ADDR=.*|OPENBOT_ADDR=$addr|" "$CONF"
+      ok "Updated OPENBOT_ADDR in $CONF"
     else
       ok "Keeping existing config $CONF"
     fi
@@ -183,28 +227,28 @@ write_config() {
   fi
   [ -n "$addr" ] || addr="127.0.0.1:$PORT"
   as_root tee "$CONF" >/dev/null <<EOF
-# barn server settings. Restart after editing: sudo systemctl restart barn
+# openbot server settings. Restart after editing: sudo systemctl restart openbot
 # Everything else (model provider, agents) is configured in the app.
 
-# Address to listen on. Use your Tailscale IP to keep barn private to your tailnet.
-BARN_ADDR=$addr
+# Address to listen on. Use your Tailscale IP to keep openbot private to your tailnet.
+OPENBOT_ADDR=$addr
 
-# Where barn stores its database and encryption key.
-BARN_DATA_DIR=$DATA_DIR
+# Where openbot stores its database and encryption key.
+OPENBOT_DATA_DIR=$DATA_DIR
 
-# Set to true if you serve barn over HTTPS (e.g. behind a reverse proxy).
-BARN_SECURE_COOKIES=false
+# Set to true if you serve openbot over HTTPS (e.g. behind a reverse proxy).
+OPENBOT_SECURE_COOKIES=false
 
-# Where connected apps (GitHub, Linear, Render, webhooks) can reach barn to deliver events, e.g. a
+# Where connected apps (GitHub, Linear, Render, webhooks) can reach openbot to deliver events, e.g. a
 # Tailscale Funnel URL for /hooks/* only. Slack and MCP don't need it.
-# BARN_PUBLIC_URL=https://your-funnel-name.ts.net
+# OPENBOT_PUBLIC_URL=https://your-funnel-name.ts.net
 EOF
   as_root chmod 0640 "$CONF"
   as_root chown root:"$SERVICE_USER" "$CONF"
   ok "Wrote $CONF"
 }
 
-# Agents run commands in Docker sandboxes. barn talks to the Docker daemon, so the barn user
+# Agents run commands in Docker sandboxes. openbot talks to the Docker daemon, so the openbot user
 # joins the docker group (which is root-equivalent on the host).
 setup_docker() {
   if ! command -v docker >/dev/null; then
@@ -229,7 +273,7 @@ setup_docker() {
 write_unit() {
   as_root tee "$UNIT" >/dev/null <<EOF
 [Unit]
-Description=barn - persistent AI agents
+Description=openbot - persistent AI agents
 Documentation=https://github.com/$REPO
 Wants=network-online.target
 After=network-online.target tailscaled.service docker.service
@@ -285,7 +329,7 @@ main() {
     esac
   done
 
-  [ "$(uname -s)" = Linux ] || die "barn's installer supports Linux only"
+  [ "$(uname -s)" = Linux ] || die "openbot's installer supports Linux only"
   if ! command -v systemctl >/dev/null || [ ! -d /run/systemd/system ]; then
     die "systemd is required"
   fi
@@ -294,6 +338,7 @@ main() {
 
   need_sudo
   ensure_prerequisites
+  migrate_from_barn
 
   if $use_tailscale; then
     setup_tailscale
@@ -314,36 +359,36 @@ main() {
   write_config "$addr"
   write_unit
   as_root systemctl daemon-reload
-  as_root systemctl enable --quiet barn
+  as_root systemctl enable --quiet openbot
   if $upgrading; then
-    as_root systemctl restart barn
+    as_root systemctl restart openbot
   else
-    as_root systemctl start barn
+    as_root systemctl start openbot
   fi
 
   local listen
-  listen=$(as_root sed -n 's/^BARN_ADDR=//p' "$CONF")
+  listen=$(as_root sed -n 's/^OPENBOT_ADDR=//p' "$CONF")
   if wait_healthy "$listen"; then
-    ok "barn is running on $listen"
+    ok "openbot is running on $listen"
   else
-    die "barn didn't start; check: sudo journalctl -u barn -n 50"
+    die "openbot didn't start; check: sudo journalctl -u openbot -n 50"
   fi
 
   echo
   local host="${listen%:*}" port="${listen##*:}"
   case "$host" in
     127.0.0.1 | localhost)
-      printf '%sOpen barn%s through an SSH tunnel from your computer:\n\n' "$bold" "$reset"
+      printf '%sOpen openbot%s through an SSH tunnel from your computer:\n\n' "$bold" "$reset"
       printf '  ssh -L %s:127.0.0.1:%s %s@%s\n\n' "$port" "$port" "$(id -un)" "$(hostname -f 2>/dev/null || hostname)"
       printf 'then visit http://localhost:%s\n\n' "$port"
-      printf '%sTip: rerun with --tailscale to reach barn from all your devices.%s\n' "$dim" "$reset"
+      printf '%sTip: rerun with --tailscale to reach openbot from all your devices.%s\n' "$dim" "$reset"
       ;;
     *)
-      printf '%sOpen barn:%s http://%s\n' "$bold" "$reset" "$listen"
+      printf '%sOpen openbot:%s http://%s\n' "$bold" "$reset" "$listen"
       ;;
   esac
   echo
-  printf '%sManage:%s sudo systemctl {status,restart,stop} barn · logs: sudo journalctl -u barn -f\n' "$dim" "$reset"
+  printf '%sManage:%s sudo systemctl {status,restart,stop} openbot · logs: sudo journalctl -u openbot -f\n' "$dim" "$reset"
   printf '%sUpgrade:%s rerun this installer · %sUninstall:%s curl -fsSL https://raw.githubusercontent.com/%s/main/scripts/uninstall.sh | bash\n' \
     "$dim" "$reset" "$dim" "$reset" "$REPO"
 }

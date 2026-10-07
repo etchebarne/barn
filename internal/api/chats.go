@@ -9,11 +9,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/runtime"
-	"github.com/etchebarne/barn/internal/sandbox"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/runtime"
+	"github.com/etchebarne/openbot/internal/sandbox"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 func (s *Server) ListChats(w http.ResponseWriter, r *http.Request) {
@@ -662,7 +662,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, agentID str
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "agent not found")
 	case errors.Is(err, store.ErrLastAdmin):
-		writeError(w, http.StatusConflict, "barn needs at least one admin agent, so this one can't be deleted")
+		writeError(w, http.StatusConflict, "openbot needs at least one admin agent, so this one can't be deleted")
 	case err != nil:
 		internalError(w, err)
 	default:

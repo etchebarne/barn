@@ -119,11 +119,11 @@ describe("form generation", () => {
 
 describe("maskWebhookUrl", () => {
   it("hides the token after the last slash and any query", () => {
-    expect(maskWebhookUrl("https://barn.example/hooks/webhook/s3cr3tt0k3n")).toBe(
-      "https://barn.example/hooks/webhook/s3cr••••••••",
+    expect(maskWebhookUrl("https://openbot.example/hooks/webhook/s3cr3tt0k3n")).toBe(
+      "https://openbot.example/hooks/webhook/s3cr••••••••",
     )
-    expect(maskWebhookUrl("https://barn.example/hooks/x/abcdef?token=zzz")).toBe(
-      "https://barn.example/hooks/x/abcd••••••••?••••••••",
+    expect(maskWebhookUrl("https://openbot.example/hooks/x/abcdef?token=zzz")).toBe(
+      "https://openbot.example/hooks/x/abcd••••••••?••••••••",
     )
     expect(maskWebhookUrl("https://h/ab")).toBe("https://h/ab")
   })
@@ -139,10 +139,10 @@ describe("grants", () => {
 
   it("labels who uses a connection", () => {
     const agents = new Map([
-      ["a1", makeAgent({ id: "a1", name: "barn" })],
+      ["a1", makeAgent({ id: "a1", name: "openbot" })],
       ["a2", makeAgent({ id: "a2", name: "Tracker" })],
     ])
-    expect(usedByLabel(["a1", "a2"], agents)).toBe("Used by: barn, Tracker")
+    expect(usedByLabel(["a1", "a2"], agents)).toBe("Used by: openbot, Tracker")
     expect(usedByLabel([], agents)).toBe("No agents yet")
     expect(usedByLabel(["gone"], agents)).toBe("No agents yet")
   })

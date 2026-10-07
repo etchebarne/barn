@@ -10,11 +10,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/runtime"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/runtime"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 func connectorErr(w http.ResponseWriter, err error) {
@@ -92,7 +92,7 @@ func stepsView(steps []connectors.SetupStep) []gen.SetupStep {
 	return out
 }
 
-// publicOrigin is where external services reach barnd: BARN_PUBLIC_URL, or this request's host.
+// publicOrigin is where external services reach openbotd: OPENBOT_PUBLIC_URL, or this request's host.
 func (s *Server) publicOrigin(r *http.Request) string {
 	if s.opts.PublicURL != "" {
 		return strings.TrimRight(s.opts.PublicURL, "/")

@@ -1,9 +1,9 @@
 {
-  "name": "barn",
+  "name": "openbot",
   "private": true,
   "packageManager": "pnpm@10.28.2",
   "scripts": {
-    "dev": "pnpm --filter @barn/web dev",
+    "dev": "pnpm --filter @openbot/web dev",
     "build": "pnpm -r --if-present build",
     "gen:api": "go generate ./internal/api/gen/ && pnpm -r --if-present gen:api",
     "lint": "oxlint --type-aware",
@@ -11,7 +11,7 @@
     "format:check": "oxfmt --check",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "dev:server": "go run ./cmd/barnd",
+    "dev:server": "go run ./cmd/openbotd",
     "test:go": "go test -race ./...",
     "lint:go": "go vet ./..."
   },

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 
-	"github.com/etchebarne/barn/internal/ids"
+	"github.com/etchebarne/openbot/internal/ids"
 )
 
 // Event is an item in an agent's inbox.

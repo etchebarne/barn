@@ -16,7 +16,7 @@ export type ProviderSettings = Schemas["ProviderSettings"]
 export type WsEvent = Schemas["WsEvent"]
 
 /** Header the server requires on every request (checked together with Origin). */
-export const CSRF_HEADER = "X-Barn-CSRF"
+export const CSRF_HEADER = "X-Openbot-CSRF"
 
 /** Error carrying the server's `{ message }` body and HTTP status. */
 export class ApiError extends Error {

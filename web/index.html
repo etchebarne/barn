@@ -6,16 +6,16 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
-    <meta name="apple-mobile-web-app-title" content="barn" />
+    <meta name="apple-mobile-web-app-title" content="openbot" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <title>barn</title>
+    <title>openbot</title>
     <script>
       // Apply the saved theme before first paint (no flash). Keep in sync with src/lib/theme.ts.
       ;(function () {
         var pref = "system"
         try {
-          var stored = localStorage.getItem("barn:theme")
+          var stored = localStorage.getItem("openbot:theme")
           if (stored === "light" || stored === "dark" || stored === "system") pref = stored
         } catch (e) {}
         var dark = pref === "dark"

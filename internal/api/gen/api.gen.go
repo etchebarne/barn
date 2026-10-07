@@ -432,7 +432,7 @@ type ActionPreview struct {
 	// AppName The connection's name
 	AppName *string `json:"appName"`
 
-	// AppType Connector type (see /connectors/types); null for barn's own actions
+	// AppType Connector type (see /connectors/types); null for openbot's own actions
 	AppType *string `json:"appType"`
 
 	// Body The main content (e.g. a message's text), shown large
@@ -558,7 +558,7 @@ type ChatMember struct {
 
 // CompleteOnboardingRequest defines model for CompleteOnboardingRequest.
 type CompleteOnboardingRequest struct {
-	// AgentName Starter agent name; defaults to "barn"
+	// AgentName Starter agent name; defaults to "openbot"
 	AgentName *string `json:"agentName,omitempty"`
 
 	// Model Model id for the starter agent (from GET /models)
@@ -604,7 +604,7 @@ type Connector struct {
 	SignIn *ConnectorSignIn `json:"signIn"`
 	Type   string           `json:"type"`
 
-	// WebhookSecret A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
+	// WebhookSecret A secret openbot generated for the service's webhook settings (e.g. GitHub's), shown so
 	// the user can copy it there
 	WebhookSecret *string `json:"webhookSecret"`
 

@@ -68,7 +68,7 @@ export function connectOutcome(prompt: Prompt): "connected" | "declined" | null 
   return prompt.connection?.accountId ? "connected" : "declined"
 }
 
-/** "Access: barn, Tracker" (unknown agents are skipped). */
+/** "Access: openbot, Tracker" (unknown agents are skipped). */
 export function accessLabel(agentIds: string[], names: Map<string, string>): string {
   const known = agentIds.flatMap((id) => {
     const name = names.get(id)

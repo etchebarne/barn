@@ -1,4 +1,4 @@
-# barn — design
+# openbot — design
 
 Self-hosted, single-user platform for persistent AI agents. Each agent is a named "coworker" with
 its own sandbox, memories, tasks, and connectors. You talk to agents in DMs and group chats, and
@@ -46,7 +46,7 @@ Status: draft, pre-implementation.
  └──────┬───────┘   └──────┬───────┘
         │ HTTPS + WebSocket │
  ┌──────▼──────────────────▼────────────────────────────────────────┐
- │ barnd (Go, single binary)                                        │
+ │ openbotd (Go, single binary)                                        │
  │                                                                  │
  │  API (REST + WS) ── Auth                                         │
  │        │                                                         │
@@ -63,8 +63,8 @@ Status: draft, pre-implementation.
  └──────────────────────────────────────────────────────────────────┘
 ```
 
-`barnd` runs on the host (or in a container with access to the Docker socket). Agents never run
-inside `barnd`'s process space for commands; all execution goes through the sandbox manager.
+`openbotd` runs on the host (or in a container with access to the Docker socket). Agents never run
+inside `openbotd`'s process space for commands; all execution goes through the sandbox manager.
 
 ## 4. Agent runtime
 
@@ -187,7 +187,7 @@ Messages in a group are visible to every participant; DMs are visible only to th
   signatures with a replay window), MCP servers over Streamable HTTP (JSON or SSE responses), and
   local MCP servers over stdio (`npx …`, `uvx …`). For both MCP kinds, tools the server marks
   read-only aren't gated.
-- **Local MCP servers** run in a container of their own (`barn-sbx-mcp`, always the default
+- **Local MCP servers** run in a container of their own (`openbot-sbx-mcp`, always the default
   image with Node.js, Python and uv), never in an agent's sandbox: an agent could read the
   server's environment there, and that's where its secrets are. Secrets are entered as
   `KEY=value` pairs and handed to `docker exec -e KEY` through the client's environment, so they
@@ -196,7 +196,7 @@ Messages in a group are visible to every participant; DMs are visible only to th
   or when the account is edited or removed (the whole process tree inside the container), and
   report the end of their stderr when they crash. Tool lists are cached for an hour so an idle
   server can stay stopped between turns. Verifying allows 2 minutes for the first download, and
-  barnd builds the image in the background at startup.
+  openbotd builds the image in the background at startup.
 - **Accounts** are added in Settings → Connectors, or proposed by an agent with `connect_app`:
   the agent fills in the type, name, non-secret config (e.g. an MCP server URL) and who gets
   access, and a connect card appears in its DM. The user types any secrets on the card
@@ -206,12 +206,12 @@ Messages in a group are visible to every participant; DMs are visible only to th
   tool names) as a `<connection_result>`. Only admin agents may propose access for others.
   Several accounts per type are fine ("Slack — work", "Slack — side").
 - **Sign-in** (MCP authorization spec): for MCP servers that answer 401 with OAuth metadata,
-  barn discovers the authorization server (RFC 9728 → RFC 8414), registers itself (dynamic
+  openbot discovers the authorization server (RFC 9728 → RFC 8414), registers itself (dynamic
   client registration, RFC 7591), and sends the user to the authorize page with PKCE (S256)
   and a resource indicator. The browser comes back to `/oauth/callback`, which exchanges the
   code and redirects into the app. Services that refuse plain-http, non-loopback redirects
   (Linear, Notion) get the loopback redirect instead: the user lands on an error page and
-  pastes its address into barn (HTTPS for barn, e.g. Tailscale Serve, avoids this). Tokens are
+  pastes its address into openbot (HTTPS for openbot, e.g. Tailscale Serve, avoids this). Tokens are
   stored encrypted with the account and refreshed shortly before expiry, or once when a call
   is rejected; a refused refresh marks the connection "sign-in expired" until Reconnect.
   Pending sign-ins are in memory, single use, and expire after 15 minutes. A catalog lists
@@ -222,7 +222,7 @@ Messages in a group are visible to every participant; DMs are visible only to th
 - **Signals** arrive at `POST /hooks/{accountID}` (public, verified per type) or over a
   listener (Slack Socket Mode). They're stored, normalized to flat string fields, and matched
   against enabled `signal` tasks of agents granted that account.
-- **Reaching webhooks**: set `BARN_PUBLIC_URL` to a URL the service can reach (Tailscale Funnel
+- **Reaching webhooks**: set `OPENBOT_PUBLIC_URL` to a URL the service can reach (Tailscale Funnel
   for just `/hooks/*`, or a reverse proxy); the Settings UI shows the full webhook URL to paste.
 - Connector content is untrusted input; external actions stay gated unless the agent is trusted.
 
@@ -235,11 +235,11 @@ Messages in a group are visible to every participant; DMs are visible only to th
   hourly (after a day). Types are sniffed from the content; image dimensions are recorded.
 - **Serving**: `GET /api/attachments/{id}` needs the session. Only images (PNG, JPEG, GIF, WebP)
   and PDFs are served inline with their type; everything else is
-  `application/octet-stream` + `attachment` (no HTML/SVG can run in barn's origin), with
+  `application/octet-stream` + `attachment` (no HTML/SVG can run in openbot's origin), with
   `nosniff` and a sandboxing CSP.
 - **Agents**: each attachment is listed as `<attachment name type size path/>`; small text files
   (≤ 32 KB) are inlined; images are shown to the model as image parts in all three protocols.
-  Stored context keeps only image ids (`barn_images`); bytes are loaded per request, for the 3
+  Stored context keeps only image ids (`openbot_images`); bytes are loaded per request, for the 3
   most recent messages with images. A model that rejects images gets the request again without
   them (and a note that they're files), and is remembered as text-only.
 - **Agents sending files**: `send_message` takes `files` (paths in the sandbox, or `/shared/…`
@@ -248,30 +248,30 @@ Messages in a group are visible to every participant; DMs are visible only to th
 
 ## 8. Sandboxes
 
-- Docker, through the CLI. Each agent gets a long-lived container (`barn-sbx-<id>`) on first
-  use, from the `barn-sandbox` image (Debian + git, curl, Python, Node, build tools, jq, ripgrep;
-  built automatically from an embedded Dockerfile, or `BARN_SANDBOX_IMAGE`). Agents are root
+- Docker, through the CLI. Each agent gets a long-lived container (`openbot-sbx-<id>`) on first
+  use, from the `openbot-sandbox` image (Debian + git, curl, Python, Node, build tools, jq, ripgrep;
+  built automatically from an embedded Dockerfile, or `OPENBOT_SANDBOX_IMAGE`). Agents are root
   inside and can install anything.
 - `/home/agent` is a named volume (persists across restarts); the host's `data/shared` is mounted
   at `/shared` in every sandbox. Limits: 2 GB memory, 2 CPUs, 512 processes.
 - `run_command` runs `bash -lc` under `timeout --signal=KILL` inside the container (default 2
   min, max 15), so runaway commands die; long output is clipped in the middle.
 - Agents can share a sandbox (`sandbox_with` on create/update). Settings show its status and can
-  restart it. Without Docker (`BARN_SANDBOX=off` or not installed), the tools aren't offered and
+  restart it. Without Docker (`OPENBOT_SANDBOX=off` or not installed), the tools aren't offered and
   agents are told.
-- The installer installs Docker and adds the `barn` user to the `docker` group (root-equivalent on
+- The installer installs Docker and adds the `openbot` user to the `docker` group (root-equivalent on
   the host; `--no-docker` skips it).
 
 ## 9. Models
 
 - OpenCode Go serves each model through one of three APIs: `/v1/chat/completions` (Kimi, GLM,
   DeepSeek, …), `/v1/responses` (GPT, Grok, Muse Spark) and the Anthropic-style `/v1/messages`
-  (MiniMax, Qwen). `barnd` keeps conversations in the chat-completions shape and translates per
+  (MiniMax, Qwen). `openbotd` keeps conversations in the chat-completions shape and translates per
   protocol in a small in-house client (`internal/model`). The protocol is guessed from the model
   id; if the provider says the model doesn't support it, the client falls back to the others and
   remembers the one that worked. Provider extensions such as `reasoning_content` are preserved.
 - Every request sends `x-opencode-session` (the agent's id, since each agent is one continuous
-  conversation) and identifies as `barn/<version>`, as OpenCode Go requires.
+  conversation) and identifies as `openbot/<version>`, as OpenCode Go requires.
 - The API key is entered during onboarding (or replaced in Settings), verified with a one-token
   request, and stored in the `settings` table encrypted with AES-GCM. The encryption key lives in
   `data/secret.key` (0600), separate from the database, so a leaked DB backup alone doesn't leak it.
@@ -285,7 +285,7 @@ Messages in a group are visible to every participant; DMs are visible only to th
 ## 10. Clients
 
 ### 10.1 Product
-- Single-page app served by `barnd`.
+- Single-page app served by `openbotd`.
 - Layout: sidebar of DMs and groups (unread badges), chat pane, composer. Settings page for
   account, auth, appearance, and system config. Agents, tasks, memories, connectors, and
   sandboxes are managed by talking to agents, not with forms (read-only inspection views are fine).
@@ -428,7 +428,7 @@ Monorepo: a Go module at the root plus a pnpm workspace (`pnpm-workspace.yaml` l
 
 ```
 api/openapi.yaml      API contract (codegen source for Go and TS)
-cmd/barnd/            main binary
+cmd/openbotd/            main binary
 internal/
   api/                REST + WebSocket handlers
   auth/
@@ -450,7 +450,7 @@ deploy/               docker-compose, example config
 
 ## 14. Milestones
 
-1. **Skeleton** ✅: monorepo, `barnd`, auth, WebSocket, chat UI, OpenCode Go client, starter agent.
+1. **Skeleton** ✅: monorepo, `openbotd`, auth, WebSocket, chat UI, OpenCode Go client, starter agent.
 2. **Agent runtime** ✅: inbox, single-loop turns, mid-turn injection, resume after restarts,
    memories, compaction.
 3. **Sandboxes** ✅: Docker sandboxes, command and file tools, `/shared`, shared sandboxes.

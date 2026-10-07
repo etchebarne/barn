@@ -11,7 +11,7 @@ const preview: ActionPreview = {
   appName: "Work Slack",
   title: "Slack message",
   verb: "Send message",
-  note: "Posts as the barn app.",
+  note: "Posts as the openbot app.",
   fields: [
     { key: "channel", label: "To", value: "#bot-ception" },
     { key: "thread_ts", label: "Thread", value: "Reply in 'deploy is green'" },
@@ -63,7 +63,7 @@ describe("ActionPreviewCard", () => {
 
     const body = screen.getByRole("group", { name: "Message" })
     expect(within(body).getByText(/Deploy finished\.\s+All checks passed\./)).toBeVisible()
-    expect(screen.getByText("Posts as the barn app.")).toBeVisible()
+    expect(screen.getByText("Posts as the openbot app.")).toBeVisible()
   })
 
   it("approves with the verb button and declines with Decline", async () => {
@@ -95,7 +95,7 @@ describe("ActionPreviewCard", () => {
     expect(screen.getByText("#bot-ception")).toBeVisible()
   })
 
-  it("uses barn's icon and no app name for barn's own actions", () => {
+  it("uses openbot's icon and no app name for openbot's own actions", () => {
     renderCard({
       preview: {
         ...preview,
@@ -156,7 +156,7 @@ describe("ActionPreviewCard", () => {
       appName: null,
       title: "Always allow",
       verb: "Always allow",
-      note: "barn won't ask before doing this again. Remove it any time in barn's settings.",
+      note: "openbot won't ask before doing this again. Remove it any time in openbot's settings.",
       fields: [
         { key: "action", label: "Action", value: "Slack message · Work Slack" },
         { key: "only_when", label: "Only when", value: "Channel is #bot-ception" },

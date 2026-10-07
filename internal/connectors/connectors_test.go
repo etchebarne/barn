@@ -19,8 +19,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func hexHMAC(secret string, body []byte) string {
@@ -287,7 +287,7 @@ func TestSlack(t *testing.T) {
 			fmt.Fprint(w, `{"ok":true,"channels":[{"id":"C111","name":"alerts","is_member":true}]}`)
 		case "/users.info":
 			id := r.URL.Query().Get("user")
-			names := map[string]string{"U1": "Steve J", "UBOT": "barn"}
+			names := map[string]string{"U1": "Steve J", "UBOT": "openbot"}
 			fmt.Fprintf(w, `{"ok":true,"user":{"id":%q,"name":"x","profile":{"display_name":%q}}}`, id, names[id])
 		case "/conversations.history":
 			fmt.Fprint(w, `{"ok":true,"messages":[{"user":"U1","text":"<@UBOT> see <#C111|alerts> and <https://x.dev|the doc> &amp; <!here>","ts":"3.0"},{"bot_id":"B9","username":"Cursor","text":"done","ts":"2.0"}]}`)
@@ -339,7 +339,7 @@ func TestSlack(t *testing.T) {
 
 	// Messages read back with names and readable text instead of Slack ids and markup.
 	read := call(t, sl, acct, "read_channel", `{"channel":"#alerts"}`).([]map[string]string)
-	if len(read) != 2 || read[0]["from"] != "Steve J" || read[0]["text"] != "@barn see #alerts and the doc (https://x.dev) & @here" ||
+	if len(read) != 2 || read[0]["from"] != "Steve J" || read[0]["text"] != "@openbot see #alerts and the doc (https://x.dev) & @here" ||
 		read[1]["from"] != "Cursor" {
 		t.Fatalf("read_channel = %+v", read)
 	}
@@ -350,7 +350,7 @@ func TestSlack(t *testing.T) {
 	if err := sl.Listen(ctx, acct, func(s Signal) { got = append(got, s) }); err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	if len(got) != 2 || got[0].Type != "slack.app_mention" || got[0].Fields["text"] != "@barn prod is down" ||
+	if len(got) != 2 || got[0].Type != "slack.app_mention" || got[0].Fields["text"] != "@openbot prod is down" ||
 		got[0].Fields["user_name"] != "Steve J" ||
 		got[1].Type != "slack.message" || got[1].Fields["channel_type"] != "im" {
 		t.Fatalf("signals = %+v (bot messages must be ignored)", got)
@@ -520,7 +520,7 @@ func TestManagerAccountsToolsAndSignals(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	post := func(q string) int {
-		resp, err := http.Post(srv.URL+"/hooks/"+hook.ID+q, "application/json", strings.NewReader(`{"status":"down","site":"barn.dev"}`))
+		resp, err := http.Post(srv.URL+"/hooks/"+hook.ID+q, "application/json", strings.NewReader(`{"status":"down","site":"openbot.dev"}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -530,7 +530,7 @@ func TestManagerAccountsToolsAndSignals(t *testing.T) {
 	if code := post("?token=wrong"); code != http.StatusUnauthorized {
 		t.Fatalf("wrong token: %d", code)
 	}
-	if code := post("?token=" + token); code != http.StatusOK || len(got) != 1 || got[0]["status"] != "down" || got[0]["site"] != "barn.dev" {
+	if code := post("?token=" + token); code != http.StatusOK || len(got) != 1 || got[0]["status"] != "down" || got[0]["site"] != "openbot.dev" {
 		t.Fatalf("signal: %d %+v", code, got)
 	}
 	if !Match(got[0], map[string]string{"status": "DOWN"}) || Match(got[0], map[string]string{"status": "up"}) {

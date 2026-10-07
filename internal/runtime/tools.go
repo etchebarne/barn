@@ -9,9 +9,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 const (
@@ -122,7 +122,7 @@ var (
 		}`)
 
 	listAgentsTool = function(toolListAgents,
-		"List the agents in barn (your teammates): their agent_id, name, what they do, and model.",
+		"List the agents in openbot (your teammates): their agent_id, name, what they do, and model.",
 		`{"type": "object", "properties": {}, "additionalProperties": false}`)
 
 	listModelsTool = function(toolListModels,

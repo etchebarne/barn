@@ -87,7 +87,7 @@ function card(overrides: Partial<Parameters<typeof ConnectCard>[0]> = {}) {
       messageId="m1"
       type={mcp}
       typesLoading={false}
-      agentNames={new Map([["a1", "barn"]])}
+      agentNames={new Map([["a1", "openbot"]])}
       isLatest
       disabled={false}
       onConnect={vi.fn<(body: ConnectPromptRequest) => Promise<void>>().mockResolvedValue()}
@@ -105,7 +105,7 @@ describe("ConnectCard", () => {
     expect(screen.getByText("· MCP server")).toBeVisible()
     expect(screen.getByText("Server URL")).toBeVisible()
     expect(screen.getByText("https://mcp.notion.com/mcp")).toBeVisible()
-    expect(screen.getByText("Access: barn")).toBeVisible()
+    expect(screen.getByText("Access: openbot")).toBeVisible()
 
     const token = screen.getByLabelText("Access token")
     expect(token).toHaveAttribute("type", "password")

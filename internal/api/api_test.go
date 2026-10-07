@@ -16,15 +16,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/attachments"
-	"github.com/etchebarne/barn/internal/bus"
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/connectors/oauthtest"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/runtime"
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/settings"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/attachments"
+	"github.com/etchebarne/openbot/internal/bus"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/connectors/oauthtest"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/runtime"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/settings"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func newTestServer(t *testing.T) *httptest.Server {
@@ -47,12 +47,12 @@ func newTestServerWithProvider(t *testing.T, providerURL string) (*httptest.Serv
 	}
 	set := settings.New(st, box)
 	b := bus.New()
-	llm := model.New(providerURL, "barn/test", set.APIKey)
+	llm := model.New(providerURL, "openbot/test", set.APIKey)
 	rt := runtime.New(st, b, llm)
 	if err := rt.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	srv := New(st, b, rt, llm, set, nil, Options{PublicURL: "https://barn.example.com"})
+	srv := New(st, b, rt, llm, set, nil, Options{PublicURL: "https://openbot.example.com"})
 	conns := connectors.NewManager(st, box)
 	rt.Connectors, srv.Connectors = conns, conns
 	files := &attachments.Files{Dir: filepath.Join(dir, "shared", "attachments"), Store: st}
@@ -220,7 +220,7 @@ func setupWithKey(t *testing.T) (*client, *store.Store) {
 func TestUpdateAgentModel(t *testing.T) {
 	c, st := setupWithKey(t)
 	agent, _, err := st.CreateAgentWithDM(context.Background(), store.Agent{
-		Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
+		Name: "openbot", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -263,7 +263,7 @@ func TestOnboardingRejectsBlockedModel(t *testing.T) {
 func TestRetryAgent(t *testing.T) {
 	c, st := setupWithKey(t)
 	agent, _, err := st.CreateAgentWithDM(context.Background(), store.Agent{
-		Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
+		Name: "openbot", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +280,7 @@ func TestAnswerPrompt(t *testing.T) {
 	c, st := setupWithKey(t)
 	ctx := context.Background()
 	agent, chatID, err := st.CreateAgentWithDM(ctx, store.Agent{
-		Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
+		Name: "openbot", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +344,7 @@ func TestAnswerPrompt(t *testing.T) {
 func TestUserReactionsAndArchiving(t *testing.T) {
 	c, st := setupWithKey(t)
 	ctx := context.Background()
-	admin, chatID, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask", IsAdmin: true})
+	admin, chatID, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "openbot", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask", IsAdmin: true})
 	other, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "Notes", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
 	msg, _ := st.InsertMessage(ctx, chatID, "agent", &admin.ID, "hello")
 
@@ -376,8 +376,8 @@ func TestUserReactionsAndArchiving(t *testing.T) {
 		t.Fatalf("the archived agent's DM should be hidden, have %d chats", len(list))
 	}
 
-	resp, body = c.do("PATCH", "/api/agents/"+admin.ID, `{"name":"Barn","trustMode":"trusted","instructions":"Be brief."}`, true)
-	if resp.StatusCode != http.StatusOK || body["name"] != "Barn" || body["trustMode"] != "trusted" || body["instructions"] != "Be brief." {
+	resp, body = c.do("PATCH", "/api/agents/"+admin.ID, `{"name":"Openbot","trustMode":"trusted","instructions":"Be brief."}`, true)
+	if resp.StatusCode != http.StatusOK || body["name"] != "Openbot" || body["trustMode"] != "trusted" || body["instructions"] != "Be brief." {
 		t.Fatalf("update: %d %v", resp.StatusCode, body)
 	}
 }
@@ -411,7 +411,7 @@ func TestConnectorsAPI(t *testing.T) {
 		t.Fatalf("create: %d %v", resp.StatusCode, body)
 	}
 	id := body["id"].(string)
-	if body["webhookUrl"] != "https://barn.example.com/hooks/"+id || !strings.Contains(fmt.Sprint(body["credentialsSet"]), "token") ||
+	if body["webhookUrl"] != "https://openbot.example.com/hooks/"+id || !strings.Contains(fmt.Sprint(body["credentialsSet"]), "token") ||
 		strings.Contains(fmt.Sprint(body), "good") {
 		t.Fatalf("view leaks or misses fields: %v", body)
 	}
@@ -434,7 +434,7 @@ func TestConnectorsAPI(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated || !strings.Contains(body["webhookUrl"].(string), "?token=") {
 		t.Fatalf("webhook connector: %d %v", resp.StatusCode, body)
 	}
-	hookURL := strings.Replace(body["webhookUrl"].(string), "https://barn.example.com", c.base, 1)
+	hookURL := strings.Replace(body["webhookUrl"].(string), "https://openbot.example.com", c.base, 1)
 	anon := &http.Client{}
 	r, err := anon.Post(hookURL, "application/json", strings.NewReader(`{"ok":true}`))
 	if err != nil || r.StatusCode != http.StatusOK {
@@ -514,7 +514,7 @@ func TestConnectorSetupGuides(t *testing.T) {
 		byName[ty["type"].(string)] = ty
 	}
 
-	// Slack's first step links to Slack's create-app page with barn's manifest filled in.
+	// Slack's first step links to Slack's create-app page with openbot's manifest filled in.
 	slack := byName["slack"]["setup"].(map[string]any)["steps"].([]any)
 	link := slack[0].(map[string]any)["link"].(map[string]any)["url"].(string)
 	u, err := url.Parse(link)
@@ -537,7 +537,7 @@ func TestConnectorSetupGuides(t *testing.T) {
 		t.Fatal("the manifest should also be copyable")
 	}
 
-	// Event-only fields are flagged, and GitHub's webhook secret is made up by barn.
+	// Event-only fields are flagged, and GitHub's webhook secret is made up by openbot.
 	for _, f := range byName["github"]["credentialFields"].([]any) {
 		field := f.(map[string]any)
 		if field["key"] == "webhook_secret" && field["events"] != true {
@@ -566,7 +566,7 @@ func TestSignInAPI(t *testing.T) {
 		t.Fatalf("key connect: %d %v", resp.StatusCode, body)
 	}
 
-	// A connect card: barn's own address is loopback here, so the service sends the browser
+	// A connect card: openbot's own address is loopback here, so the service sends the browser
 	// straight back to /oauth/callback, which answers the card and returns to the chat.
 	card, _ := st.InsertPrompt(ctx, dm, agent.ID, store.Prompt{Kind: "connect", Question: "Connect Linear?",
 		Options: []store.PromptOption{{Label: "Connect"}, {Label: "Decline"}},
@@ -598,7 +598,7 @@ func TestSignInAPI(t *testing.T) {
 		t.Fatalf("connectors = %v", list)
 	}
 
-	// Opened over plain http on a tailnet address, the service refuses barn's address: the
+	// Opened over plain http on a tailnet address, the service refuses openbot's address: the
 	// user lands on an error page and pastes its address back.
 	req, _ := http.NewRequest("POST", c.base+"/api/connectors/sign-in", strings.NewReader(`{"url":"`+srv.URL+`/mcp","name":"Notion","agentIds":["`+agent.ID+`"]}`))
 	req.Host = "100.64.0.1:8080"
@@ -641,7 +641,7 @@ func TestSignInAPI(t *testing.T) {
 func TestDeleteAgentAPI(t *testing.T) {
 	c, st := setupWithKey(t)
 	ctx := context.Background()
-	admin, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask", IsAdmin: true})
+	admin, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "openbot", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask", IsAdmin: true})
 	helper, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "Tracker", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
 	if resp, _ := c.do("DELETE", "/api/agents/"+helper.ID, "", true); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete: %d", resp.StatusCode)

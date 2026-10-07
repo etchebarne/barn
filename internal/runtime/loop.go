@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 // maxSteps bounds model calls in a single turn.
@@ -251,7 +251,7 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 		tools = append(tools, connectAppTool())
 	}
 	tools = append(tools, asModelTools(ctx, l.m, l.connectorTools(ctx, agent))...)
-	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools}, nil
+	return model.Request{Session: "openbot-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools}, nil
 }
 
 // reportError tells the user, in the agent's DM, that the agent couldn't finish its turn. The

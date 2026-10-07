@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
-// Registry is every connector type barn supports.
+// Registry is every connector type openbot supports.
 var Registry = []Type{Webhook{}, GitHub{}, Linear{}, Slack{}, Render{}, MCP{}, MCPLocal{}}
 
 // TypeByName finds a connector type in the Registry.

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // Deleting an agent removes what's only its own and keeps group conversations readable.
@@ -70,7 +70,7 @@ func TestDeleteAgent(t *testing.T) {
 	}
 
 	// The last admin can't be deleted (but an archived one can).
-	admin, _, _ := f.store.CreateAgentWithDM(ctx, store.Agent{Name: "barn", Instructions: "x", Model: "m", Language: "auto", TrustMode: "ask", IsAdmin: true})
+	admin, _, _ := f.store.CreateAgentWithDM(ctx, store.Agent{Name: "openbot", Instructions: "x", Model: "m", Language: "auto", TrustMode: "ask", IsAdmin: true})
 	if err := f.rt.DeleteAgent(ctx, admin.ID); !errors.Is(err, store.ErrLastAdmin) {
 		t.Fatalf("deleting the last admin: %v", err)
 	}

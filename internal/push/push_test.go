@@ -20,8 +20,8 @@ import (
 
 	"golang.org/x/crypto/hkdf"
 
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // browser simulates a subscribed browser's keys and decrypts what the push service receives
@@ -150,7 +150,7 @@ func TestSendDeliversEncryptedNotifications(t *testing.T) {
 }
 
 func TestPreview(t *testing.T) {
-	if got := Preview("## Your week\n\n- **barn**: shipped `v0.2`"); got != "Your week - barn: shipped v0.2" {
+	if got := Preview("## Your week\n\n- **openbot**: shipped `v0.2`"); got != "Your week - openbot: shipped v0.2" {
 		t.Fatalf("preview = %q", got)
 	}
 	if got := Preview(strings.Repeat("word ", 100)); len([]rune(got)) != 158 || !strings.HasSuffix(got, "…") {

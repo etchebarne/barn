@@ -11,8 +11,8 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // EventTask fires an agent's scheduled task. Payload: {"taskId", "scheduledFor"}.
@@ -85,7 +85,7 @@ var (
 		}`)
 )
 
-// Timezone returns the user's time zone; set by barnd from the app's settings.
+// Timezone returns the user's time zone; set by openbotd from the app's settings.
 type Timezone func(ctx context.Context) *time.Location
 
 func (m *Manager) location(ctx context.Context) *time.Location {

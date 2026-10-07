@@ -8,7 +8,7 @@ import { Composer } from "./composer"
 const members = [
   { id: "a", name: "Alpha" },
   { id: "b", name: "Beta" },
-  { id: "c", name: "barn" },
+  { id: "c", name: "openbot" },
 ]
 
 function Harness({
@@ -82,7 +82,7 @@ describe("Composer", () => {
 
       await userEvent.type(box, "b")
       const options = screen.getAllByRole("option").map((o) => o.textContent)
-      expect(options).toEqual(["Beta", "barn"])
+      expect(options).toEqual(["Beta"])
     })
 
     it("inserts the mention on Enter instead of sending, then Enter sends", async () => {

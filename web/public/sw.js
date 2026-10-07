@@ -1,4 +1,4 @@
-/* barn service worker: shows push notifications and focuses the app when one is clicked. */
+/* openbot service worker: shows push notifications and focuses the app when one is clicked. */
 
 self.addEventListener("install", () => self.skipWaiting())
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()))
@@ -26,7 +26,7 @@ self.addEventListener("push", (event) => {
           new URL(client.url).pathname === url,
       )
       if (reading) return undefined
-      return self.registration.showNotification(payload.title || "barn", {
+      return self.registration.showNotification(payload.title || "openbot", {
         body: payload.body || "",
         tag: payload.tag,
         data: { url },

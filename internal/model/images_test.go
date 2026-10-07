@@ -59,7 +59,7 @@ func TestModelWithoutVision(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "ok"}}}})
 	}))
 	defer srv.Close()
-	c := New(srv.URL, "barn/test", func(context.Context) (string, error) { return "k", nil })
+	c := New(srv.URL, "openbot/test", func(context.Context) (string, error) { return "k", nil })
 	c.RetryDelays = []time.Duration{time.Millisecond}
 	if _, err := c.Chat(context.Background(), withImage()); err != nil {
 		t.Fatal(err)

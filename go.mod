@@ -1,4 +1,4 @@
-module github.com/etchebarne/barn
+module github.com/etchebarne/openbot
 
 go 1.26.8
 

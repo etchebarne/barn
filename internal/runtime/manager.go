@@ -11,13 +11,13 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/attachments"
-	"github.com/etchebarne/barn/internal/bus"
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/attachments"
+	"github.com/etchebarne/openbot/internal/bus"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 // ChatModel is the model API the runtime needs.

@@ -34,7 +34,7 @@ export function useSignInCompleted() {
   }
 }
 
-/** The paste-back step: the app couldn't send the user back to barn, so they bring the address. */
+/** The paste-back step: the app couldn't send the user back to openbot, so they bring the address. */
 function PasteBack({
   appName,
   complete,
@@ -105,14 +105,14 @@ function PasteBack({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        To skip this step, open barn over HTTPS (for example with Tailscale Serve).
+        To skip this step, open openbot over HTTPS (for example with Tailscale Serve).
       </p>
     </form>
   )
 }
 
 /**
- * "Sign in with <app>": starts the app's sign-in. Usually this leaves barn and comes back
+ * "Sign in with <app>": starts the app's sign-in. Usually this leaves openbot and comes back
  * connected; when the app can't redirect back, it opens a new tab and shows the paste-back
  * step right here (inline, so no dialog stacks on a sheet).
  */
@@ -134,7 +134,7 @@ export function SignInButton({
   size?: "sm" | "default"
   disabled?: boolean
   deps?: SignInDeps
-  /** Defaults to toasting and navigating like barn's own redirect would. */
+  /** Defaults to toasting and navigating like openbot's own redirect would. */
   onCompleted?: (result: SignInResult) => void
 }) {
   const completed = useSignInCompleted()

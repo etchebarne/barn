@@ -80,7 +80,7 @@ describe("uploadAttachment", () => {
     const [url, init] = fetchMock.mock.calls[0] ?? []
     expect(url).toBe("/api/chats/chat%201/attachments")
     expect(init?.method).toBe("POST")
-    expect(init?.headers).toEqual({ "X-Barn-CSRF": "1" })
+    expect(init?.headers).toEqual({ "X-Openbot-CSRF": "1" })
     const body = init?.body
     expect(body).toBeInstanceOf(FormData)
     expect(body instanceof FormData ? body.get("file") : null).toBeInstanceOf(File)

@@ -199,7 +199,7 @@ describe("SignInButton", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sign in with Linear" }))
     expect(deps.navigate.open).toHaveBeenCalled()
     expect(screen.getByText("Click Allow on Linear's page.")).toBeVisible()
-    expect(screen.getByText(/open barn over HTTPS/)).toBeVisible()
+    expect(screen.getByText(/open openbot over HTTPS/)).toBeVisible()
 
     await userEvent.type(screen.getByRole("textbox"), "http://localhost:1/oauth/callback?code=abc")
     await userEvent.click(screen.getByRole("button", { name: "Finish" }))

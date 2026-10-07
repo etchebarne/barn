@@ -10,9 +10,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/sandbox"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/sandbox"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // Sandboxer runs commands in agents' sandboxes (see package sandbox).

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// barn keeps conversations in the OpenAI chat-completions shape (Message). OpenCode Go serves
+// openbot keeps conversations in the OpenAI chat-completions shape (Message). OpenCode Go serves
 // each model through one of three APIs, so requests are translated per protocol.
 
 // errWrongProtocol means the provider doesn't serve this model through the API we called.

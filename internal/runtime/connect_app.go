@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 const toolConnectApp = "connect_app"
@@ -20,7 +20,7 @@ const toolConnectApp = "connect_app"
 func connectAppTool() model.Tool {
 	var b strings.Builder
 	b.WriteString("Propose connecting an app or MCP server for the user. They get a card in your DM showing " +
-		"what you filled in, type any secrets (tokens, API keys) there, and press Connect; barn checks it " +
+		"what you filled in, type any secrets (tokens, API keys) there, and press Connect; openbot checks it " +
 		"works before saving. Never ask for secrets in chat. Your turn ends here; the outcome arrives as a " +
 		"<connection_result>, and once connected its tools are yours to use. Types:\n")
 	names := make([]string, 0, len(connectors.Registry))

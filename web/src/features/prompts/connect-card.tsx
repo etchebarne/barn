@@ -73,7 +73,7 @@ function ConnectForm({
       // Don't keep secrets around once they're saved.
       setValues(initialValues(fields))
     } catch (e) {
-      // 400: the app rejected the details; 502: barn couldn't reach it. The prompt stays
+      // 400: the app rejected the details; 502: openbot couldn't reach it. The prompt stays
       // pending so the user can fix the values and try again.
       setError(
         e instanceof ApiError || e instanceof Error ? e.message : "Couldn't connect. Try again.",
@@ -350,7 +350,9 @@ export function ConnectCard({
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2 px-1.5 pb-1">
-            <p className="text-xs text-destructive">barn doesn't know how to connect {typeName}.</p>
+            <p className="text-xs text-destructive">
+              openbot doesn't know how to connect {typeName}.
+            </p>
             <Button
               type="button"
               size="sm"

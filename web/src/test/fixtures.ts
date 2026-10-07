@@ -26,7 +26,7 @@ export function makeChat(overrides: Partial<Chat> = {}): Chat {
   return {
     id: "chat-1",
     kind: "dm",
-    name: "barn",
+    name: "openbot",
     members: [{ agentId: "agent-1", position: 0 }],
     unreadCount: 0,
     lastMessage: null,
@@ -40,7 +40,7 @@ export function makeChat(overrides: Partial<Chat> = {}): Chat {
 export function makeAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     id: "agent-1",
-    name: "barn",
+    name: "openbot",
     instructions: "",
     model: "kimi-k2.6",
     language: "auto",

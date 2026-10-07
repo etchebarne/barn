@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/model"
+	"github.com/etchebarne/openbot/internal/model"
 )
 
 const interruptedResult = `{"ok":false,"error":"interrupted by a server restart before finishing; check whether it took effect before trying again"}`

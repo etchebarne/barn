@@ -1,5 +1,5 @@
 /** Namespaced localStorage access that never throws (private mode, blocked storage, SSR). */
-const PREFIX = "barn:"
+const PREFIX = "openbot:"
 
 export function readStorage(key: string): string | null {
   try {

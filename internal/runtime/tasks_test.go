@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func TestParseAtAndNextFire(t *testing.T) {
@@ -150,7 +150,7 @@ func TestAgentMessagesArePushed(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(pushed) != 1 || pushed[0] != "barn|**Done**, see `report.md`|"+f.chatID {
+	if len(pushed) != 1 || pushed[0] != "openbot|**Done**, see `report.md`|"+f.chatID {
 		t.Fatalf("expected exactly one push while notifications were on, got %q", pushed)
 	}
 }

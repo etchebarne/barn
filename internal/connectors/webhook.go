@@ -31,7 +31,7 @@ func (Webhook) Verify(context.Context, Account) error { return nil }
 func (Webhook) HandleWebhook(acct Account, r *http.Request, body []byte) ([]Signal, error) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		token = r.Header.Get("X-Barn-Token")
+		token = r.Header.Get("X-Openbot-Token")
 	}
 	want := acct.Credentials["token"]
 	if want == "" || subtle.ConstantTimeCompare([]byte(token), []byte(want)) != 1 {

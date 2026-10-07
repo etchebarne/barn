@@ -52,8 +52,8 @@ describe("parseWsEvent", () => {
 
 describe("defaultWsUrl", () => {
   it("uses the same origin with ws/wss", () => {
-    expect(defaultWsUrl({ protocol: "https:", host: "barn.example:8443" })).toBe(
-      "wss://barn.example:8443/api/ws",
+    expect(defaultWsUrl({ protocol: "https:", host: "openbot.example:8443" })).toBe(
+      "wss://openbot.example:8443/api/ws",
     )
     expect(defaultWsUrl({ protocol: "http:", host: "localhost:5173" })).toBe(
       "ws://localhost:5173/api/ws",

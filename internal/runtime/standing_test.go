@@ -10,10 +10,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func TestStandingApprovals(t *testing.T) {

@@ -597,7 +597,7 @@ export interface paths {
          *     agentIds), a connect card in chat (messageId) or reconnecting a connection
          *     (connectorId). Send the user to authorizeUrl. They come back to /oauth/callback, which
          *     finishes and redirects into the app. When pasteBack is true the server wouldn't accept
-         *     barn's address: the user lands on an error page and pastes its address into
+         *     openbot's address: the user lands on an error page and pastes its address into
          *     /connectors/sign-in/complete.
          */
         post: operations["startSignIn"];
@@ -722,7 +722,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Accept a connection an agent proposed (a prompt of kind connect). barn checks the
+         * @description Accept a connection an agent proposed (a prompt of kind connect). openbot checks the
          *     credentials with the app, saves the connection with the proposed agents' access, marks
          *     the prompt answered (broadcast as message.updated) and tells the agent. Credentials go
          *     straight to the connection and are never shown to the agent. To decline, answer the
@@ -867,7 +867,7 @@ export interface components {
         CompleteOnboardingRequest: {
             /** @description Model id for the starter agent (from GET /models) */
             model: string;
-            /** @description Starter agent name; defaults to "barn" */
+            /** @description Starter agent name; defaults to "openbot" */
             agentName?: string;
         };
         CompleteOnboardingResponse: {
@@ -993,7 +993,7 @@ export interface components {
             /** @description Where the service should send events (types with webhooks) */
             webhookUrl: string | null;
             /**
-             * @description A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
+             * @description A secret openbot generated for the service's webhook settings (e.g. GitHub's), shown so
              *     the user can copy it there
              */
             webhookSecret: string | null;
@@ -1201,7 +1201,7 @@ export interface components {
             preview?: components["schemas"]["ActionPreview"] | null;
         };
         ActionPreview: {
-            /** @description Connector type (see /connectors/types); null for barn's own actions */
+            /** @description Connector type (see /connectors/types); null for openbot's own actions */
             appType: string | null;
             /** @description The connection's name */
             appName: string | null;
@@ -2423,7 +2423,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description barn couldn't reach the server */
+            /** @description openbot couldn't reach the server */
             502: {
                 headers: {
                     [name: string]: unknown;
@@ -2458,7 +2458,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
-            /** @description barn couldn't reach the server */
+            /** @description openbot couldn't reach the server */
             502: {
                 headers: {
                     [name: string]: unknown;
@@ -2658,7 +2658,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description barn couldn't reach the app */
+            /** @description openbot couldn't reach the app */
             502: {
                 headers: {
                     [name: string]: unknown;

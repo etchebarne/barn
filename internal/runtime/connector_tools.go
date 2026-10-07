@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // connectorTools returns the connector tools an agent may call (nil without connectors).

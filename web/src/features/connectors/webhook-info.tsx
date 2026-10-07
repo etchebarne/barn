@@ -12,7 +12,7 @@ import {
   type ConnectorType,
 } from "./logic"
 
-/** barn's generated webhook signing secret: masked until revealed, with Copy. */
+/** openbot's generated webhook signing secret: masked until revealed, with Copy. */
 export function WebhookSecret({ connector, type }: { connector: Connector; type?: ConnectorType }) {
   const [revealed, setRevealed] = useState(false)
   const secret = connector.webhookSecret
@@ -39,7 +39,7 @@ export function WebhookSecret({ connector, type }: { connector: Connector; type?
         <CopyButton text={secret} label="Copy webhook secret" />
       </div>
       <p className="text-xs text-muted-foreground">
-        Paste this into {service}'s webhook settings so barn can verify events come from it.
+        Paste this into {service}'s webhook settings so openbot can verify events come from it.
       </p>
     </section>
   )

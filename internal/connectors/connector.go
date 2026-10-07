@@ -43,7 +43,7 @@ type SetupStep struct {
 type SetupLink struct{ Label, URL string }
 type SetupCopy struct{ Label, Text string }
 
-// GeneratedSecret is implemented by types whose event secret barn makes up itself (so the user
+// GeneratedSecret is implemented by types whose event secret openbot makes up itself (so the user
 // copies it into the service instead of the other way around).
 type GeneratedSecret interface {
 	GeneratedSecret() string // the credential key

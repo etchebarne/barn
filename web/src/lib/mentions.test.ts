@@ -11,7 +11,7 @@ import {
 const alpha = { id: "a", name: "Alpha" }
 const opsBot = { id: "o", name: "Ops Bot" }
 const ops = { id: "p", name: "Ops" }
-const barn = { id: "b", name: "barn" }
+const openbot = { id: "b", name: "openbot" }
 
 describe("splitMentions", () => {
   it("highlights only the given targets, case-insensitively", () => {
@@ -23,11 +23,11 @@ describe("splitMentions", () => {
   })
 
   it("leaves email addresses and longer words alone", () => {
-    expect(splitMentions("mail martin@barn.dev", [barn])).toEqual(["mail martin@barn.dev"])
-    expect(splitMentions("@barnyard", [barn])).toEqual(["@barnyard"])
-    expect(splitMentions("(@barn), ok", [barn])).toEqual([
+    expect(splitMentions("mail martin@openbot.dev", [openbot])).toEqual(["mail martin@openbot.dev"])
+    expect(splitMentions("@openbotyard", [openbot])).toEqual(["@openbotyard"])
+    expect(splitMentions("(@openbot), ok", [openbot])).toEqual([
       "(",
-      { mention: barn, text: "@barn" },
+      { mention: openbot, text: "@openbot" },
       "), ok",
     ])
   })
@@ -56,9 +56,10 @@ describe("autocomplete", () => {
   })
 
   it("filters by name prefix first, then by word prefix", () => {
-    const all = [alpha, opsBot, barn]
+    const all = [alpha, opsBot, openbot]
     expect(filterMentionCandidates(all, "")).toEqual(all)
-    expect(filterMentionCandidates(all, "b")).toEqual([barn, opsBot])
+    expect(filterMentionCandidates(all, "o")).toEqual([opsBot, openbot]) // name prefix
+    expect(filterMentionCandidates(all, "b")).toEqual([opsBot]) // word prefix ("Ops Bot")
     expect(filterMentionCandidates(all, "AL")).toEqual([alpha])
     expect(filterMentionCandidates(all, "zz")).toEqual([])
   })

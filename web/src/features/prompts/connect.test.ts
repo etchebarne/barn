@@ -100,10 +100,10 @@ describe("connect prompt logic", () => {
       accessLabel(
         ["a1", "a2", "gone"],
         new Map([
-          ["a1", "barn"],
+          ["a1", "openbot"],
           ["a2", "Tracker"],
         ]),
       ),
-    ).toBe("Access: barn, Tracker")
+    ).toBe("Access: openbot, Tracker")
   })
 })

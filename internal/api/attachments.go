@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/attachments"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/attachments"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 func (s *Server) UploadAttachment(w http.ResponseWriter, r *http.Request, chatID gen.ChatId) {

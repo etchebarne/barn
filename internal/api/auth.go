@@ -7,9 +7,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/auth"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/auth"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func (s *Server) GetAuthStatus(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +138,7 @@ func validateCredentials(c gen.Credentials) string {
 	return ""
 }
 
-// clientIP is the TCP peer address. barnd doesn't trust proxy headers.
+// clientIP is the TCP peer address. openbotd doesn't trust proxy headers.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

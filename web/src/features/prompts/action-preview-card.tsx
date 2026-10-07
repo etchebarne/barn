@@ -174,7 +174,9 @@ export function ActionPreviewCard({
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center gap-2.5 px-1.5 pt-1">
         <ConnectorIcon
-          type={preview.appType ?? (isStandingApprovalProposal(preview) ? "always-allow" : "barn")}
+          type={
+            preview.appType ?? (isStandingApprovalProposal(preview) ? "always-allow" : "openbot")
+          }
           className="size-7"
         />
         <p className="min-w-0 flex-1 truncate text-sm">

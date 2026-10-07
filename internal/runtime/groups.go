@@ -11,9 +11,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/api/gen"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 // EventGroupTurn gives an agent its turn in a group chat. Payload: {"chatId": "..."}.

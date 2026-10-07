@@ -28,8 +28,8 @@ const ICONS: Record<string, LucideIcon> = {
   notion: NotebookTextIcon,
   sentry: BugIcon,
   stripe: CreditCardIcon,
-  // barn's own actions (e.g. archiving an agent).
-  barn: HouseIcon,
+  // openbot's own actions (e.g. archiving an agent).
+  openbot: HouseIcon,
   "always-allow": ShieldCheckIcon,
 }
 

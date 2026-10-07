@@ -2,7 +2,7 @@ import { activityLabel } from "@/features/agents"
 import type { Agent } from "@/lib/api-client"
 
 /**
- * "barn is thinking…" above the composer while agents in this chat are working. The text
+ * "openbot is thinking…" above the composer while agents in this chat are working. The text
  * updates in place without animation; only `shimmer` signals that work is live.
  */
 export function ActivityLine({ agents }: { agents: Agent[] }) {

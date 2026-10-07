@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func TestAgentUsesConnectedApps(t *testing.T) {
@@ -95,7 +95,7 @@ func TestAgentUsesConnectedApps(t *testing.T) {
 	f.waitIdle(t)
 	msgs, _, _ := f.store.ListMessages(ctx, f.chatID, "", 50)
 	card := msgs[len(msgs)-1]
-	if card.Prompt == nil || card.Prompt.Kind != "approval" || card.Prompt.Question != "Allow barn to use GitHub: New issue?" {
+	if card.Prompt == nil || card.Prompt.Kind != "approval" || card.Prompt.Question != "Allow openbot to use GitHub: New issue?" {
 		t.Fatalf("expected an approval card, got %+v", card)
 	}
 	// The card gets a structured preview: the app, labelled arguments in order, the button.
@@ -129,7 +129,7 @@ func TestAgentUsesConnectedApps(t *testing.T) {
 	mux.HandleFunc("POST /hooks/{accountID}", conns.ServeWebhook)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	for _, body := range []string{`{"status":"up"}`, `{"status":"down","site":"barn.dev"}`} {
+	for _, body := range []string{`{"status":"up"}`, `{"status":"down","site":"openbot.dev"}`} {
 		resp, err := http.Post(srv.URL+"/hooks/"+hook.ID+"?token="+token, "application/json", strings.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
@@ -142,7 +142,7 @@ func TestAgentUsesConnectedApps(t *testing.T) {
 		got := sawEvent
 		mu.Unlock()
 		if got != "" {
-			if !strings.Contains(got, `"site": "barn.dev"`) || !strings.Contains(got, "Tell Martin the site is down.") {
+			if !strings.Contains(got, `"site": "openbot.dev"`) || !strings.Contains(got, "Tell Martin the site is down.") {
 				t.Fatalf("task_fired should carry the event: %s", got)
 			}
 			break

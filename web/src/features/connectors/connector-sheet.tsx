@@ -17,7 +17,7 @@ const ADD_TITLES: Record<AddStep["step"], { title: string; description: string }
   type: { title: "Add connection", description: "Pick an app to connect." },
   form: {
     title: "Add connection",
-    description: "barn checks the details with the app before saving.",
+    description: "openbot checks the details with the app before saving.",
   },
   signin: { title: "Add connection", description: "Sign in once; no keys to copy." },
   done: { title: "Connected", description: "Agents you picked can use it now." },

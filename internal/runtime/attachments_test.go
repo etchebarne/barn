@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/attachments"
-	"github.com/etchebarne/barn/internal/model"
+	"github.com/etchebarne/openbot/internal/attachments"
+	"github.com/etchebarne/openbot/internal/model"
 )
 
 func TestAgentsSeeAndSendAttachments(t *testing.T) {

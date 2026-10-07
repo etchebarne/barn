@@ -1,4 +1,4 @@
-// Command barnd is the barn server: API, agent runtime, and web app.
+// Command openbotd is the openbot server: API, agent runtime, and web app.
 package main
 
 import (
@@ -15,19 +15,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/etchebarne/barn/internal/api"
-	"github.com/etchebarne/barn/internal/attachments"
-	"github.com/etchebarne/barn/internal/bus"
-	"github.com/etchebarne/barn/internal/config"
-	"github.com/etchebarne/barn/internal/connectors"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/push"
-	"github.com/etchebarne/barn/internal/runtime"
-	"github.com/etchebarne/barn/internal/sandbox"
-	"github.com/etchebarne/barn/internal/secrets"
-	"github.com/etchebarne/barn/internal/settings"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/webui"
+	"github.com/etchebarne/openbot/internal/api"
+	"github.com/etchebarne/openbot/internal/attachments"
+	"github.com/etchebarne/openbot/internal/bus"
+	"github.com/etchebarne/openbot/internal/config"
+	"github.com/etchebarne/openbot/internal/connectors"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/push"
+	"github.com/etchebarne/openbot/internal/runtime"
+	"github.com/etchebarne/openbot/internal/sandbox"
+	"github.com/etchebarne/openbot/internal/secrets"
+	"github.com/etchebarne/openbot/internal/settings"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/webui"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -35,11 +35,11 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
-		fmt.Println("barnd", version)
+		fmt.Println("openbotd", version)
 		return
 	}
 	if err := run(); err != nil {
-		slog.Error("barnd exited", "err", err)
+		slog.Error("openbotd exited", "err", err)
 		os.Exit(1)
 	}
 }
@@ -67,7 +67,7 @@ func run() error {
 
 	set := settings.New(st, box)
 	b := bus.New()
-	llm := model.New(cfg.OpenCodeBaseURL, "barn/"+strings.TrimPrefix(version, "v"), set.APIKey)
+	llm := model.New(cfg.OpenCodeBaseURL, "openbot/"+strings.TrimPrefix(version, "v"), set.APIKey)
 	rt := runtime.New(st, b, llm)
 	rt.CompactAtTokens = cfg.CompactAtTokens
 	rt.Timezone = set.Location
@@ -141,7 +141,7 @@ func run() error {
 	}
 	errc := make(chan error, 1)
 	go func() {
-		slog.Info("barnd listening", "version", version, "addr", cfg.Addr)
+		slog.Info("openbotd listening", "version", version, "addr", cfg.Addr)
 		errc <- httpSrv.ListenAndServe()
 	}()
 
@@ -160,7 +160,7 @@ func run() error {
 	return nil
 }
 
-// webFS picks the web app to serve: BARN_WEB_DIR if set, else the copy embedded at build time.
+// webFS picks the web app to serve: OPENBOT_WEB_DIR if set, else the copy embedded at build time.
 func webFS(dir string) fs.FS {
 	if dir != "" {
 		return os.DirFS(dir)

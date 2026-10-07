@@ -13,8 +13,8 @@ import (
 
 // fakeProc is an in-memory stdio MCP server.
 type fakeProc struct {
-	in       *io.PipeWriter // what barn writes
-	out      *io.PipeReader // what barn reads
+	in       *io.PipeWriter // what openbot writes
+	out      *io.PipeReader // what openbot reads
 	stderr   string
 	done     chan struct{}
 	once     sync.Once
@@ -36,7 +36,7 @@ func (p *fakeProc) Close() error {
 	return nil
 }
 
-// startFake runs a server that pings barn once before answering each tools/call, and exits
+// startFake runs a server that pings openbot once before answering each tools/call, and exits
 // with stderr output when asked to call "crash".
 func startFake(t *testing.T, env map[string]string) *fakeProc {
 	inR, inW := io.Pipe()

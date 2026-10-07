@@ -42,7 +42,7 @@ func apiRequest(ctx context.Context, method, url string, header http.Header, bod
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "barn")
+	req.Header.Set("User-Agent", "openbot")
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err

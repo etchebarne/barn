@@ -9,7 +9,7 @@ export const onboardingQueryOptions = queryOptions({
   staleTime: Number.POSITIVE_INFINITY,
 })
 
-export const DEFAULT_AGENT_NAME = "barn"
+export const DEFAULT_AGENT_NAME = "openbot"
 
 export function useCompleteOnboarding() {
   const queryClient = useQueryClient()

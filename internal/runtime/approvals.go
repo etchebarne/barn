@@ -9,8 +9,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // EventApproval delivers the outcome of an approval prompt. Payload: {"messageId": "..."}.

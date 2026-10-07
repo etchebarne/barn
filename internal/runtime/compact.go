@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
-	"github.com/etchebarne/barn/internal/view"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/view"
 )
 
 // DefaultCompactAtTokens is when an agent's context gets compacted. Models served by OpenCode Go
@@ -85,7 +85,7 @@ func (l *loop) compact(ctx context.Context, agent store.Agent, limit int) error 
 
 	l.m.setActivity(agent.ID, view.Working("tidying up my notes"))
 	resp, err := l.m.llm.Chat(ctx, model.Request{
-		Session:   "barn-agent-" + agent.ID,
+		Session:   "openbot-agent-" + agent.ID,
 		Model:     agent.Model,
 		Messages:  []model.Message{model.Text("system", compactorPrompt), model.Text("user", transcript.String())},
 		MaxTokens: 4000,

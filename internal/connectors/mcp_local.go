@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// MCPLocal runs an MCP server that talks over stdio (the usual `npx …` / `uvx …` servers). barn
+// MCPLocal runs an MCP server that talks over stdio (the usual `npx …` / `uvx …` servers). openbot
 // runs it in a container of its own, apart from agents' sandboxes, so agents can't read the
 // secrets in its environment.
 type MCPLocal struct{}
@@ -22,7 +22,7 @@ type MCPLocal struct{}
 func (MCPLocal) Name() string        { return "mcp_local" }
 func (MCPLocal) DisplayName() string { return "Local MCP server" }
 func (MCPLocal) Description() string {
-	return "Run an MCP server that talks over stdio, like `npx -y @modelcontextprotocol/server-memory`, in barn's MCP container."
+	return "Run an MCP server that talks over stdio, like `npx -y @modelcontextprotocol/server-memory`, in openbot's MCP container."
 }
 func (MCPLocal) CredentialFields() []Field {
 	return []Field{{Key: "env", Label: "Environment variables", Secret: true, Optional: true,
@@ -45,7 +45,7 @@ type LocalProcess interface {
 	Done() <-chan struct{}
 }
 
-// LocalRunner starts a command with env in barn's MCP container.
+// LocalRunner starts a command with env in openbot's MCP container.
 type LocalRunner func(ctx context.Context, command string, env map[string]string) (LocalProcess, error)
 
 var localRunner struct {
@@ -53,7 +53,7 @@ var localRunner struct {
 	run LocalRunner
 }
 
-// SetLocalRunner enables local MCP servers (barn sets it when Docker is available).
+// SetLocalRunner enables local MCP servers (openbot sets it when Docker is available).
 func SetLocalRunner(r LocalRunner) {
 	localRunner.Lock()
 	defer localRunner.Unlock()
@@ -64,7 +64,7 @@ func runner() (LocalRunner, error) {
 	localRunner.Lock()
 	defer localRunner.Unlock()
 	if localRunner.run == nil {
-		return nil, userErr("local MCP servers need Docker on the barn server (it isn't available)")
+		return nil, userErr("local MCP servers need Docker on the openbot server (it isn't available)")
 	}
 	return localRunner.run, nil
 }
@@ -266,12 +266,12 @@ func (c *stdioConn) read() {
 		}
 		switch {
 		case msg.Method != "" && len(msg.ID) > 0:
-			// A request from the server (ping, roots/list, sampling…). barn only answers ping.
+			// A request from the server (ping, roots/list, sampling…). openbot only answers ping.
 			reply := map[string]any{"jsonrpc": "2.0", "id": msg.ID}
 			if msg.Method == "ping" {
 				reply["result"] = map[string]any{}
 			} else {
-				reply["error"] = map[string]any{"code": -32601, "message": "barn doesn't support " + msg.Method}
+				reply["error"] = map[string]any{"code": -32601, "message": "openbot doesn't support " + msg.Method}
 			}
 			// Reply from elsewhere: the server may be busy writing to us and not reading yet.
 			go func() { _ = c.write(reply) }()

@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/etchebarne/barn/internal/ids"
+	"github.com/etchebarne/openbot/internal/ids"
 )
 
 // Message is a chat message in OpenAI format. ReasoningContent is a provider extension some
@@ -29,7 +29,7 @@ type Message struct {
 	ToolCallID       string     `json:"tool_call_id,omitempty"`
 	// ImageRefs are attachment ids of images on a user message (kept in the stored context);
 	// Images holds their bytes for one request only and is never stored.
-	ImageRefs []string `json:"barn_images,omitempty"`
+	ImageRefs []string `json:"openbot_images,omitempty"`
 	Images    []Image  `json:"-"`
 }
 
@@ -188,7 +188,7 @@ func transient(err error) bool {
 	return errors.As(err, &netErr) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET)
 }
 
-// New creates a client. userAgent identifies barn to the provider, e.g. "barn/0.1.0".
+// New creates a client. userAgent identifies openbot to the provider, e.g. "openbot/0.1.0".
 func New(baseURL, userAgent string, key KeyFunc) *Client {
 	return &Client{
 		baseURL:   strings.TrimRight(baseURL, "/"),
@@ -289,7 +289,7 @@ func (c *Client) VerifyKey(ctx context.Context, key string) error {
 		return errors.New("provider returned no models")
 	}
 	_, err = c.chat(ctx, key, Request{
-		Session:   "barn-verify-" + ids.New(),
+		Session:   "openbot-verify-" + ids.New(),
 		Model:     pickCheapModel(models),
 		Messages:  []Message{Text("user", "ok")},
 		MaxTokens: 1,
@@ -301,7 +301,7 @@ func (c *Client) VerifyKey(ctx context.Context, key string) error {
 // request. It returns ErrTrainsOnData if the workspace's privacy settings block the model.
 func (c *Client) ProbeModel(ctx context.Context, model string) error {
 	_, err := c.Chat(ctx, Request{
-		Session:   "barn-probe-" + ids.New(),
+		Session:   "openbot-probe-" + ids.New(),
 		Model:     model,
 		Messages:  []Message{Text("user", "ok")},
 		MaxTokens: 1,

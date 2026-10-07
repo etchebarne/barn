@@ -21,7 +21,7 @@ func (GitHub) CredentialFields() []Field {
 	return []Field{
 		{Key: "token", Label: "Personal access token", Secret: true, Help: "Starts with github_pat_."},
 		{Key: "webhook_secret", Label: "Webhook secret", Secret: true, Optional: true, Events: true,
-			Help: "barn makes one up; paste it into the repository's webhook. Change it only if you need a specific value."},
+			Help: "openbot makes one up; paste it into the repository's webhook. Change it only if you need a specific value."},
 	}
 }
 func (GitHub) ConfigFields() []Field {

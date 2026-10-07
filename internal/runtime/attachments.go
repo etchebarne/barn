@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/etchebarne/barn/internal/attachments"
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/attachments"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // How attachments reach agents: every file is listed with its sandbox path; small text files

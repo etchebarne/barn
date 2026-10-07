@@ -162,7 +162,7 @@ func TestChatPicksAndRemembersProtocol(t *testing.T) {
 		"qwen3.8-max": "/messages",
 		"oddball":     "/messages", // guessed wrong; must fall back
 	})
-	c := New(srv.URL, "barn/test", func(context.Context) (string, error) { return "k", nil })
+	c := New(srv.URL, "openbot/test", func(context.Context) (string, error) { return "k", nil })
 	ctx := context.Background()
 
 	for model, want := range map[string]string{"kimi-k2.6": "cc", "muse-spark": "resp", "qwen3.8-max": "msg"} {

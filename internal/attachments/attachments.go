@@ -24,11 +24,11 @@ import (
 
 	_ "golang.org/x/image/webp"
 
-	"github.com/etchebarne/barn/internal/ids"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/ids"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
-// MaxSize is the largest file barn accepts.
+// MaxSize is the largest file openbot accepts.
 const MaxSize = 25 << 20
 
 // ErrTooLarge means a file is over MaxSize.

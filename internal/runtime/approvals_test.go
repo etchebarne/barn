@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 func newTarget(t *testing.T, f fixture) store.Agent {
@@ -49,7 +49,7 @@ func TestArchiveNeedsApproval(t *testing.T) {
 
 			var outcome string
 			f.llm.handler = func(req model.Request) model.Message {
-				if !strings.HasPrefix(req.Messages[0].Text(), "You are barn,") {
+				if !strings.HasPrefix(req.Messages[0].Text(), "You are openbot,") {
 					return model.Text("assistant", "")
 				}
 				last := req.Messages[len(req.Messages)-1]
@@ -101,7 +101,7 @@ func TestTrustedAgentsSkipApproval(t *testing.T) {
 	target := newTarget(t, f)
 	f.llm.handler = func(req model.Request) model.Message {
 		last := req.Messages[len(req.Messages)-1]
-		if strings.HasPrefix(req.Messages[0].Text(), "You are barn,") && last.Role == "user" {
+		if strings.HasPrefix(req.Messages[0].Text(), "You are openbot,") && last.Role == "user" {
 			return toolCall(toolArchiveAgent, map[string]string{"agent_id": target.ID})
 		}
 		return model.Text("assistant", "")
@@ -120,10 +120,10 @@ func TestUpdateAgentTool(t *testing.T) {
 	var f fixture
 	f = setup(t,
 		func(model.Request) model.Message {
-			return toolCall(toolUpdateAgent, map[string]string{"name": "Barnaby", "language": "Spanish"})
+			return toolCall(toolUpdateAgent, map[string]string{"name": "Opie", "language": "Spanish"})
 		},
 		func(req model.Request) model.Message {
-			if tr := req.Messages[len(req.Messages)-1].Text(); !strings.Contains(tr, `"name":"Barnaby"`) {
+			if tr := req.Messages[len(req.Messages)-1].Text(); !strings.Contains(tr, `"name":"Opie"`) {
 				t.Errorf("unexpected tool result %s", tr)
 			}
 			return model.Text("assistant", "")
@@ -138,13 +138,13 @@ func TestUpdateAgentTool(t *testing.T) {
 			return model.Text("assistant", "")
 		},
 	)
-	f.userSays(t, "call yourself Barnaby and speak Spanish")
+	f.userSays(t, "call yourself Opie and speak Spanish")
 	f.waitIdle(t)
 	a, _ := f.store.GetAgent(context.Background(), f.agent.ID)
-	if a.Name != "Barnaby" || a.Language != "Spanish" {
+	if a.Name != "Opie" || a.Language != "Spanish" {
 		t.Fatalf("expected renamed agent, got %+v", a)
 	}
-	if c, _ := f.store.GetChat(context.Background(), f.chatID); c.Name != "Barnaby" {
+	if c, _ := f.store.GetChat(context.Background(), f.chatID); c.Name != "Opie" {
 		t.Fatalf("the DM should follow the agent's name, got %q", c.Name)
 	}
 	f.userSays(t, "rename someone else")

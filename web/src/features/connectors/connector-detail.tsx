@@ -239,7 +239,7 @@ function Disconnect({
   )
 }
 
-/** How the service sends events to barn: URL, secret, setup steps and event-only fields. */
+/** How the service sends events to openbot: URL, secret, setup steps and event-only fields. */
 function ReceiveEvents({
   connector,
   type,

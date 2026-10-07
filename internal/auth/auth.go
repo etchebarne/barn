@@ -69,7 +69,7 @@ func VerifyPassword(password, encoded string) (bool, error) {
 // dummyHash is verified against when a username doesn't exist, so response timing doesn't
 // reveal whether the account exists.
 var dummyHash = func() string {
-	h, _ := HashPassword("barn-dummy-password")
+	h, _ := HashPassword("openbot-dummy-password")
 	return h
 }()
 

@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/etchebarne/barn/internal/model"
-	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/store"
 )
 
 // Standing approvals: the user can let an agent take an action without asking each time, from
@@ -34,7 +34,7 @@ var allowWithoutAskingTool = function(toolAllowWithoutAsking,
 		"additionalProperties": false
 	}`)
 
-// actionKey identifies a gated action across renames: barn's own tools by name, app tools by
+// actionKey identifies a gated action across renames: openbot's own tools by name, app tools by
 // connection id and tool. label is what the user sees.
 func (l *loop) actionKey(ctx context.Context, agent store.Agent, tool string) (key, label string, ok bool) {
 	if tool == toolAllowWithoutAsking {
