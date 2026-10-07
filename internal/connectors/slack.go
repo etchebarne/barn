@@ -41,18 +41,13 @@ func (Slack) SignalTypes() []SignalType {
 
 func (Slack) Tools(_ context.Context, acct Account) ([]Tool, error) {
 	post := Tool{Name: "post_message", Description: "Post a message to a channel (by name like #alerts or id), optionally in a thread.", External: true,
-		Title: "Slack message", Verb: "Send message", Body: "text", Labels: map[string]string{"channel": "To", "thread_ts": "Thread", "as": "Post as"},
+		Title: "Slack message", Verb: "Send message", Body: "text", Labels: map[string]string{"channel": "To", "thread_ts": "Thread"},
 		Parameters: params(map[string]string{"channel": "#name or channel id", "text": "message (Slack mrkdwn)", "?thread_ts": "reply in this thread"})}
 	if acct.Credentials["user_token"] != "" {
-		// The choice is explicit so the approval card always says who the message comes from.
-		post.Description = "Post a message to a channel (by name like #alerts or id, including the user's own channels), " +
-			"optionally in a thread. as=me posts as the user (how messages sent on their behalf normally look); " +
-			"as=bot posts as the app's bot account."
-		post.Parameters = json.RawMessage(`{"type":"object","additionalProperties":false,"required":["as","channel","text"],"properties":{` +
-			`"as":{"type":"string","enum":["me","bot"],"description":"me = as the user (default choice for messages on their behalf); bot = as the bot"},` +
-			`"channel":{"type":"string","description":"#name or channel id"},` +
-			`"text":{"type":"string","description":"message (Slack mrkdwn)"},` +
-			`"thread_ts":{"type":"string","description":"reply in this thread"}}}`)
+		// With the user's token, messages always go out as them ("Sent using" the app).
+		post.Title = "Slack message as you"
+		post.Description = "Post a message as the user to a channel (by name like #alerts or id, including the " +
+			"user's own channels), optionally in a thread."
 	}
 	return []Tool{
 		post,
@@ -114,7 +109,6 @@ func (s Slack) Call(ctx context.Context, acct Account, tool string, args json.Ra
 		ThreadTS string `json:"thread_ts"`
 		Limit    int    `json:"limit"`
 		User     string `json:"user"`
-		As       string `json:"as"`
 	}
 	if err := decodeArgs(args, &a); err != nil {
 		return nil, err
@@ -125,11 +119,8 @@ func (s Slack) Call(ctx context.Context, acct Account, tool string, args json.Ra
 		if strings.TrimSpace(a.Text) == "" {
 			return nil, userErr("text is required")
 		}
-		if a.As == "me" || (a.As == "" && acct.Credentials["user_token"] != "") {
-			if acct.Credentials["user_token"] == "" {
-				return nil, userErr("posting as the user needs a user token on this Slack connection; post as the bot instead")
-			}
-			token = acct.Credentials["user_token"]
+		if user := acct.Credentials["user_token"]; user != "" {
+			token = user // post as the user when their token is set
 		}
 		id, err := s.channelID(ctx, acct, token, a.Channel)
 		if err != nil {

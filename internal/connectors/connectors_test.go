@@ -524,7 +524,7 @@ func TestManagerAccountsToolsAndSignals(t *testing.T) {
 	}
 }
 
-// With a user token, agents choose who a message comes from; "me" posts with the user's token.
+// With a user token, messages always go out as the user; without one, as the bot.
 func TestSlackPostsAsUser(t *testing.T) {
 	var mu sync.Mutex
 	var postedWith, listedWith string
@@ -549,26 +549,18 @@ func TestSlackPostsAsUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools, _ := sl.Tools(context.Background(), acct)
-	if !strings.Contains(string(tools[0].Parameters), `"required":["as","channel","text"]`) {
-		t.Fatalf("with a user token, as should be required: %s", tools[0].Parameters)
+	if strings.Contains(string(tools[0].Parameters), `"as"`) || tools[0].Title != "Slack message as you" {
+		t.Fatalf("no choice of sender: %s %q", tools[0].Parameters, tools[0].Title)
 	}
-	call(t, sl, acct, "post_message", `{"as":"me","channel":"#bot-ception","text":"hi"}`)
+	call(t, sl, acct, "post_message", `{"channel":"#bot-ception","text":"hi"}`)
 	if postedWith != "Bearer xoxp-1" || listedWith != "Bearer xoxp-1" {
-		t.Fatalf("as me: posted with %q, looked up with %q", postedWith, listedWith)
-	}
-	call(t, sl, acct, "post_message", `{"as":"bot","channel":"#bot-ception","text":"hi"}`)
-	if postedWith != "Bearer xoxb-1" {
-		t.Fatalf("as bot: posted with %q", postedWith)
+		t.Fatalf("posted with %q, looked up with %q", postedWith, listedWith)
 	}
 
-	// Without a user token there's no choice, and asking to post as the user explains why not.
 	noUser := Account{Credentials: map[string]string{"bot_token": "xoxb-1"}, Config: acct.Config}
-	tools, _ = sl.Tools(context.Background(), noUser)
-	if strings.Contains(string(tools[0].Parameters), `"as"`) {
-		t.Fatal("no user token, no as parameter")
-	}
-	if _, err := sl.Call(context.Background(), noUser, "post_message", json.RawMessage(`{"as":"me","channel":"#bot-ception","text":"hi"}`)); err == nil {
-		t.Fatal("posting as the user without a user token should fail")
+	call(t, sl, noUser, "post_message", `{"channel":"#bot-ception","text":"hi"}`)
+	if postedWith != "Bearer xoxb-1" {
+		t.Fatalf("without a user token: posted with %q", postedWith)
 	}
 	bad := Account{Credentials: map[string]string{"bot_token": "xoxb-1", "user_token": "xoxb-2"}, Config: acct.Config}
 	if err := sl.Verify(context.Background(), bad); err == nil || !strings.Contains(err.Error(), "xoxp-") {
