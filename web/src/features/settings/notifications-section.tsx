@@ -13,7 +13,10 @@ import { SettingsSection } from "./settings-section"
 const PUSH_STATE_KEY = ["push", "state"] as const
 
 const DESCRIPTIONS: Record<PushState, string> = {
-  unsupported: "This browser can't show notifications from barn.",
+  unsupported:
+    typeof window !== "undefined" && !window.isSecureContext
+      ? "Notifications need barn to be opened over HTTPS (for example with Tailscale Serve)."
+      : "This browser can't show notifications from barn.",
   unavailable: "Notifications aren't set up on the server.",
   blocked:
     "Notifications are blocked for barn. Allow them in your browser's site settings, then reload.",

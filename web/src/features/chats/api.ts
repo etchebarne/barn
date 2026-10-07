@@ -13,6 +13,7 @@ import {
   markChatReadInCache,
   updateMessageInCache,
 } from "@/lib/chat-cache"
+import { randomId } from "@/lib/ids"
 import { queryKeys } from "@/lib/query-keys"
 import { toggleUserReaction } from "@/lib/reactions"
 
@@ -71,7 +72,7 @@ export function useSendMessage(chatId: string) {
 
   return {
     send: (body: string) => {
-      const clientId = crypto.randomUUID()
+      const clientId = randomId()
       add(chatId, { clientId, body, status: "sending", createdAt: Date.now() })
       mutation.mutate({ clientId, body })
     },

@@ -11,12 +11,12 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(text)
+      await writeClipboard(text)
       setCopied(true)
       clearTimeout(timer.current)
       timer.current = setTimeout(() => setCopied(false), 1500)
     } catch {
-      // Clipboard unavailable (insecure context or denied); nothing sensible to do.
+      // Copying was refused; nothing sensible to do.
     }
   }
 
@@ -38,4 +38,22 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
       <TooltipContent>{copied ? "Copied" : label}</TooltipContent>
     </Tooltip>
   )
+}
+
+/**
+ * The Clipboard API only exists in secure contexts (HTTPS or localhost). Over plain http, fall
+ * back to selecting a hidden textarea and the legacy copy command.
+ */
+async function writeClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text)
+  const area = document.createElement("textarea")
+  area.value = text
+  area.setAttribute("readonly", "")
+  area.style.position = "fixed"
+  area.style.opacity = "0"
+  document.body.append(area)
+  area.select()
+  const ok = document.execCommand("copy")
+  area.remove()
+  if (!ok) throw new Error("copy failed")
 }
