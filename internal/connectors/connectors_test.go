@@ -523,3 +523,55 @@ func TestManagerAccountsToolsAndSignals(t *testing.T) {
 		t.Fatal("matching is a case-insensitive contains")
 	}
 }
+
+// With a user token, agents choose who a message comes from; "me" posts with the user's token.
+func TestSlackPostsAsUser(t *testing.T) {
+	var mu sync.Mutex
+	var postedWith, listedWith string
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch r.URL.Path {
+		case "/auth.test":
+			fmt.Fprint(w, `{"ok":true,"user_id":"U1"}`)
+		case "/conversations.list":
+			listedWith = r.Header.Get("Authorization")
+			fmt.Fprint(w, `{"ok":true,"channels":[{"id":"C9","name":"bot-ception"}]}`)
+		case "/chat.postMessage":
+			postedWith = r.Header.Get("Authorization")
+			fmt.Fprint(w, `{"ok":true,"ts":"1.0"}`)
+		}
+	}))
+	defer api.Close()
+	sl := Slack{}
+	acct := Account{Credentials: map[string]string{"bot_token": "xoxb-1", "user_token": "xoxp-1"}, Config: map[string]string{"base_url": api.URL}}
+	if err := sl.Verify(context.Background(), acct); err != nil {
+		t.Fatal(err)
+	}
+	tools, _ := sl.Tools(context.Background(), acct)
+	if !strings.Contains(string(tools[0].Parameters), `"required":["as","channel","text"]`) {
+		t.Fatalf("with a user token, as should be required: %s", tools[0].Parameters)
+	}
+	call(t, sl, acct, "post_message", `{"as":"me","channel":"#bot-ception","text":"hi"}`)
+	if postedWith != "Bearer xoxp-1" || listedWith != "Bearer xoxp-1" {
+		t.Fatalf("as me: posted with %q, looked up with %q", postedWith, listedWith)
+	}
+	call(t, sl, acct, "post_message", `{"as":"bot","channel":"#bot-ception","text":"hi"}`)
+	if postedWith != "Bearer xoxb-1" {
+		t.Fatalf("as bot: posted with %q", postedWith)
+	}
+
+	// Without a user token there's no choice, and asking to post as the user explains why not.
+	noUser := Account{Credentials: map[string]string{"bot_token": "xoxb-1"}, Config: acct.Config}
+	tools, _ = sl.Tools(context.Background(), noUser)
+	if strings.Contains(string(tools[0].Parameters), `"as"`) {
+		t.Fatal("no user token, no as parameter")
+	}
+	if _, err := sl.Call(context.Background(), noUser, "post_message", json.RawMessage(`{"as":"me","channel":"#bot-ception","text":"hi"}`)); err == nil {
+		t.Fatal("posting as the user without a user token should fail")
+	}
+	bad := Account{Credentials: map[string]string{"bot_token": "xoxb-1", "user_token": "xoxb-2"}, Config: acct.Config}
+	if err := sl.Verify(context.Background(), bad); err == nil || !strings.Contains(err.Error(), "xoxp-") {
+		t.Fatalf("a bot token in the user field should be caught: %v", err)
+	}
+}

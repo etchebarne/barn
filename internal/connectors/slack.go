@@ -19,11 +19,13 @@ type Slack struct{}
 func (Slack) Name() string        { return "slack" }
 func (Slack) DisplayName() string { return "Slack" }
 func (Slack) Description() string {
-	return "Read channels and post messages; get notified when the bot is mentioned or messaged."
+	return "Read channels and post messages as you or as the bot; get notified when the bot is mentioned or messaged."
 }
 func (Slack) CredentialFields() []Field {
 	return []Field{
 		{Key: "bot_token", Label: "Bot token", Secret: true, Help: "Starts with xoxb-. From Install App or OAuth & Permissions."},
+		{Key: "user_token", Label: "User token", Secret: true, Optional: true,
+			Help: "Starts with xoxp-. Lets agents post as you (Slack shows “Sent using” under it). Without it they post as the bot."},
 		{Key: "app_token", Label: "App-level token", Secret: true, Optional: true,
 			Help: "Starts with xapp-. Lets agents hear mentions and DMs."},
 	}
@@ -37,11 +39,23 @@ func (Slack) SignalTypes() []SignalType {
 	}
 }
 
-func (Slack) Tools(context.Context, Account) ([]Tool, error) {
+func (Slack) Tools(_ context.Context, acct Account) ([]Tool, error) {
+	post := Tool{Name: "post_message", Description: "Post a message to a channel (by name like #alerts or id), optionally in a thread.", External: true,
+		Title: "Slack message", Verb: "Send message", Body: "text", Labels: map[string]string{"channel": "To", "thread_ts": "Thread", "as": "Post as"},
+		Parameters: params(map[string]string{"channel": "#name or channel id", "text": "message (Slack mrkdwn)", "?thread_ts": "reply in this thread"})}
+	if acct.Credentials["user_token"] != "" {
+		// The choice is explicit so the approval card always says who the message comes from.
+		post.Description = "Post a message to a channel (by name like #alerts or id, including the user's own channels), " +
+			"optionally in a thread. as=me posts as the user (how messages sent on their behalf normally look); " +
+			"as=bot posts as the app's bot account."
+		post.Parameters = json.RawMessage(`{"type":"object","additionalProperties":false,"required":["as","channel","text"],"properties":{` +
+			`"as":{"type":"string","enum":["me","bot"],"description":"me = as the user (default choice for messages on their behalf); bot = as the bot"},` +
+			`"channel":{"type":"string","description":"#name or channel id"},` +
+			`"text":{"type":"string","description":"message (Slack mrkdwn)"},` +
+			`"thread_ts":{"type":"string","description":"reply in this thread"}}}`)
+	}
 	return []Tool{
-		{Name: "post_message", Description: "Post a message to a channel (by name like #alerts or id), optionally in a thread.", External: true,
-			Title: "Slack message", Verb: "Send message", Body: "text", Labels: map[string]string{"channel": "To", "thread_ts": "Thread"},
-			Parameters: params(map[string]string{"channel": "#name or channel id", "text": "message (Slack mrkdwn)", "?thread_ts": "reply in this thread"})},
+		post,
 		{Name: "read_channel", Description: "Read recent messages in a channel.",
 			Parameters: params(map[string]string{"channel": "#name or channel id", "?limit": "int:how many (default 20, max 100)"})},
 		{Name: "list_channels", Description: "List channels the bot can see.", Parameters: params(map[string]string{})},
@@ -64,7 +78,7 @@ func (Slack) call(ctx context.Context, acct Account, token, method string, args 
 }
 
 // channelID resolves "#name" (or a bare name) to a channel id.
-func (s Slack) channelID(ctx context.Context, acct Account, channel string) (string, error) {
+func (s Slack) channelID(ctx context.Context, acct Account, token, channel string) (string, error) {
 	name := strings.TrimPrefix(channel, "#")
 	if name == "" {
 		return "", userErr("channel is required")
@@ -78,7 +92,7 @@ func (s Slack) channelID(ctx context.Context, acct Account, channel string) (str
 			Name string `json:"name"`
 		} `json:"channels"`
 	}
-	if err := s.call(ctx, acct, acct.Credentials["bot_token"], "conversations.list",
+	if err := s.call(ctx, acct, token, "conversations.list",
 		map[string]any{"types": "public_channel,private_channel", "limit": 1000, "exclude_archived": true}, &out); err != nil {
 		return "", err
 	}
@@ -86,6 +100,9 @@ func (s Slack) channelID(ctx context.Context, acct Account, channel string) (str
 		if strings.EqualFold(c.Name, name) {
 			return c.ID, nil
 		}
+	}
+	if token == acct.Credentials["user_token"] {
+		return "", userErr("no channel #%s that the user is in", name)
 	}
 	return "", userErr("no channel #%s that the bot can see (invite it with /invite)", name)
 }
@@ -97,6 +114,7 @@ func (s Slack) Call(ctx context.Context, acct Account, tool string, args json.Ra
 		ThreadTS string `json:"thread_ts"`
 		Limit    int    `json:"limit"`
 		User     string `json:"user"`
+		As       string `json:"as"`
 	}
 	if err := decodeArgs(args, &a); err != nil {
 		return nil, err
@@ -107,7 +125,13 @@ func (s Slack) Call(ctx context.Context, acct Account, tool string, args json.Ra
 		if strings.TrimSpace(a.Text) == "" {
 			return nil, userErr("text is required")
 		}
-		id, err := s.channelID(ctx, acct, a.Channel)
+		if a.As == "me" || (a.As == "" && acct.Credentials["user_token"] != "") {
+			if acct.Credentials["user_token"] == "" {
+				return nil, userErr("posting as the user needs a user token on this Slack connection; post as the bot instead")
+			}
+			token = acct.Credentials["user_token"]
+		}
+		id, err := s.channelID(ctx, acct, token, a.Channel)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +147,7 @@ func (s Slack) Call(ctx context.Context, acct Account, tool string, args json.Ra
 		}
 		return map[string]string{"channel": id, "ts": out.TS}, nil
 	case "read_channel":
-		id, err := s.channelID(ctx, acct, a.Channel)
+		id, err := s.channelID(ctx, acct, token, a.Channel)
 		if err != nil {
 			return nil, err
 		}
@@ -170,6 +194,15 @@ func (s Slack) Verify(ctx context.Context, acct Account) error {
 	var out map[string]any
 	if err := s.call(ctx, acct, acct.Credentials["bot_token"], "auth.test", nil, &out); err != nil {
 		return err
+	}
+	if user := acct.Credentials["user_token"]; user != "" {
+		if !strings.HasPrefix(user, "xoxp-") {
+			return userErr("the user token should start with xoxp- (the bot token starts with xoxb-)")
+		}
+		var who map[string]any
+		if err := s.call(ctx, acct, user, "auth.test", nil, &who); err != nil {
+			return fmt.Errorf("user token: %w", err)
+		}
 	}
 	if app := acct.Credentials["app_token"]; app != "" {
 		var conn map[string]any

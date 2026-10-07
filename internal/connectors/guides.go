@@ -18,10 +18,14 @@ var slackManifest = map[string]any{
 		"app_home": map[string]any{"messages_tab_enabled": true, "messages_tab_read_only_enabled": false},
 	},
 	"oauth_config": map[string]any{
-		"scopes": map[string]any{"bot": []string{
-			"app_mentions:read", "chat:write", "channels:history", "channels:read",
-			"groups:history", "groups:read", "im:history", "users:read",
-		}},
+		"scopes": map[string]any{
+			"bot": []string{
+				"app_mentions:read", "chat:write", "channels:history", "channels:read",
+				"groups:history", "groups:read", "im:history", "users:read",
+			},
+			// Posting as the user: messages show as them, with "Sent using barn".
+			"user": []string{"chat:write", "channels:read", "groups:read", "im:read", "mpim:read"},
+		},
 	},
 	"settings": map[string]any{
 		"event_subscriptions":    map[string]any{"bot_events": []string{"app_mention", "message.im"}},
@@ -44,7 +48,8 @@ func (Slack) Setup() Setup {
 			Link: &SetupLink{Label: "Create Slack app", URL: "https://api.slack.com/apps?new_app=1&manifest_json=" + url.QueryEscape(string(compact))},
 			Copy: &SetupCopy{Label: "Copy app manifest (if Slack shows an empty form, choose “From a manifest” and paste it)", Text: slackManifestJSON()}},
 		{Text: "In the app's sidebar, open Install App, click Install to Workspace, then Allow."},
-		{Text: "Copy the Bot User OAuth Token it shows (starts with xoxb-) into Bot token below."},
+		{Text: "Copy the Bot User OAuth Token it shows (starts with xoxb-) into Bot token below. To let " +
+			"agents post as you, also copy the User OAuth Token (starts with xoxp-) into User token."},
 		{Text: "So agents hear mentions and DMs: open Basic Information, scroll to App-Level Tokens, click " +
 			"Generate Token and Scopes, add the connections:write scope, click Generate, and paste the " +
 			"token (starts with xapp-) into App-level token below."},
