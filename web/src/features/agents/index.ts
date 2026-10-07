@@ -1,5 +1,5 @@
 export { activityLabel } from "./activity"
-export { AgentAvatar, initials } from "./agent-avatar"
+export { AgentAvatar, GroupAvatar, initials } from "./agent-avatar"
 export { AgentDetailsSheet } from "./agent-details-sheet"
 export { agentsQueryOptions, useAgents, useAgentsById, useRetryAgent, useUpdateAgent } from "./api"
 export { openAgentDetails } from "./details-store"

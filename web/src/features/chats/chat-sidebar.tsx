@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, useMatchRoute } from "@tanstack/react-router"
-import { SettingsIcon, UsersIcon } from "lucide-react"
+import { SettingsIcon } from "lucide-react"
 
 import { BrandMark } from "@/components/brand-mark"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Sidebar,
   SidebarContent,
@@ -17,7 +16,7 @@ import {
   SidebarMenuSkeleton,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { AgentAvatar, useAgentsById } from "@/features/agents"
+import { AgentAvatar, GroupAvatar, useAgentsById } from "@/features/agents"
 import type { Agent, Chat } from "@/lib/api-client"
 import { useConnectionStore } from "@/lib/ws"
 
@@ -37,14 +36,8 @@ function UnreadBadge({ count }: { count: number }) {
 }
 
 function ChatAvatar({ chat, agent }: { chat: Chat; agent: Agent | undefined }) {
-  if (chat.kind === "dm") return <AgentAvatar name={agent?.name ?? chat.name} />
-  return (
-    <Avatar aria-hidden="true">
-      <AvatarFallback>
-        <UsersIcon className="size-4" />
-      </AvatarFallback>
-    </Avatar>
-  )
+  if (chat.kind === "dm") return <AgentAvatar id={agent?.id} name={agent?.name ?? chat.name} />
+  return <GroupAvatar memberIds={chat.members.map((m) => m.agentId)} />
 }
 
 function ChatListItem({

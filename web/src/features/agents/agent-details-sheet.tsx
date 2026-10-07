@@ -94,7 +94,7 @@ export function AgentDetailsSheet() {
           initialFocus={focus === "model" ? modelInputRef : undefined}
         >
           <SheetHeader className="flex-row items-center gap-3 border-b pr-12">
-            <AgentAvatar name={shown.name} size="lg" />
+            <AgentAvatar id={shown.id} name={shown.name} size="lg" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <SheetTitle className="truncate">{shown.name}</SheetTitle>
               <SheetDescription>Agent settings</SheetDescription>

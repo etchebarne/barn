@@ -1,11 +1,16 @@
 import { useQuery } from "@tanstack/react-query"
-import { UsersIcon } from "lucide-react"
 
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { MessageScrollerProvider } from "@/components/ui/message-scroller"
 import { Skeleton } from "@/components/ui/skeleton"
-import { activityLabel, AgentAvatar, openAgentDetails, useAgentsById } from "@/features/agents"
+import {
+  activityLabel,
+  AgentAvatar,
+  GroupAvatar,
+  openAgentDetails,
+  useAgentsById,
+} from "@/features/agents"
 import type { Agent, Chat } from "@/lib/api-client"
 
 import { ActivityLine } from "./activity-line"
@@ -53,7 +58,7 @@ function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
               aria-label={`${agent.name}: agent details`}
               onClick={() => openAgentDetails(agent.id)}
             >
-              <AgentAvatar name={agent.name} />
+              <AgentAvatar id={agent.id} name={agent.name} />
               <HeaderTitle title={chat.name} status={status} inButton />
             </Button>
           </>
@@ -69,9 +74,7 @@ function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
 
   return (
     <PageHeader>
-      <span className="flex size-8 items-center justify-center rounded-full bg-muted">
-        <UsersIcon className="size-4 text-muted-foreground" />
-      </span>
+      <GroupAvatar memberIds={chat.members.map((m) => m.agentId)} />
       <HeaderTitle
         title={chat.name}
         status={`${members.length} ${members.length === 1 ? "agent" : "agents"}`}
