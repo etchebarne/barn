@@ -65,6 +65,9 @@ func (m *Manager) Start(ctx context.Context) error {
 		return err
 	}
 	for _, a := range agents {
+		if err := m.resumeIfInterrupted(ctx, a.ID); err != nil {
+			logger(a.ID).Error("check for an interrupted turn", "err", err)
+		}
 		m.AddAgent(a.ID)
 	}
 	return nil
