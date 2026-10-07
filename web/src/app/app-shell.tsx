@@ -2,7 +2,7 @@ import { Outlet } from "@tanstack/react-router"
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { AgentDetailsSheet } from "@/features/agents"
-import { ChatSidebar } from "@/features/chats"
+import { ChatSidebar, CommandPalette } from "@/features/chats"
 
 import { useRealtime } from "./realtime"
 import { useSyncTimezone } from "./timezone"
@@ -18,6 +18,7 @@ export function AppShell() {
         <Outlet />
       </SidebarInset>
       <AgentDetailsSheet />
+      <CommandPalette />
     </SidebarProvider>
   )
 }

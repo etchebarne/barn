@@ -270,13 +270,13 @@ func TestRender(t *testing.T) {
 func TestSlack(t *testing.T) {
 	var mu sync.Mutex
 	var posted map[string]any
-	acks := make(chan string, 4)
+	acks := make(chan string, 8)
 	var wsURL string
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		switch r.URL.Path {
 		case "/auth.test":
-			fmt.Fprint(w, `{"ok":true,"user_id":"UBOT"}`)
+			fmt.Fprint(w, `{"ok":true,"user_id":"UBOT","bot_id":"B1"}`)
 		case "/apps.connections.open":
 			if auth != "Bearer xapp-1" {
 				fmt.Fprint(w, `{"ok":false,"error":"invalid_auth"}`)
@@ -308,7 +308,9 @@ func TestSlack(t *testing.T) {
 			send(`{"envelope_id":"e1","type":"events_api","payload":{"event":{"type":"app_mention","channel":"C111","user":"U1","text":"<@UBOT> prod is down","ts":"1.0"}}}`)
 			send(`{"envelope_id":"e2","type":"events_api","payload":{"event":{"type":"message","channel":"C111","bot_id":"B1","text":"bot echo"}}}`)
 			send(`{"envelope_id":"e3","type":"events_api","payload":{"event":{"type":"message","channel":"D9","channel_type":"im","user":"U1","text":"hi bot","ts":"2.0"}}}`)
-			for range 3 {
+			send(`{"envelope_id":"e4","type":"events_api","payload":{"event":{"type":"message","subtype":"bot_message","channel":"C222","channel_type":"channel","bot_id":"B2","bot_profile":{"name":"Render"},"text":"Server unhealthy for api-production","ts":"3.0"}}}`)
+			send(`{"envelope_id":"e5","type":"events_api","payload":{"event":{"type":"message","subtype":"channel_join","channel":"C222","user":"U1","text":"joined"}}}`)
+			for range 5 {
 				_, data, err := ws.Read(ctx)
 				if err != nil {
 					return
@@ -338,9 +340,17 @@ func TestSlack(t *testing.T) {
 	}
 
 	// Messages read back with names and readable text instead of Slack ids and markup.
-	read := call(t, sl, acct, "read_channel", `{"channel":"#alerts"}`).([]map[string]string)
+	// …with when they were sent, in the user's time zone and as an age.
+	now = func() time.Time { return time.Unix(3, 0).Add(6 * time.Minute) }
+	defer func() { now = time.Now }()
+	loc := time.FixedZone("-03", -3*3600)
+	res2, err := sl.Call(WithLocation(context.Background(), loc), acct, "read_channel", json.RawMessage(`{"channel":"#alerts"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := res2.([]map[string]string)
 	if len(read) != 2 || read[0]["from"] != "Steve J" || read[0]["text"] != "@openbot see #alerts and the doc (https://x.dev) & @here" ||
-		read[1]["from"] != "Cursor" {
+		read[1]["from"] != "Cursor" || read[0]["time"] != "1969-12-31 21:00 -03" || read[0]["ago"] != "6 min ago" {
 		t.Fatalf("read_channel = %+v", read)
 	}
 
@@ -350,12 +360,14 @@ func TestSlack(t *testing.T) {
 	if err := sl.Listen(ctx, acct, func(s Signal) { got = append(got, s) }); err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	if len(got) != 2 || got[0].Type != "slack.app_mention" || got[0].Fields["text"] != "@openbot prod is down" ||
+	// Our own messages and joins are ignored; other bots' messages (alerts) come through, named.
+	if len(got) != 3 || got[0].Type != "slack.app_mention" || got[0].Fields["text"] != "@openbot prod is down" ||
 		got[0].Fields["user_name"] != "Steve J" ||
-		got[1].Type != "slack.message" || got[1].Fields["channel_type"] != "im" {
-		t.Fatalf("signals = %+v (bot messages must be ignored)", got)
+		got[1].Type != "slack.message" || got[1].Fields["channel_type"] != "im" ||
+		got[2].Fields["user_name"] != "Render" || got[2].Fields["text"] != "Server unhealthy for api-production" {
+		t.Fatalf("signals = %+v", got)
 	}
-	for _, want := range []string{"e1", "e2", "e3"} {
+	for _, want := range []string{"e1", "e2", "e3", "e4", "e5"} {
 		if id := <-acks; id != want {
 			t.Fatalf("ack %q, want %q", id, want)
 		}

@@ -35,7 +35,7 @@ func (Slack) SignalTypes() []SignalType {
 	f := []string{"channel", "user", "user_name", "text", "ts", "thread_ts"}
 	return []SignalType{
 		{Type: "slack.app_mention", Description: "Someone mentioned the bot in a channel", Fields: f},
-		{Type: "slack.message", Description: "A message in a DM with the bot or a channel it's in", Fields: append(f, "channel_type")},
+		{Type: "slack.message", Description: "A message (from a person, a bot or an integration such as alerts) in a DM with the bot or in a channel it's in", Fields: append(f, "channel_type")},
 	}
 }
 
@@ -154,12 +154,16 @@ func (s Slack) Call(ctx context.Context, acct Account, tool string, args json.Ra
 		}
 		var msgs []map[string]string
 		for _, m := range out.Messages {
-			from := str(m, "username") // bots
-			if u := str(m, "user"); u != "" {
+			from := firstNonEmpty(str(m, "bot_profile.name"), str(m, "username")) // bots and integrations
+			if u := str(m, "user"); u != "" && str(m, "bot_id") == "" {
 				from = s.userName(ctx, acct, u)
 			}
-			msgs = append(msgs, map[string]string{"from": from, "user": str(m, "user"),
-				"text": truncateStr(s.readable(ctx, acct, str(m, "text")), 2000), "ts": str(m, "ts"), "thread_ts": str(m, "thread_ts")})
+			msg := map[string]string{"from": from, "user": str(m, "user"),
+				"text": truncateStr(s.readable(ctx, acct, str(m, "text")), 2000), "ts": str(m, "ts"), "thread_ts": str(m, "thread_ts")}
+			if t, ok := slackTime(str(m, "ts")); ok {
+				msg["time"], msg["ago"] = when(ctx, t)
+			}
+			msgs = append(msgs, msg)
 		}
 		return msgs, nil
 	case "list_channels":
@@ -226,6 +230,13 @@ func (s Slack) Listen(ctx context.Context, acct Account, emit func(Signal)) erro
 	if _, err := url.Parse(conn.URL); err != nil || conn.URL == "" {
 		return fmt.Errorf("Slack returned no socket URL")
 	}
+	// Who we are, so our own messages don't wake anyone (other bots' messages, like alerts
+	// from integrations, do).
+	var self struct {
+		UserID string `json:"user_id"`
+		BotID  string `json:"bot_id"`
+	}
+	_ = s.call(ctx, acct, acct.Credentials["bot_token"], "auth.test", nil, &self)
 	ws, _, err := websocket.Dial(ctx, conn.URL, nil)
 	if err != nil {
 		return err
@@ -260,20 +271,30 @@ func (s Slack) Listen(ctx context.Context, acct Account, emit func(Signal)) erro
 		case "disconnect":
 			return nil // Slack wants us to reconnect
 		case "events_api":
-			if sig, ok := s.slackSignal(ctx, acct, env.Payload.Event); ok {
+			if sig, ok := s.slackSignal(ctx, acct, self.UserID, self.BotID, env.Payload.Event); ok {
 				emit(sig)
 			}
 		}
 	}
 }
 
-func (s Slack) slackSignal(ctx context.Context, acct Account, ev map[string]any) (Signal, bool) {
-	// Ignore bots (including ourselves) and edits/joins, to avoid loops and noise.
-	if str(ev, "bot_id") != "" || str(ev, "subtype") != "" {
+func (s Slack) slackSignal(ctx context.Context, acct Account, selfUser, selfBot string, ev map[string]any) (Signal, bool) {
+	// Ignore our own messages (no loops) and edits, joins and the like (noise). Messages from
+	// other bots and integrations count: that's how alerts arrive.
+	switch str(ev, "subtype") {
+	case "", "bot_message", "thread_broadcast", "file_share":
+	default:
 		return Signal{}, false
 	}
+	if (selfBot != "" && str(ev, "bot_id") == selfBot) || (selfUser != "" && str(ev, "user") == selfUser) {
+		return Signal{}, false
+	}
+	name := firstNonEmpty(str(ev, "bot_profile.name"), str(ev, "username"))
+	if str(ev, "bot_id") == "" {
+		name = s.userName(ctx, acct, str(ev, "user"))
+	}
 	f := map[string]string{"channel": str(ev, "channel"), "user": str(ev, "user"),
-		"user_name": s.userName(ctx, acct, str(ev, "user")),
+		"user_name": name,
 		"text":      truncateStr(s.readable(ctx, acct, str(ev, "text")), 4000),
 		"ts":        str(ev, "ts"), "thread_ts": str(ev, "thread_ts")}
 	switch str(ev, "type") {

@@ -28,7 +28,7 @@ var slackManifest = map[string]any{
 		},
 	},
 	"settings": map[string]any{
-		"event_subscriptions":    map[string]any{"bot_events": []string{"app_mention", "message.im"}},
+		"event_subscriptions":    map[string]any{"bot_events": []string{"app_mention", "message.im", "message.channels", "message.groups"}},
 		"socket_mode_enabled":    true,
 		"org_deploy_enabled":     false,
 		"token_rotation_enabled": false,
@@ -53,6 +53,8 @@ func (Slack) Setup() Setup {
 		{Text: "So agents hear mentions and DMs: open Basic Information, scroll to App-Level Tokens, click " +
 			"Generate Token and Scopes, add the connections:write scope, click Generate, and paste the " +
 			"token (starts with xapp-) into App-level token below."},
+		{Text: "In Slack, invite the bot to the channels agents should follow (type /invite @openbot in the " +
+			"channel). It only sees messages in channels it's in."},
 	}}
 }
 

@@ -33,12 +33,11 @@ export function AgentConnections({
         <p className="text-sm text-muted-foreground">
           No apps yet. Connect them in{" "}
           <Link
-            to="/settings"
-            hash="connectors"
+            to="/connectors"
             className="underline underline-offset-4 hover:text-foreground"
             onClick={onNavigate}
           >
-            Settings → Connectors
+            Connectors
           </Link>
           .
         </p>
@@ -47,7 +46,7 @@ export function AgentConnections({
           {mine.map((connector) => (
             <li key={connector.id}>
               <Link
-                to="/settings"
+                to="/connectors"
                 search={{ connector: connector.id }}
                 className="flex items-center gap-3 rounded-lg p-1.5 text-sm select-none hover:bg-muted/50"
                 onClick={onNavigate}

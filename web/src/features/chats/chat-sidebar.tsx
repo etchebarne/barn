@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
-import { Link, useMatchRoute } from "@tanstack/react-router"
-import { SettingsIcon } from "lucide-react"
+import { useMatchRoute } from "@tanstack/react-router"
 
-import { BrandMark } from "@/components/brand-mark"
 import {
   Sidebar,
   SidebarContent,
@@ -11,15 +9,16 @@ import {
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useAgentsById } from "@/features/agents"
+import { AccountMenu } from "@/features/auth"
 import { useConnectionStore } from "@/lib/ws"
 
 import { chatsQueryOptions } from "./api"
+import { SearchButton } from "./command-palette"
 import { useCategories } from "./sidebar-api"
 import { NewCategory, SidebarSections } from "./sidebar-sections"
 
@@ -34,7 +33,7 @@ function ConnectionNotice() {
   )
 }
 
-/** Left sidebar: chats in the user's categories and order, settings pinned at the bottom. */
+/** Left sidebar: search on top, chats in the user's categories and order, account at the bottom. */
 export function ChatSidebar() {
   const { data: chats, isPending, error } = useQuery(chatsQueryOptions)
   const { data: categories, isPending: categoriesPending } = useCategories()
@@ -44,12 +43,13 @@ export function ChatSidebar() {
   const closeOnMobile = () => {
     if (isMobile) setOpenMobile(false)
   }
-  const settingsActive = !!matchRoute({ to: "/settings" })
 
   return (
     <Sidebar collapsible={isMobile ? "offcanvas" : "none"} className="h-svh border-r">
-      <SidebarHeader className="h-14 justify-center border-b px-4">
-        <BrandMark />
+      {/* Top and bottom use the same button shape so the sidebar's edges balance. */}
+      <SidebarHeader className="h-14 justify-center border-b px-2">
+        {/* On mobile the sidebar is a sheet: close it first so the palette never stacks on it. */}
+        <SearchButton onOpen={closeOnMobile} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -86,18 +86,7 @@ export function ChatSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t">
         <ConnectionNotice />
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              isActive={settingsActive}
-              className="select-none"
-              render={<Link to="/settings" onClick={closeOnMobile} />}
-            >
-              <SettingsIcon />
-              <span>Settings</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <AccountMenu onNavigate={closeOnMobile} />
       </SidebarFooter>
     </Sidebar>
   )

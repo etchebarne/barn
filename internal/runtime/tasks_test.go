@@ -85,15 +85,35 @@ func TestMissedRunsCollapse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.rt.fireDueTasks(ctx)
-	events, _ := f.store.PendingEvents(ctx, f.agent.ID)
-	f.waitIdle(t)
-	count := 0
-	for _, e := range events {
-		if e.Kind == EventTask {
-			count++
+	// The runtime's own scheduler may claim it first (and record the firing a moment later), and
+	// the agent may consume the event before we look: count firings wherever they ended up,
+	// waiting for the first, then make sure no second one follows.
+	firings := func() int {
+		n := 0
+		events, _ := f.store.PendingEvents(ctx, f.agent.ID)
+		for _, e := range events {
+			if e.Kind == EventTask {
+				n++
+			}
 		}
+		entries, _ := f.store.Context(ctx, f.agent.ID)
+		for _, e := range entries {
+			if strings.Contains(string(e.Entry), "task_fired task_id") {
+				n++
+			}
+		}
+		return n
 	}
+	f.rt.fireDueTasks(ctx)
+	deadline := time.Now().Add(3 * time.Second)
+	for firings() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	f.waitIdle(t)
+	f.rt.fireDueTasks(ctx) // nothing is due any more
+	time.Sleep(50 * time.Millisecond)
+	f.waitIdle(t)
+	count := firings()
 	if count != 1 {
 		t.Fatalf("expected one firing, got %d", count)
 	}

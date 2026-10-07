@@ -12,7 +12,7 @@ import { ConnectorSheet } from "./connector-sheet"
 import { usedByLabel } from "./logic"
 
 /**
- * Settings → Connectors: connected accounts and "Add connection". `selection` ("new" or a
+ * The Connectors page: connected accounts and "Add connection". `selection` ("new" or a
  * connection id) lives in the URL so the agent sheet can link to a connection.
  */
 export function ConnectorsSection({

@@ -24,3 +24,16 @@ if (!window.matchMedia) {
     }),
   })
 }
+
+// cmdk (the command palette) measures and scrolls items; jsdom has neither.
+if (!("ResizeObserver" in window)) {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(window, "ResizeObserver", { writable: true, value: ResizeObserverStub })
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {}
+}

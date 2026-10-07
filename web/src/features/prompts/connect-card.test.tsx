@@ -176,7 +176,7 @@ describe("ConnectCard", () => {
     expect(screen.getByText("Connected")).toBeVisible()
     expect(screen.getByRole("link", { name: "View connection" })).toHaveAttribute(
       "href",
-      "/settings?connector=k9",
+      "/connectors?connector=k9",
     )
     expect(document.querySelector("input")).toBeNull()
   })

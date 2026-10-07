@@ -73,7 +73,7 @@ func asModelTools(ctx context.Context, m *Manager, tools []connectors.AgentTool)
 }
 
 func (l *loop) callConnector(ctx context.Context, agent store.Agent, name string, args []byte) (string, bool) {
-	result, err := l.m.Connectors.Call(ctx, agent.ID, name, json.RawMessage(args))
+	result, err := l.m.Connectors.Call(connectors.WithLocation(ctx, l.m.location(ctx)), agent.ID, name, json.RawMessage(args))
 	var ue *connectors.UserError
 	switch {
 	case errors.As(err, &ue):

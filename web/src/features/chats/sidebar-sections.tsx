@@ -42,6 +42,7 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui
 import { AgentAvatar, GroupAvatar } from "@/features/agents"
 import type { Agent, Chat } from "@/lib/api-client"
 
+import { usePaletteStore } from "./palette-store"
 import { chatPreview, dmAgent } from "./preview"
 import {
   useCreateCategory,
@@ -657,6 +658,13 @@ export function SidebarSections({
 export function NewCategory() {
   const create = useCreateCategory()
   const [naming, setNaming] = useState(false)
+  // The command palette's "New category" starts naming here.
+  const request = usePaletteStore((s) => s.newCategoryRequest)
+  const [handled, setHandled] = useState(request)
+  if (request !== handled) {
+    setHandled(request)
+    setNaming(true)
+  }
   if (naming) {
     return (
       <div className="px-2 py-1">

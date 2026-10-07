@@ -29,7 +29,7 @@ export function useSignInCompleted() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.messages(result.chatId) })
       void navigate({ to: "/chats/$chatId", params: { chatId: result.chatId } })
     } else {
-      void navigate({ to: "/settings", search: { connector: result.connector.id } })
+      void navigate({ to: "/connectors", search: { connector: result.connector.id } })
     }
   }
 }

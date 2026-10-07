@@ -1,4 +1,5 @@
 export { chatsQueryOptions, messagesQueryOptions } from "./api"
 export { ChatSidebar } from "./chat-sidebar"
+export { CommandPalette } from "./command-palette"
 export { ChatView } from "./chat-view"
 export { ChatsEmptyState } from "./chats-empty"

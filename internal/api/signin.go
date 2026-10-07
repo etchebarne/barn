@@ -139,7 +139,7 @@ func (s *Server) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	state := q.Get("state")
 	back := func(chatID string, params url.Values) {
-		dest := "/settings"
+		dest := "/connectors"
 		if chatID != "" {
 			dest = "/chats/" + chatID
 		}

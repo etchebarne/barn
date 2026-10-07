@@ -241,7 +241,7 @@ function ConnectOutcome({ prompt }: { prompt: Prompt }) {
           ·
         </span>
         <Link
-          to="/settings"
+          to="/connectors"
           search={{ connector: accountId }}
           className="font-normal text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >

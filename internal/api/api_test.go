@@ -530,7 +530,7 @@ func TestConnectorSetupGuides(t *testing.T) {
 		} `json:"settings"`
 	}
 	if err := json.Unmarshal([]byte(u.Query().Get("manifest_json")), &manifest); err != nil || !manifest.Settings.SocketMode ||
-		len(manifest.Settings.Events.Bot) != 2 {
+		len(manifest.Settings.Events.Bot) != 4 {
 		t.Fatalf("manifest = %+v %v", manifest, err)
 	}
 	if slack[0].(map[string]any)["copy"] == nil {
@@ -633,7 +633,7 @@ func TestSignInAPI(t *testing.T) {
 	r, _ = noRedirect.Get(c.base + "/oauth/callback?error=access_denied&state=" + url.QueryEscape(authURL.Query().Get("state")))
 	r.Body.Close()
 	loc, _ = url.Parse(r.Header.Get("Location"))
-	if loc.Path != "/settings" || loc.Query().Get("signin_error") != "Sign-in was cancelled" {
+	if loc.Path != "/connectors" || loc.Query().Get("signin_error") != "Sign-in was cancelled" {
 		t.Fatalf("denied redirect: %s", r.Header.Get("Location"))
 	}
 }

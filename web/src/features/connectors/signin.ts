@@ -95,3 +95,26 @@ export function signInReturnMessage(
 export function needsSignIn(error: unknown): boolean {
   return error instanceof ApiError && error.code === "sign_in_required"
 }
+
+/** Search params of the /connectors page: the open connection plus sign-in return params. */
+export type ConnectorsSearch = SignInReturnParams & {
+  /** Open connection in the connectors sheet: "new" (add flow) or a connection id. */
+  connector?: string
+}
+
+export function readConnectorsSearch(search: Record<string, unknown>): ConnectorsSearch {
+  return {
+    ...(typeof search.connector === "string" && search.connector
+      ? { connector: search.connector }
+      : {}),
+    ...readSignInReturn(search),
+  }
+}
+
+/**
+ * Connectors used to live in Settings, and the server's OAuth callback still returns to
+ * /settings. Returns the /connectors params to forward to, or null for a plain /settings.
+ */
+export function connectorsForward(search: ConnectorsSearch): ConnectorsSearch | null {
+  return search.connector || search.connected || search.signin_error ? search : null
+}
