@@ -18,6 +18,8 @@ import (
 // ChatModel is the model API the runtime needs.
 type ChatModel interface {
 	Chat(ctx context.Context, req model.Request) (model.Response, error)
+	Models(ctx context.Context) ([]string, error)
+	ProbeModel(ctx context.Context, model string) error
 }
 
 // Event kinds.
@@ -25,6 +27,7 @@ const (
 	EventMessage = "message" // payload: {"messageId": "..."}
 	EventSystem  = "system"  // payload: {"text": "..."}
 	EventRetry   = "retry"   // payload: {}; re-runs the model on the current context
+	EventAnswer  = "answer"  // payload: {"messageId": "..."}; the user answered a prompt
 )
 
 // ErrBusy is returned by Retry when the agent is already working or has pending events.
@@ -172,14 +175,31 @@ func (m *Manager) LastTurnFailed(ctx context.Context, agentID string) (bool, err
 	return last.Failure != nil && last.Failure.AgentID == agentID, nil
 }
 
+// DeliverAnswer tells the agent that asked a prompt how the user answered it.
+func (m *Manager) DeliverAnswer(ctx context.Context, msg store.Message) error {
+	if msg.AuthorAgentID == nil {
+		return nil
+	}
+	if _, err := m.store.InsertEvent(ctx, *msg.AuthorAgentID, EventAnswer,
+		map[string]string{"messageId": msg.ID}); err != nil {
+		return err
+	}
+	m.wake(*msg.AuthorAgentID)
+	return nil
+}
+
 // postMessage stores a message and broadcasts it.
 func (m *Manager) postMessage(ctx context.Context, chatID, authorKind string, agentID *string, body string) (store.Message, error) {
 	msg, err := m.store.InsertMessage(ctx, chatID, authorKind, agentID, body)
 	if err != nil {
 		return msg, err
 	}
-	m.bus.Publish(view.MessageCreated(view.Message(msg)))
+	m.publishMessage(msg)
 	return msg, nil
+}
+
+func (m *Manager) publishMessage(msg store.Message) {
+	m.bus.Publish(view.MessageCreated(view.Message(msg)))
 }
 
 func logger(agentID string) *slog.Logger { return slog.With("agent", agentID) }

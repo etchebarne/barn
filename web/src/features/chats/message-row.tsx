@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
 import type { ReactNode } from "react"
 
@@ -7,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Marker, MarkerContent } from "@/components/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
 import { AgentAvatar } from "@/features/agents"
-import type { Agent } from "@/lib/api-client"
+import { PromptCard } from "@/features/prompts"
+import type { Agent, Schemas } from "@/lib/api-client"
 
 import { messageFailure } from "./failure"
 import { FailureNotice } from "./failure-notice"
@@ -28,6 +30,43 @@ function MessageActions({ side, children }: { side: "start" | "end"; children: R
     >
       {children}
     </div>
+  )
+}
+
+/** "Created scout": a centered note linking to what happened (e.g. the new agent's DM). */
+function EventMarker({
+  event,
+  agents,
+  fallback,
+}: {
+  event: Schemas["MessageEvent"]
+  agents: Map<string, Agent>
+  fallback: string
+}) {
+  const agent = agents.get(event.agentId)
+  const label = agent ? `Created ${agent.name}` : fallback || "Created a new agent"
+  const content = (
+    <>
+      <AgentAvatar name={agent?.name ?? "?"} size="sm" />
+      <MarkerContent className="font-medium">{label}</MarkerContent>
+    </>
+  )
+  return (
+    <Marker className="justify-center py-1 text-xs select-none">
+      {event.chatId ? (
+        <Link
+          to="/chats/$chatId"
+          params={{ chatId: event.chatId }}
+          className="inline-flex items-center gap-2 rounded-full border bg-background py-1 pr-3 pl-1 no-underline! hover:bg-muted"
+        >
+          {content}
+        </Link>
+      ) : (
+        <span className="inline-flex items-center gap-2 rounded-full border py-1 pr-3 pl-1">
+          {content}
+        </span>
+      )}
+    </Marker>
   )
 }
 
@@ -64,6 +103,10 @@ export function MessageRow({
         isLatest={isLatest}
       />
     )
+  }
+
+  if (message.author.kind === "system" && message.event) {
+    return <EventMarker event={message.event} agents={agents} fallback={message.body} />
   }
 
   if (message.author.kind === "system") {
@@ -104,15 +147,24 @@ export function MessageRow({
       </MessageAvatar>
       <MessageContent>
         {showAuthorName && startsRun && <MessageHeader>{name}</MessageHeader>}
-        <Bubble variant="muted">
-          <BubbleContent>
-            <Markdown>{message.body}</Markdown>
-          </BubbleContent>
-          <MessageActions side="start">
-            <CopyButton text={message.body} />
-            {time}
-          </MessageActions>
-        </Bubble>
+        {message.prompt ? (
+          <Bubble variant="muted" className="w-full max-w-[min(85%,26rem)]">
+            {/* p-2: the prompt card's row radii are derived from this padding. */}
+            <BubbleContent className="w-full p-2">
+              <PromptCard message={message} prompt={message.prompt} isLatest={isLatest} />
+            </BubbleContent>
+          </Bubble>
+        ) : (
+          <Bubble variant="muted">
+            <BubbleContent>
+              <Markdown>{message.body}</Markdown>
+            </BubbleContent>
+            <MessageActions side="start">
+              <CopyButton text={message.body} />
+              {time}
+            </MessageActions>
+          </Bubble>
+        )}
       </MessageContent>
     </Message>
   )

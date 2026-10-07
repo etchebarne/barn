@@ -166,6 +166,75 @@ describe("applyWsEvent", () => {
     })
   })
 
+  describe("message.updated", () => {
+    it("replaces the message in its chat and in the chat list preview", () => {
+      const question = makeMessage({ body: "Pick one" })
+      seedMessages(qc, "chat-1", {
+        pages: [{ messages: [makeMessage(), question], hasMore: false }],
+        pageParams: [undefined],
+      })
+      qc.setQueryData<Chat[]>(queryKeys.chats, [makeChat({ lastMessage: question })])
+      const answered = {
+        ...question,
+        prompt: {
+          kind: "single" as const,
+          question: "Pick one",
+          options: [{ label: "A" }],
+          allowOther: false,
+          status: "answered" as const,
+          answer: { selected: [0] },
+        },
+      }
+
+      applyWsEvent(qc, { type: "message.updated", message: answered })
+
+      const data = qc.getQueryData<MessagesData>(queryKeys.messages("chat-1"))
+      expect(flattenMessages(data)).toHaveLength(2)
+      expect(flattenMessages(data)[1]?.prompt?.status).toBe("answered")
+      expect(qc.getQueryData<Chat[]>(queryKeys.chats)?.[0]?.lastMessage?.prompt?.status).toBe(
+        "answered",
+      )
+    })
+
+    it("leaves the preview alone when the edited message isn't the last one", () => {
+      const older = makeMessage()
+      const last = makeMessage()
+      qc.setQueryData<Chat[]>(queryKeys.chats, [makeChat({ lastMessage: last })])
+      applyWsEvent(qc, { type: "message.updated", message: { ...older, body: "edited" } })
+      expect(qc.getQueryData<Chat[]>(queryKeys.chats)?.[0]?.lastMessage).toBe(last)
+    })
+  })
+
+  describe("agent.created / chat.created", () => {
+    it("adds the new agent", () => {
+      qc.setQueryData<Agent[]>(queryKeys.agents, [makeAgent()])
+      applyWsEvent(qc, { type: "agent.created", agent: makeAgent({ id: "scout", name: "scout" }) })
+      expect(qc.getQueryData<Agent[]>(queryKeys.agents)?.map((a) => a.id)).toEqual([
+        "agent-1",
+        "scout",
+      ])
+    })
+
+    it("adds the new chat once, and its intro message then moves it to the top", () => {
+      qc.setQueryData<Chat[]>(queryKeys.chats, [makeChat({ lastMessage: makeMessage() })])
+      const dm = makeChat({ id: "dm-scout", name: "scout", lastMessage: null })
+
+      applyWsEvent(qc, { type: "chat.created", chat: dm })
+      applyWsEvent(qc, { type: "chat.created", chat: dm })
+      expect(qc.getQueryData<Chat[]>(queryKeys.chats)?.map((c) => c.id)).toEqual([
+        "chat-1",
+        "dm-scout",
+      ])
+
+      applyWsEvent(qc, {
+        type: "message.created",
+        message: makeMessage({ chatId: "dm-scout", author: { kind: "agent", agentId: "scout" } }),
+      })
+      const chats = qc.getQueryData<Chat[]>(queryKeys.chats) ?? []
+      expect(chats[0]).toMatchObject({ id: "dm-scout", unreadCount: 1 })
+    })
+  })
+
   describe("chat.read", () => {
     it("clears the unread count when read up to the last message", () => {
       const last = makeMessage()

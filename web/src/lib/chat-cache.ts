@@ -170,3 +170,64 @@ export function markChatReadInCache(
   })
   if (stale) void queryClient.invalidateQueries({ queryKey: queryKeys.chats, exact: true })
 }
+
+/** Replaces a message wherever it's loaded. Returns the same object when it isn't cached. */
+export function replaceMessage(data: MessagesData, message: Message): MessagesData {
+  let found = false
+  const pages = data.pages.map((page) => {
+    const index = page.messages.findIndex((m) => m.id === message.id)
+    if (index === -1) return page
+    found = true
+    const messages = [...page.messages]
+    messages[index] = message
+    return { ...page, messages }
+  })
+  return found ? { ...data, pages } : data
+}
+
+/** Updates the chat list's preview if `message` is a chat's last message. */
+export function applyUpdatedMessageToChats(chats: Chat[], message: Message): Chat[] {
+  const index = chats.findIndex(
+    (chat) => chat.id === message.chatId && chat.lastMessage?.id === message.id,
+  )
+  const chat = chats[index]
+  if (!chat) return chats
+  const next = [...chats]
+  next[index] = { ...chat, lastMessage: message }
+  return next
+}
+
+/** Applies an edited message (e.g. an answered prompt) to every cache that shows it. */
+export function updateMessageInCache(queryClient: QueryClient, message: Message) {
+  queryClient.setQueryData<MessagesData>(queryKeys.messages(message.chatId), (data) =>
+    data ? replaceMessage(data, message) : data,
+  )
+  queryClient.setQueryData<Chat[]>(queryKeys.chats, (chats) =>
+    chats ? applyUpdatedMessageToChats(chats, message) : chats,
+  )
+}
+
+/** Looks up a loaded message by id. */
+export function findCachedMessage(
+  queryClient: QueryClient,
+  chatId: string,
+  messageId: string,
+): Message | undefined {
+  const data = queryClient.getQueryData<MessagesData>(queryKeys.messages(chatId))
+  for (const page of data?.pages ?? []) {
+    const found = page.messages.find((m) => m.id === messageId)
+    if (found) return found
+  }
+  return undefined
+}
+
+/** Adds (or refreshes) an agent in the agents list. */
+export function upsertAgent(agents: Agent[], agent: Agent): Agent[] {
+  return replaceAgent(agents, agent) ?? [...agents, agent]
+}
+
+/** Adds a new chat to the chat list, keeping most-recently-active order. */
+export function upsertChat(chats: Chat[], chat: Chat): Chat[] {
+  const rest = chats.filter((c) => c.id !== chat.id)
+  return sortChats([...rest, chat])
+}

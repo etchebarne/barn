@@ -274,6 +274,62 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /messages/{messageId}/answer:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: answerPrompt
+      tags: [chats]
+      description: |
+        Answer a pending prompt (a message with `prompt` set). The answer is stored on the
+        message (broadcast as message.updated) and delivered to the agent that asked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromptAnswer" }
+      responses:
+        "200":
+          description: The updated message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The prompt was already answered or dismissed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /messages/{messageId}/dismiss:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: dismissPrompt
+      tags: [chats]
+      description: Dismiss a pending prompt without answering (broadcast as message.updated).
+      responses:
+        "200":
+          description: The updated message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The prompt was already answered or dismissed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /models:
     get:
       operationId: listModels
@@ -477,6 +533,16 @@ components:
           allOf: [{ $ref: "#/components/schemas/MessageFailure" }]
           nullable: true
           description: Set on system messages reporting that an agent's turn failed
+        prompt:
+          allOf: [{ $ref: "#/components/schemas/Prompt" }]
+          nullable: true
+          description: |
+            Set on agent messages that ask the user something with clickable answers. `body`
+            holds the question as plain text (for previews).
+        event:
+          allOf: [{ $ref: "#/components/schemas/MessageEvent" }]
+          nullable: true
+          description: Set on system messages that mark something that happened, e.g. an agent was created
         clientId:
           type: string
           description: |
@@ -495,6 +561,59 @@ components:
             model_blocked: OpenCode refuses the agent's model (its provider trains on request
             data and the workspace's privacy settings forbid that). Offer to change the model.
         retryable: { type: boolean }
+
+    Prompt:
+      type: object
+      required: [kind, question, options, allowOther, status, answer]
+      properties:
+        kind:
+          type: string
+          enum: [single, multi, text]
+          description: single = pick one; multi = pick any number; text = free-text answer
+        question: { type: string }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/PromptOption" }
+        allowOther:
+          type: boolean
+          description: Offer "type your own" in addition to the options
+        status: { type: string, enum: [pending, answered, dismissed] }
+        answer:
+          allOf: [{ $ref: "#/components/schemas/PromptAnswer" }]
+          nullable: true
+
+    PromptOption:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string }
+        opensChatId:
+          type: string
+          description: Choosing this option also opens this chat (e.g. "Go talk to X")
+
+    PromptAnswer:
+      type: object
+      properties:
+        selected:
+          type: array
+          description: Indexes of the chosen options
+          items: { type: integer, minimum: 0 }
+        text:
+          type: string
+          maxLength: 4000
+          description: Free-text answer (text prompts, or "type your own")
+
+    MessageEvent:
+      type: object
+      required: [kind, agentId]
+      properties:
+        kind: { type: string, enum: [agent_created] }
+        agentId:
+          type: string
+          description: The agent the event is about (e.g. the one that was created)
+        chatId:
+          type: string
+          description: A chat to link to (e.g. the new agent's DM)
 
     MessagePage:
       type: object
@@ -535,6 +654,9 @@ components:
         - $ref: "#/components/schemas/WsAgentActivity"
         - $ref: "#/components/schemas/WsChatRead"
         - $ref: "#/components/schemas/WsAgentUpdated"
+        - $ref: "#/components/schemas/WsMessageUpdated"
+        - $ref: "#/components/schemas/WsAgentCreated"
+        - $ref: "#/components/schemas/WsChatCreated"
       discriminator:
         propertyName: type
         mapping:
@@ -542,6 +664,9 @@ components:
           agent.activity: "#/components/schemas/WsAgentActivity"
           chat.read: "#/components/schemas/WsChatRead"
           agent.updated: "#/components/schemas/WsAgentUpdated"
+          message.updated: "#/components/schemas/WsMessageUpdated"
+          agent.created: "#/components/schemas/WsAgentCreated"
+          chat.created: "#/components/schemas/WsChatCreated"
 
     WsMessageCreated:
       type: object
@@ -574,6 +699,28 @@ components:
       properties:
         type: { type: string, enum: [agent.updated] }
         agent: { $ref: "#/components/schemas/Agent" }
+
+    WsMessageUpdated:
+      type: object
+      required: [type, message]
+      description: A message changed (e.g. its prompt was answered or dismissed)
+      properties:
+        type: { type: string, enum: [message.updated] }
+        message: { $ref: "#/components/schemas/Message" }
+
+    WsAgentCreated:
+      type: object
+      required: [type, agent]
+      properties:
+        type: { type: string, enum: [agent.created] }
+        agent: { $ref: "#/components/schemas/Agent" }
+
+    WsChatCreated:
+      type: object
+      required: [type, chat]
+      properties:
+        type: { type: string, enum: [chat.created] }
+        chat: { $ref: "#/components/schemas/Chat" }
 
 security:
   - session: []

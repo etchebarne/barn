@@ -14,7 +14,58 @@ func Message(m store.Message) gen.Message {
 		Body:      m.Body,
 		CreatedAt: store.Time(m.CreatedAt),
 		Failure:   failure(m.Failure),
+		Prompt:    prompt(m.Prompt),
+		Event:     event(m.Event),
 	}
+}
+
+func prompt(p *store.Prompt) *gen.Prompt {
+	if p == nil {
+		return nil
+	}
+	options := make([]gen.PromptOption, 0, len(p.Options))
+	for _, o := range p.Options {
+		opt := gen.PromptOption{Label: o.Label}
+		if o.OpensChatID != "" {
+			opt.OpensChatId = &o.OpensChatID
+		}
+		options = append(options, opt)
+	}
+	out := &gen.Prompt{
+		Kind:       gen.PromptKind(p.Kind),
+		Question:   p.Question,
+		Options:    options,
+		AllowOther: p.AllowOther,
+		Status:     gen.PromptStatus(p.Status),
+	}
+	if p.Answer != nil {
+		a := gen.PromptAnswer{}
+		if len(p.Answer.Selected) > 0 {
+			sel := p.Answer.Selected
+			a.Selected = &sel
+		}
+		if p.Answer.Text != "" {
+			text := p.Answer.Text
+			a.Text = &text
+		}
+		out.Answer = &a
+	}
+	return out
+}
+
+func event(e *store.MessageEvent) *gen.MessageEvent {
+	if e == nil {
+		return nil
+	}
+	out := &gen.MessageEvent{Kind: gen.MessageEventKind(e.Kind), AgentId: e.AgentID}
+	if e.ChatID != "" {
+		out.ChatId = &e.ChatID
+	}
+	return out
+}
+
+func MessageUpdated(m gen.Message) gen.WsMessageUpdated {
+	return gen.WsMessageUpdated{Type: "message.updated", Message: m}
 }
 
 func failure(f *store.Failure) *gen.MessageFailure {

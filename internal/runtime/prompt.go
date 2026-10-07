@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,13 +39,22 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	b.WriteString("- Your plain text output is private thinking. Nobody ever sees it.\n")
 	b.WriteString("- To say anything, call send_message with the chat_id of the chat to write in. Usually reply in the chat where you were addressed, unless asked to write somewhere else.\n")
 	b.WriteString("- If nothing needs a reply, end your turn without calling send_message.\n")
-	b.WriteString("- Messages support Markdown. Write like a helpful coworker on chat: concise, direct, no filler. Prefer one message per reply.\n")
+	b.WriteString("- Write like a helpful coworker on chat: concise, direct, no filler. Messages support Markdown, including tables. Short replies are one message; when you have more to say, send a few short messages in a row instead of one long one.\n")
+	b.WriteString("- When there are clear options, ask with ask_user so the user can click an answer, then end your turn. Answers arrive in <prompt_answer> tags and are already visible in the chat, so don't repeat them back.\n")
 	if agent.Language == "" || agent.Language == "auto" {
 		b.WriteString("- Reply in the language the other person writes in.\n")
 	} else {
 		fmt.Fprintf(&b, "- Always reply in %s.\n", agent.Language)
 	}
 	b.WriteString("\n")
+
+	b.WriteString("# What you can do today\n")
+	b.WriteString("- Talk with people in your chats and ask them questions with clickable answers.\n")
+	b.WriteString("- Remember everything said in your chats; your conversation carries on across all of them.\n")
+	if agent.IsAdmin {
+		b.WriteString("- Set up new agents (create_agent): persistent teammates that each own one job and talk to the user in their own DM. Before creating one, confirm the job and ask which model to use (offer your own model first).\n")
+	}
+	b.WriteString("- Not yet available (coming soon): running commands or code, browsing the web, connecting to apps like Slack, Linear or email, and acting on a schedule. Don't promise these; if they come up, say they're on the way.\n\n")
 
 	b.WriteString("# Your chats\n")
 	for _, c := range chats {
@@ -128,10 +138,46 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 		}
 		return "<system_notice>\n" + p.Text + "\n</system_notice>", nil
 
+	case EventAnswer:
+		var p struct {
+			MessageID string `json:"messageId"`
+		}
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return "", err
+		}
+		msg, err := l.m.store.GetMessage(ctx, p.MessageID)
+		if err != nil {
+			return "", err
+		}
+		if msg.Prompt == nil || msg.Prompt.Answer == nil {
+			return "", nil
+		}
+		return renderAnswer(msg), nil
+
 	case EventRetry:
 		return "", nil // no new input; the turn re-runs on the existing context
 
 	default:
 		return "", fmt.Errorf("unknown event kind %q", e.Kind)
 	}
+}
+
+func renderAnswer(msg store.Message) string {
+	p := msg.Prompt
+	var b strings.Builder
+	fmt.Fprintf(&b, "<prompt_answer prompt_id=%q chat_id=%q question=%q>\n", msg.ID, msg.ChatID, p.Question)
+	if len(p.Answer.Selected) > 0 {
+		labels := make([]string, 0, len(p.Answer.Selected))
+		for _, i := range p.Answer.Selected {
+			if i >= 0 && i < len(p.Options) {
+				labels = append(labels, strconv.Quote(p.Options[i].Label))
+			}
+		}
+		fmt.Fprintf(&b, "Chose: %s\n", strings.Join(labels, ", "))
+	}
+	if p.Answer.Text != "" {
+		fmt.Fprintf(&b, "Typed: %s\n", p.Answer.Text)
+	}
+	b.WriteString("</prompt_answer>")
+	return b.String()
 }

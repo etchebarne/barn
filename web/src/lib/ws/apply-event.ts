@@ -1,11 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query"
 
-import type { Agent, WsEvent } from "../api-client"
+import type { Agent, Chat, WsEvent } from "../api-client"
 import {
   addMessageToCache,
   applyActivityToAgents,
   markChatReadInCache,
   updateAgentInCache,
+  updateMessageInCache,
+  upsertAgent,
+  upsertChat,
 } from "../chat-cache"
 import { queryKeys } from "../query-keys"
 
@@ -14,6 +17,19 @@ export function applyWsEvent(queryClient: QueryClient, event: WsEvent): void {
   switch (event.type) {
     case "message.created":
       addMessageToCache(queryClient, event.message)
+      return
+    case "message.updated":
+      updateMessageInCache(queryClient, event.message)
+      return
+    case "agent.created":
+      queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) =>
+        agents ? upsertAgent(agents, event.agent) : agents,
+      )
+      return
+    case "chat.created":
+      queryClient.setQueryData<Chat[]>(queryKeys.chats, (chats) =>
+        chats ? upsertChat(chats, event.chat) : chats,
+      )
       return
     case "agent.activity":
       queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) =>

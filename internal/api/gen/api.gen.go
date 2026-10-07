@@ -90,6 +90,21 @@ func (e MessageAuthorKind) Valid() bool {
 	}
 }
 
+// Defines values for MessageEventKind.
+const (
+	MessageEventKindAgentCreated MessageEventKind = "agent_created"
+)
+
+// Valid indicates whether the value is a known member of the MessageEventKind enum.
+func (e MessageEventKind) Valid() bool {
+	switch e {
+	case MessageEventKindAgentCreated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageFailureReason.
 const (
 	InvalidKey    MessageFailureReason = "invalid_key"
@@ -111,6 +126,48 @@ func (e MessageFailureReason) Valid() bool {
 	case ProviderError:
 		return true
 	case TooManySteps:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromptKind.
+const (
+	Multi  PromptKind = "multi"
+	Single PromptKind = "single"
+	Text   PromptKind = "text"
+)
+
+// Valid indicates whether the value is a known member of the PromptKind enum.
+func (e PromptKind) Valid() bool {
+	switch e {
+	case Multi:
+		return true
+	case Single:
+		return true
+	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromptStatus.
+const (
+	Answered  PromptStatus = "answered"
+	Dismissed PromptStatus = "dismissed"
+	Pending   PromptStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the PromptStatus enum.
+func (e PromptStatus) Valid() bool {
+	switch e {
+	case Answered:
+		return true
+	case Dismissed:
+		return true
+	case Pending:
 		return true
 	default:
 		return false
@@ -147,6 +204,21 @@ func (e WsAgentActivityType) Valid() bool {
 	}
 }
 
+// Defines values for WsAgentCreatedType.
+const (
+	WsAgentCreatedTypeAgentCreated WsAgentCreatedType = "agent.created"
+)
+
+// Valid indicates whether the value is a known member of the WsAgentCreatedType enum.
+func (e WsAgentCreatedType) Valid() bool {
+	switch e {
+	case WsAgentCreatedTypeAgentCreated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WsAgentUpdatedType.
 const (
 	AgentUpdated WsAgentUpdatedType = "agent.updated"
@@ -156,6 +228,21 @@ const (
 func (e WsAgentUpdatedType) Valid() bool {
 	switch e {
 	case AgentUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WsChatCreatedType.
+const (
+	ChatCreated WsChatCreatedType = "chat.created"
+)
+
+// Valid indicates whether the value is a known member of the WsChatCreatedType enum.
+func (e WsChatCreatedType) Valid() bool {
+	switch e {
+	case ChatCreated:
 		return true
 	default:
 		return false
@@ -186,6 +273,21 @@ const (
 func (e WsMessageCreatedType) Valid() bool {
 	switch e {
 	case MessageCreated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WsMessageUpdatedType.
+const (
+	MessageUpdated WsMessageUpdatedType = "message.updated"
+)
+
+// Valid indicates whether the value is a known member of the WsMessageUpdatedType enum.
+func (e WsMessageUpdatedType) Valid() bool {
+	switch e {
+	case MessageUpdated:
 		return true
 	default:
 		return false
@@ -299,11 +401,18 @@ type Message struct {
 	ClientId  *string   `json:"clientId,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 
+	// Event Set on system messages that mark something that happened, e.g. an agent was created
+	Event *MessageEvent `json:"event,omitempty"`
+
 	// Failure Set on system messages reporting that an agent's turn failed
 	Failure *MessageFailure `json:"failure,omitempty"`
 
 	// Id ULID; lexicographic order is chronological order
 	Id string `json:"id"`
+
+	// Prompt Set on agent messages that ask the user something with clickable answers. `body`
+	// holds the question as plain text (for previews).
+	Prompt *Prompt `json:"prompt,omitempty"`
 }
 
 // MessageAuthor defines model for MessageAuthor.
@@ -314,6 +423,19 @@ type MessageAuthor struct {
 
 // MessageAuthorKind defines model for MessageAuthor.Kind.
 type MessageAuthorKind string
+
+// MessageEvent defines model for MessageEvent.
+type MessageEvent struct {
+	// AgentId The agent the event is about (e.g. the one that was created)
+	AgentId string `json:"agentId"`
+
+	// ChatId A chat to link to (e.g. the new agent's DM)
+	ChatId *string          `json:"chatId,omitempty"`
+	Kind   MessageEventKind `json:"kind"`
+}
+
+// MessageEventKind defines model for MessageEvent.Kind.
+type MessageEventKind string
 
 // MessageFailure defines model for MessageFailure.
 type MessageFailure struct {
@@ -348,6 +470,42 @@ type OnboardingState struct {
 	// ProviderConfigured An OpenCode Go API key has been saved
 	ProviderConfigured  bool `json:"providerConfigured"`
 	StarterAgentCreated bool `json:"starterAgentCreated"`
+}
+
+// Prompt defines model for Prompt.
+type Prompt struct {
+	// AllowOther Offer "type your own" in addition to the options
+	AllowOther bool          `json:"allowOther"`
+	Answer     *PromptAnswer `json:"answer"`
+
+	// Kind single = pick one; multi = pick any number; text = free-text answer
+	Kind     PromptKind     `json:"kind"`
+	Options  []PromptOption `json:"options"`
+	Question string         `json:"question"`
+	Status   PromptStatus   `json:"status"`
+}
+
+// PromptKind single = pick one; multi = pick any number; text = free-text answer
+type PromptKind string
+
+// PromptStatus defines model for Prompt.Status.
+type PromptStatus string
+
+// PromptAnswer defines model for PromptAnswer.
+type PromptAnswer struct {
+	// Selected Indexes of the chosen options
+	Selected *[]int `json:"selected,omitempty"`
+
+	// Text Free-text answer (text prompts, or "type your own")
+	Text *string `json:"text,omitempty"`
+}
+
+// PromptOption defines model for PromptOption.
+type PromptOption struct {
+	Label string `json:"label"`
+
+	// OpensChatId Choosing this option also opens this chat (e.g. "Go talk to X")
+	OpensChatId *string `json:"opensChatId,omitempty"`
 }
 
 // ProviderSettings defines model for ProviderSettings.
@@ -397,6 +555,15 @@ type WsAgentActivity struct {
 // WsAgentActivityType defines model for WsAgentActivity.Type.
 type WsAgentActivityType string
 
+// WsAgentCreated defines model for WsAgentCreated.
+type WsAgentCreated struct {
+	Agent Agent              `json:"agent"`
+	Type  WsAgentCreatedType `json:"type"`
+}
+
+// WsAgentCreatedType defines model for WsAgentCreated.Type.
+type WsAgentCreatedType string
+
 // WsAgentUpdated An agent's settings changed
 type WsAgentUpdated struct {
 	Agent Agent              `json:"agent"`
@@ -405,6 +572,15 @@ type WsAgentUpdated struct {
 
 // WsAgentUpdatedType defines model for WsAgentUpdated.Type.
 type WsAgentUpdatedType string
+
+// WsChatCreated defines model for WsChatCreated.
+type WsChatCreated struct {
+	Chat Chat              `json:"chat"`
+	Type WsChatCreatedType `json:"type"`
+}
+
+// WsChatCreatedType defines model for WsChatCreated.Type.
+type WsChatCreatedType string
 
 // WsChatRead The user read a chat (possibly from another device); clears its unread count
 type WsChatRead struct {
@@ -430,6 +606,15 @@ type WsMessageCreated struct {
 // WsMessageCreatedType defines model for WsMessageCreated.Type.
 type WsMessageCreatedType string
 
+// WsMessageUpdated A message changed (e.g. its prompt was answered or dismissed)
+type WsMessageUpdated struct {
+	Message Message              `json:"message"`
+	Type    WsMessageUpdatedType `json:"type"`
+}
+
+// WsMessageUpdatedType defines model for WsMessageUpdated.Type.
+type WsMessageUpdatedType string
+
 // ChatId defines model for ChatId.
 type ChatId = string
 
@@ -454,6 +639,9 @@ type SendMessageJSONRequestBody = SendMessageRequest
 
 // MarkChatReadJSONRequestBody defines body for MarkChatRead for application/json ContentType.
 type MarkChatReadJSONRequestBody = MarkReadRequest
+
+// AnswerPromptJSONRequestBody defines body for AnswerPrompt for application/json ContentType.
+type AnswerPromptJSONRequestBody = PromptAnswer
 
 // CompleteOnboardingJSONRequestBody defines body for CompleteOnboarding for application/json ContentType.
 type CompleteOnboardingJSONRequestBody = CompleteOnboardingRequest
@@ -597,6 +785,108 @@ func (t *WsEvent) MergeWsAgentUpdated(v WsAgentUpdated) error {
 	return err
 }
 
+// AsWsMessageUpdated returns the union data inside the WsEvent as a WsMessageUpdated
+func (t WsEvent) AsWsMessageUpdated() (WsMessageUpdated, error) {
+	var body WsMessageUpdated
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsMessageUpdated overwrites any union data inside the WsEvent as the provided WsMessageUpdated
+func (t *WsEvent) FromWsMessageUpdated(v WsMessageUpdated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.updated"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsMessageUpdated performs a merge with any union data inside the WsEvent, using the provided WsMessageUpdated
+func (t *WsEvent) MergeWsMessageUpdated(v WsMessageUpdated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.updated"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsAgentCreated returns the union data inside the WsEvent as a WsAgentCreated
+func (t WsEvent) AsWsAgentCreated() (WsAgentCreated, error) {
+	var body WsAgentCreated
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsAgentCreated overwrites any union data inside the WsEvent as the provided WsAgentCreated
+func (t *WsEvent) FromWsAgentCreated(v WsAgentCreated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.created"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsAgentCreated performs a merge with any union data inside the WsEvent, using the provided WsAgentCreated
+func (t *WsEvent) MergeWsAgentCreated(v WsAgentCreated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.created"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWsChatCreated returns the union data inside the WsEvent as a WsChatCreated
+func (t WsEvent) AsWsChatCreated() (WsChatCreated, error) {
+	var body WsChatCreated
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsChatCreated overwrites any union data inside the WsEvent as the provided WsChatCreated
+func (t *WsEvent) FromWsChatCreated(v WsChatCreated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"chat.created"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsChatCreated performs a merge with any union data inside the WsEvent, using the provided WsChatCreated
+func (t *WsEvent) MergeWsChatCreated(v WsChatCreated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"chat.created"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -613,12 +903,18 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 	switch discriminator {
 	case "agent.activity":
 		return t.AsWsAgentActivity()
+	case "agent.created":
+		return t.AsWsAgentCreated()
 	case "agent.updated":
 		return t.AsWsAgentUpdated()
+	case "chat.created":
+		return t.AsWsChatCreated()
 	case "chat.read":
 		return t.AsWsChatRead()
 	case "message.created":
 		return t.AsWsMessageCreated()
+	case "message.updated":
+		return t.AsWsMessageUpdated()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
@@ -669,6 +965,12 @@ type ServerInterface interface {
 
 	// (POST /chats/{chatId}/read)
 	MarkChatRead(w http.ResponseWriter, r *http.Request, chatId ChatId)
+
+	// (POST /messages/{messageId}/answer)
+	AnswerPrompt(w http.ResponseWriter, r *http.Request, messageId string)
+
+	// (POST /messages/{messageId}/dismiss)
+	DismissPrompt(w http.ResponseWriter, r *http.Request, messageId string)
 
 	// (GET /models)
 	ListModels(w http.ResponseWriter, r *http.Request)
@@ -938,6 +1240,58 @@ func (siw *ServerInterfaceWrapper) MarkChatRead(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// AnswerPrompt operation middleware
+func (siw *ServerInterfaceWrapper) AnswerPrompt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnswerPrompt(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DismissPrompt operation middleware
+func (siw *ServerInterfaceWrapper) DismissPrompt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissPrompt(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListModels operation middleware
 func (siw *ServerInterfaceWrapper) ListModels(w http.ResponseWriter, r *http.Request) {
 
@@ -1143,6 +1497,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/answer", wrapper.AnswerPrompt)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/dismiss", wrapper.DismissPrompt)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/models", wrapper.ListModels)
 
 	return m

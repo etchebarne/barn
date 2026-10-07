@@ -35,6 +35,37 @@ type Message struct {
 	CreatedAt     int64
 	// Failure is set on system messages that report a failed agent turn.
 	Failure *Failure
+	// Prompt is set on agent messages that ask the user something.
+	Prompt *Prompt
+	// Event is set on system messages that mark something that happened.
+	Event *MessageEvent
+}
+
+// Prompt is a question with clickable answers.
+type Prompt struct {
+	Kind       string         `json:"kind"` // "single" | "multi" | "text"
+	Question   string         `json:"question"`
+	Options    []PromptOption `json:"options"`
+	AllowOther bool           `json:"allowOther"`
+	Status     string         `json:"status"` // "pending" | "answered" | "dismissed"
+	Answer     *PromptAnswer  `json:"answer"`
+}
+
+type PromptOption struct {
+	Label       string `json:"label"`
+	OpensChatID string `json:"opensChatId,omitempty"`
+}
+
+type PromptAnswer struct {
+	Selected []int  `json:"selected,omitempty"`
+	Text     string `json:"text,omitempty"`
+}
+
+// MessageEvent marks something that happened, e.g. {"kind": "agent_created"}.
+type MessageEvent struct {
+	Kind    string `json:"kind"`
+	AgentID string `json:"agentId"`
+	ChatID  string `json:"chatId,omitempty"`
 }
 
 // Failure describes a failed agent turn.
@@ -181,21 +212,93 @@ func sortChatsByActivity(chats []Chat) {
 	slices.SortFunc(chats, func(a, b Chat) int { return strings.Compare(activity(b), activity(a)) })
 }
 
-const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at, failure`
+const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at, failure, prompt, event`
 
 func scanMessage(row interface{ Scan(...any) error }) (Message, error) {
 	var m Message
-	var failure sql.NullString
-	err := row.Scan(&m.ID, &m.ChatID, &m.AuthorKind, &m.AuthorAgentID, &m.Body, &m.CreatedAt, &failure)
-	if err == nil && failure.Valid {
-		m.Failure = &Failure{}
-		err = json.Unmarshal([]byte(failure.String), m.Failure)
+	var failure, prompt, event sql.NullString
+	if err := row.Scan(&m.ID, &m.ChatID, &m.AuthorKind, &m.AuthorAgentID, &m.Body, &m.CreatedAt,
+		&failure, &prompt, &event); err != nil {
+		return m, err
 	}
-	return m, err
+	if err := unmarshalNullable(failure, &m.Failure); err != nil {
+		return m, err
+	}
+	if err := unmarshalNullable(prompt, &m.Prompt); err != nil {
+		return m, err
+	}
+	return m, unmarshalNullable(event, &m.Event)
+}
+
+func unmarshalNullable[T any](s sql.NullString, dst **T) error {
+	if !s.Valid {
+		return nil
+	}
+	*dst = new(T)
+	return json.Unmarshal([]byte(s.String), *dst)
+}
+
+func marshalNullable[T any](v *T) (*string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	out := string(b)
+	return &out, nil
 }
 
 func (s *Store) InsertMessage(ctx context.Context, chatID, authorKind string, authorAgentID *string, body string) (Message, error) {
 	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body})
+}
+
+// InsertPrompt posts an agent message that asks the user something.
+func (s *Store) InsertPrompt(ctx context.Context, chatID, agentID string, p Prompt) (Message, error) {
+	p.Status, p.Answer = "pending", nil
+	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: "agent", AuthorAgentID: &agentID, Body: p.Question, Prompt: &p})
+}
+
+// InsertEventMessage posts a system message marking something that happened.
+func (s *Store) InsertEventMessage(ctx context.Context, chatID, body string, e MessageEvent) (Message, error) {
+	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: "system", Body: body, Event: &e})
+}
+
+// ErrPromptClosed is returned when answering or dismissing a prompt that isn't pending.
+var ErrPromptClosed = errors.New("prompt is no longer pending")
+
+// UpdatePrompt applies fn to a pending prompt atomically. fn returns the new prompt state.
+func (s *Store) UpdatePrompt(ctx context.Context, messageID string, fn func(Prompt) (Prompt, error)) (Message, error) {
+	var out Message
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		m, err := scanMessage(tx.QueryRowContext(ctx,
+			`SELECT `+messageColumns+` FROM messages WHERE id = ?`, messageID))
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && m.Prompt == nil) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if m.Prompt.Status != "pending" {
+			return ErrPromptClosed
+		}
+		next, err := fn(*m.Prompt)
+		if err != nil {
+			return err
+		}
+		raw, err := marshalNullable(&next)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE messages SET prompt = ? WHERE id = ?`, raw, messageID); err != nil {
+			return err
+		}
+		m.Prompt = &next
+		out = m
+		return nil
+	})
+	return out, err
 }
 
 // InsertFailure posts a system message reporting a failed agent turn.
@@ -205,17 +308,20 @@ func (s *Store) InsertFailure(ctx context.Context, chatID, body string, f Failur
 
 func (s *Store) insertMessage(ctx context.Context, m Message) (Message, error) {
 	m.ID, m.CreatedAt = ids.New(), now()
-	var failure *string
-	if m.Failure != nil {
-		b, err := json.Marshal(m.Failure)
-		if err != nil {
-			return m, err
-		}
-		f := string(b)
-		failure = &f
+	failure, err := marshalNullable(m.Failure)
+	if err != nil {
+		return m, err
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure)
+	prompt, err := marshalNullable(m.Prompt)
+	if err != nil {
+		return m, err
+	}
+	event, err := marshalNullable(m.Event)
+	if err != nil {
+		return m, err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure, prompt, event)
 	return m, err
 }
 

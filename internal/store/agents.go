@@ -90,3 +90,8 @@ func (s *Store) UpdateAgentModel(ctx context.Context, id, model string) error {
 	}
 	return nil
 }
+
+func (s *Store) SetAgentAdmin(ctx context.Context, id string, admin bool) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE agents SET is_admin = ? WHERE id = ?`, admin, id)
+	return err
+}

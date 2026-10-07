@@ -232,6 +232,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{messageId}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Answer a pending prompt (a message with `prompt` set). The answer is stored on the
+         *     message (broadcast as message.updated) and delivered to the agent that asked.
+         */
+        post: operations["answerPrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{messageId}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Dismiss a pending prompt without answering (broadcast as message.updated). */
+        post: operations["dismissPrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/models": {
         parameters: {
             query?: never;
@@ -355,6 +396,13 @@ export interface components {
             /** @description Set on system messages reporting that an agent's turn failed */
             failure?: components["schemas"]["MessageFailure"] | null;
             /**
+             * @description Set on agent messages that ask the user something with clickable answers. `body`
+             *     holds the question as plain text (for previews).
+             */
+            prompt?: components["schemas"]["Prompt"] | null;
+            /** @description Set on system messages that mark something that happened, e.g. an agent was created */
+            event?: components["schemas"]["MessageEvent"] | null;
+            /**
              * @description Echo of SendMessageRequest.clientId. Only present on the sendMessage response and the
              *     matching message.created event.
              */
@@ -369,6 +417,39 @@ export interface components {
              */
             reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps";
             retryable: boolean;
+        };
+        Prompt: {
+            /**
+             * @description single = pick one; multi = pick any number; text = free-text answer
+             * @enum {string}
+             */
+            kind: "single" | "multi" | "text";
+            question: string;
+            options: components["schemas"]["PromptOption"][];
+            /** @description Offer "type your own" in addition to the options */
+            allowOther: boolean;
+            /** @enum {string} */
+            status: "pending" | "answered" | "dismissed";
+            answer: components["schemas"]["PromptAnswer"] | null;
+        };
+        PromptOption: {
+            label: string;
+            /** @description Choosing this option also opens this chat (e.g. "Go talk to X") */
+            opensChatId?: string;
+        };
+        PromptAnswer: {
+            /** @description Indexes of the chosen options */
+            selected?: number[];
+            /** @description Free-text answer (text prompts, or "type your own") */
+            text?: string;
+        };
+        MessageEvent: {
+            /** @enum {string} */
+            kind: "agent_created";
+            /** @description The agent the event is about (e.g. the one that was created) */
+            agentId: string;
+            /** @description A chat to link to (e.g. the new agent's DM) */
+            chatId?: string;
         };
         MessagePage: {
             messages: components["schemas"]["Message"][];
@@ -385,7 +466,7 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"];
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -421,6 +502,31 @@ export interface components {
              */
             type: "agent.updated";
             agent: components["schemas"]["Agent"];
+        };
+        /** @description A message changed (e.g. its prompt was answered or dismissed) */
+        WsMessageUpdated: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "message.updated";
+            message: components["schemas"]["Message"];
+        };
+        WsAgentCreated: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "agent.created";
+            agent: components["schemas"]["Agent"];
+        };
+        WsChatCreated: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "chat.created";
+            chat: components["schemas"]["Chat"];
         };
     };
     responses: {
@@ -813,6 +919,77 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             /** @description The agent is busy and will pick up pending work on its own */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    answerPrompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptAnswer"];
+            };
+        };
+        responses: {
+            /** @description The updated message */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The prompt was already answered or dismissed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    dismissPrompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The updated message */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The prompt was already answered or dismissed */
             409: {
                 headers: {
                     [name: string]: unknown;

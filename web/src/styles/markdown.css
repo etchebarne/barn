@@ -59,16 +59,42 @@
     line-height: 1.55;
     overscroll-behavior-x: contain;
   }
-  & table {
-    display: block;
+  & .table-scroll {
+    max-width: 100%;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  & table {
+    /* Cells wrap first; the table only scrolls once it can't shrink further. */
     border-collapse: collapse;
-    font-size: 0.95em;
+    font-size: 0.925em;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
   }
   & :where(th, td) {
-    border: 1px solid var(--border);
+    min-width: 7em;
     padding: 0.3em 0.6em;
     text-align: left;
+    vertical-align: top;
+  }
+  & :where(th, td):first-child {
+    padding-left: 0;
+  }
+  & :where(th, td):last-child {
+    padding-right: 0;
+  }
+  & :where(th, td)[align="right"] {
+    text-align: right;
+  }
+  & :where(th, td)[align="center"] {
+    text-align: center;
+  }
+  & thead th {
+    border-bottom: 1px solid color-mix(in oklch, var(--foreground) 18%, transparent);
+    white-space: nowrap;
+  }
+  & tbody tr + tr td {
+    border-top: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
   }
   & th {
     font-weight: 600;

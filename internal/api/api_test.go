@@ -247,3 +247,68 @@ func TestRetryAgent(t *testing.T) {
 		t.Fatalf("expected 404, got %d", resp.StatusCode)
 	}
 }
+
+func TestAnswerPrompt(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	agent, chatID, err := st.CreateAgentWithDM(ctx, store.Agent{
+		Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ask := func(kind string, allowOther bool) string {
+		p := store.Prompt{Kind: kind, Question: "Q?", AllowOther: allowOther}
+		if kind != "text" {
+			p.Options = []store.PromptOption{{Label: "A"}, {Label: "B"}}
+		}
+		msg, err := st.InsertPrompt(ctx, chatID, agent.ID, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return msg.ID
+	}
+
+	single := ask("single", false)
+	for _, body := range []string{`{}`, `{"selected":[0,1]}`, `{"selected":[5]}`, `{"text":"other"}`} {
+		if resp, _ := c.do("POST", "/api/messages/"+single+"/answer", body, true); resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("single %s: expected 400, got %d", body, resp.StatusCode)
+		}
+	}
+	resp, body := c.do("POST", "/api/messages/"+single+"/answer", `{"selected":[1]}`, true)
+	prompt, _ := body["prompt"].(map[string]any)
+	if resp.StatusCode != http.StatusOK || prompt["status"] != "answered" {
+		t.Fatalf("answer failed: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := c.do("POST", "/api/messages/"+single+"/answer", `{"selected":[0]}`, true); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409 for a second answer, got %d", resp.StatusCode)
+	}
+
+	multi := ask("multi", true)
+	if resp, body := c.do("POST", "/api/messages/"+multi+"/answer", `{"selected":[0,1],"text":"C"}`, true); resp.StatusCode != http.StatusOK {
+		t.Fatalf("multi with other: %d %v", resp.StatusCode, body)
+	}
+
+	text := ask("text", false)
+	if resp, _ := c.do("POST", "/api/messages/"+text+"/answer", `{"selected":[0]}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("text with selection: expected 400, got %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("POST", "/api/messages/"+text+"/answer", `{"text":"hello"}`, true); resp.StatusCode != http.StatusOK {
+		t.Fatalf("text answer: expected 200, got %d", resp.StatusCode)
+	}
+
+	dismissed := ask("single", false)
+	resp, body = c.do("POST", "/api/messages/"+dismissed+"/dismiss", "", true)
+	prompt, _ = body["prompt"].(map[string]any)
+	if resp.StatusCode != http.StatusOK || prompt["status"] != "dismissed" {
+		t.Fatalf("dismiss failed: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := c.do("POST", "/api/messages/"+dismissed+"/answer", `{"selected":[0]}`, true); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409 answering a dismissed prompt, got %d", resp.StatusCode)
+	}
+
+	plain, _ := st.InsertMessage(ctx, chatID, "user", nil, "hi")
+	if resp, _ := c.do("POST", "/api/messages/"+plain.ID+"/answer", `{"selected":[0]}`, true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for a non-prompt message, got %d", resp.StatusCode)
+	}
+}

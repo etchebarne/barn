@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -20,6 +21,8 @@ type fakeModel struct {
 	responses []func(req model.Request) model.Message
 	requests  []model.Request
 	failNext  error
+	// handler, if set, answers every request (used when several agents share the model).
+	handler func(req model.Request) model.Message
 }
 
 func (f *fakeModel) Chat(_ context.Context, req model.Request) (model.Response, error) {
@@ -30,6 +33,9 @@ func (f *fakeModel) Chat(_ context.Context, req model.Request) (model.Response, 
 		f.failNext = nil
 		return model.Response{}, err
 	}
+	if f.handler != nil {
+		return model.Response{Message: f.handler(req)}, nil
+	}
 	if len(f.responses) == 0 {
 		return model.Response{Message: model.Text("assistant", "")}, nil
 	}
@@ -38,10 +44,23 @@ func (f *fakeModel) Chat(_ context.Context, req model.Request) (model.Response, 
 	return model.Response{Message: next(req)}, nil
 }
 
+func (f *fakeModel) Models(context.Context) ([]string, error) {
+	return []string{"test-model", "other-model"}, nil
+}
+
+func (f *fakeModel) ProbeModel(context.Context, string) error { return nil }
+
 func (f *fakeModel) calls() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.requests)
+}
+
+func toolCall(name string, args any) model.Message {
+	b, _ := json.Marshal(args)
+	return model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{
+		ID: "call_" + name, Type: "function", Function: model.FunctionCall{Name: name, Arguments: string(b)},
+	}}}
 }
 
 func sendCall(chatID, text string) model.Message {
@@ -274,5 +293,168 @@ func TestFailedTurnCanBeRetried(t *testing.T) {
 	}
 	if failed, _ := f.rt.LastTurnFailed(context.Background(), f.agent.ID); failed {
 		t.Fatal("LastTurnFailed should be false after a successful retry")
+	}
+}
+
+func TestAskUserAndAnswer(t *testing.T) {
+	var f fixture
+	f = setup(t,
+		func(model.Request) model.Message {
+			return toolCall(toolAskUser, map[string]any{
+				"chat_id": f.chatID, "question": "Which tools?", "kind": "multi", "allow_other": true,
+				"options": []map[string]string{{"label": "ChatGPT"}, {"label": "Claude"}},
+			})
+		},
+		func(model.Request) model.Message { return model.Text("assistant", "") },
+		func(req model.Request) model.Message {
+			last := req.Messages[len(req.Messages)-1].Text()
+			if !strings.Contains(last, "<prompt_answer") || !strings.Contains(last, `Chose: "Claude"`) ||
+				!strings.Contains(last, "Typed: Cursor") {
+				t.Errorf("answer not rendered as expected: %s", last)
+			}
+			return sendCall(f.chatID, "nice")
+		},
+		func(model.Request) model.Message { return model.Text("assistant", "") },
+	)
+	f.userSays(t, "hi")
+	msgs := f.waitForMessages(t, 2)
+	prompt := msgs[1].Prompt
+	if prompt == nil || prompt.Kind != "multi" || prompt.Status != "pending" || len(prompt.Options) != 2 || msgs[1].Body != "Which tools?" {
+		t.Fatalf("expected a pending prompt, got %+v (prompt %+v)", msgs[1], prompt)
+	}
+	f.waitIdle(t)
+
+	answered, err := f.store.UpdatePrompt(context.Background(), msgs[1].ID, func(p store.Prompt) (store.Prompt, error) {
+		p.Status, p.Answer = "answered", &store.PromptAnswer{Selected: []int{1}, Text: "Cursor"}
+		return p, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.rt.DeliverAnswer(context.Background(), answered); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.waitForMessages(t, 3)[2]; got.Body != "nice" {
+		t.Fatalf("unexpected reply: %+v", got)
+	}
+	if _, err := f.store.UpdatePrompt(context.Background(), msgs[1].ID, func(p store.Prompt) (store.Prompt, error) {
+		return p, nil
+	}); !errors.Is(err, store.ErrPromptClosed) {
+		t.Fatalf("expected ErrPromptClosed for an answered prompt, got %v", err)
+	}
+}
+
+func TestAskUserValidation(t *testing.T) {
+	var f fixture
+	f = setup(t,
+		func(model.Request) model.Message {
+			return toolCall(toolAskUser, map[string]any{"chat_id": f.chatID, "question": "Pick", "kind": "single"})
+		},
+		func(req model.Request) model.Message {
+			tr := req.Messages[len(req.Messages)-1]
+			if !strings.Contains(tr.Text(), "need 1–8 options") {
+				t.Errorf("expected an options error, got %s", tr.Text())
+			}
+			return model.Text("assistant", "")
+		},
+	)
+	f.userSays(t, "hi")
+	f.waitIdle(t)
+}
+
+func TestCreateAgent(t *testing.T) {
+	var f fixture
+	f = setup(t)
+	if err := f.store.SetAgentAdmin(context.Background(), f.agent.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	var newChatID string
+	var mu sync.Mutex
+	f.llm.handler = func(req model.Request) model.Message {
+		sys := req.Messages[0].Text()
+		last := req.Messages[len(req.Messages)-1]
+		if strings.HasPrefix(sys, "You are Notes,") {
+			// The new agent: introduce itself once, in its own DM.
+			if strings.Contains(last.Text(), "You were just created by barn") {
+				mu.Lock()
+				id := newChatID
+				mu.Unlock()
+				return sendCall(id, "hi, I'm Notes")
+			}
+			return model.Text("assistant", "")
+		}
+		// The creator.
+		if last.Role == "user" && strings.Contains(last.Text(), "make a notes agent") {
+			return toolCall(toolCreateAgent, map[string]string{
+				"name": "Notes", "job": "Keep meeting notes.", "instructions": "Write tidy notes.", "model": "other-model",
+			})
+		}
+		if last.Role == "tool" && strings.Contains(last.Text(), `"chat_id"`) {
+			var res struct {
+				Result struct {
+					ChatID string `json:"chat_id"`
+				} `json:"result"`
+			}
+			json.Unmarshal([]byte(last.Text()), &res)
+			mu.Lock()
+			newChatID = res.Result.ChatID
+			mu.Unlock()
+		}
+		return model.Text("assistant", "")
+	}
+	f.userSays(t, "make a notes agent")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		agents, _ := f.store.ListAgents(context.Background())
+		mu.Lock()
+		id := newChatID
+		mu.Unlock()
+		if len(agents) == 2 && id != "" {
+			msgs, _, _ := f.store.ListMessages(context.Background(), id, "", 10)
+			if len(msgs) == 1 && msgs[0].Body == "hi, I'm Notes" {
+				created := agents[1]
+				if created.Name != "Notes" || created.Model != "other-model" || created.IsAdmin ||
+					!strings.Contains(created.Instructions, "Your job: Keep meeting notes.") {
+					t.Fatalf("unexpected agent: %+v", created)
+				}
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("new agent didn't introduce itself (agents %d, chat %q)", len(agents), id)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// The creator's DM has a "Created Notes" marker linking to the new chat.
+	msgs := f.waitForMessages(t, 2)
+	ev := msgs[1].Event
+	if ev == nil || ev.Kind != "agent_created" || ev.ChatID != newChatID {
+		t.Fatalf("expected an agent_created marker, got %+v (event %+v)", msgs[1], ev)
+	}
+}
+
+func TestNonAdminCannotCreateAgents(t *testing.T) {
+	var f fixture
+	f = setup(t,
+		func(req model.Request) model.Message {
+			for _, tool := range req.Tools {
+				if tool.Function.Name == toolCreateAgent {
+					t.Errorf("non-admin agent was offered create_agent")
+				}
+			}
+			return toolCall(toolCreateAgent, map[string]string{"name": "x", "job": "x", "instructions": "x", "model": "test-model"})
+		},
+		func(req model.Request) model.Message {
+			if tr := req.Messages[len(req.Messages)-1]; !strings.Contains(tr.Text(), "unknown tool") {
+				t.Errorf("expected unknown tool error, got %s", tr.Text())
+			}
+			return model.Text("assistant", "")
+		},
+	)
+	f.userSays(t, "make an agent")
+	f.waitIdle(t)
+	if agents, _ := f.store.ListAgents(context.Background()); len(agents) != 1 {
+		t.Fatalf("no agent should have been created, have %d", len(agents))
 	}
 }

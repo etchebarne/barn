@@ -3,6 +3,12 @@ import rehypeHighlight from "rehype-highlight"
 import remarkGfm from "remark-gfm"
 
 const components: Components = {
+  // Wide tables scroll inside the bubble instead of overflowing it.
+  table: ({ node: _node, ...props }) => (
+    <div className="table-scroll">
+      <table {...props} />
+    </div>
+  ),
   a: ({ node: _node, children, ...props }) => (
     <a {...props} target="_blank" rel="noreferrer noopener">
       {children}

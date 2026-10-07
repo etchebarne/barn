@@ -27,7 +27,15 @@ export function defaultWsUrl(
   return `${protocol}//${location.host}/api/ws`
 }
 
-const KNOWN_EVENTS = new Set(["message.created", "agent.activity", "agent.updated", "chat.read"])
+const KNOWN_EVENTS = new Set([
+  "message.created",
+  "message.updated",
+  "agent.activity",
+  "agent.created",
+  "agent.updated",
+  "chat.created",
+  "chat.read",
+])
 
 export function parseWsEvent(data: unknown): WsEvent | null {
   if (typeof data !== "string") return null

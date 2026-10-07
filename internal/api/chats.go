@@ -4,12 +4,10 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/etchebarne/barn/internal/api/gen"
-	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/runtime"
 	"github.com/etchebarne/barn/internal/store"
 	"github.com/etchebarne/barn/internal/view"
@@ -224,26 +222,132 @@ func (s *Server) RetryAgent(w http.ResponseWriter, r *http.Request, agentID stri
 // checkModel verifies a model exists and is usable with the saved key (a one-token request),
 // writing a user-facing error and returning false if not.
 func (s *Server) checkModel(w http.ResponseWriter, r *http.Request, id string) bool {
-	ctx := r.Context()
-	models, err := s.llm.Models(ctx)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, "couldn't load models: "+err.Error())
-		return false
-	}
-	if !slices.Contains(models, id) {
-		writeError(w, http.StatusBadRequest, "unknown model "+id)
-		return false
-	}
-	switch err := s.llm.ProbeModel(ctx, id); {
-	case err == nil:
+	err := s.runtime.CheckModel(r.Context(), id)
+	if err == nil {
 		return true
-	case errors.Is(err, model.ErrTrainsOnData):
-		writeError(w, http.StatusBadRequest, id+" is blocked by your OpenCode workspace's Privacy settings "+
-			"(its provider trains on request data). Pick another model, or allow these models in OpenCode.")
-	case errors.Is(err, model.ErrInvalidKey), errors.Is(err, model.ErrNoKey):
-		writeError(w, http.StatusBadRequest, "OpenCode Go rejected your API key. Replace it in Settings.")
-	default:
-		writeError(w, http.StatusBadGateway, "couldn't reach "+id+": "+err.Error())
+	}
+	var me *runtime.ModelError
+	if errors.As(err, &me) {
+		writeError(w, http.StatusBadRequest, me.Message)
+	} else {
+		writeError(w, http.StatusBadGateway, err.Error())
 	}
 	return false
+}
+
+func (s *Server) AnswerPrompt(w http.ResponseWriter, r *http.Request, messageID string) {
+	ctx := r.Context()
+	var req gen.PromptAnswer
+	if !decode(w, r, &req) {
+		return
+	}
+	answer := store.PromptAnswer{}
+	if req.Selected != nil {
+		answer.Selected = *req.Selected
+	}
+	if req.Text != nil {
+		answer.Text = strings.TrimSpace(*req.Text)
+	}
+	msg, err := s.store.UpdatePrompt(ctx, messageID, func(p store.Prompt) (store.Prompt, error) {
+		if err := validateAnswer(p, answer); err != nil {
+			return p, err
+		}
+		p.Status, p.Answer = "answered", &answer
+		return p, nil
+	})
+	var invalid *invalidAnswerError
+	switch {
+	case errors.As(err, &invalid):
+		writeError(w, http.StatusBadRequest, invalid.msg)
+		return
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "prompt not found")
+		return
+	case errors.Is(err, store.ErrPromptClosed):
+		writeError(w, http.StatusConflict, "this question was already answered")
+		return
+	case err != nil:
+		internalError(w, err)
+		return
+	}
+	// Answering implies having read the chat up to the question.
+	if err := s.store.MarkRead(ctx, msg.ChatID, msg.ID); err != nil {
+		internalError(w, err)
+		return
+	}
+	out := view.Message(msg)
+	s.bus.Publish(view.MessageUpdated(out))
+	if err := s.runtime.DeliverAnswer(ctx, msg); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) DismissPrompt(w http.ResponseWriter, r *http.Request, messageID string) {
+	msg, err := s.store.UpdatePrompt(r.Context(), messageID, func(p store.Prompt) (store.Prompt, error) {
+		p.Status = "dismissed"
+		return p, nil
+	})
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "prompt not found")
+		return
+	case errors.Is(err, store.ErrPromptClosed):
+		writeError(w, http.StatusConflict, "this question was already answered")
+		return
+	case err != nil:
+		internalError(w, err)
+		return
+	}
+	out := view.Message(msg)
+	s.bus.Publish(view.MessageUpdated(out))
+	writeJSON(w, http.StatusOK, out)
+}
+
+type invalidAnswerError struct{ msg string }
+
+func (e *invalidAnswerError) Error() string { return e.msg }
+
+func validateAnswer(p store.Prompt, a store.PromptAnswer) error {
+	bad := func(msg string) error { return &invalidAnswerError{msg} }
+	if utf8.RuneCountInString(a.Text) > 4000 {
+		return bad("answer is too long")
+	}
+	seen := map[int]bool{}
+	for _, i := range a.Selected {
+		if i < 0 || i >= len(p.Options) {
+			return bad("selected option doesn't exist")
+		}
+		if seen[i] {
+			return bad("an option was selected twice")
+		}
+		seen[i] = true
+	}
+	hasText := a.Text != ""
+	switch p.Kind {
+	case "text":
+		if !hasText || len(a.Selected) > 0 {
+			return bad("type an answer")
+		}
+	case "single":
+		if len(a.Selected)+btoi(hasText) != 1 {
+			return bad("choose one option")
+		}
+	case "multi":
+		if len(a.Selected) == 0 && !hasText {
+			return bad("choose at least one option")
+		}
+	}
+	if hasText && p.Kind != "text" && !p.AllowOther {
+		return bad("this question doesn't take a typed answer")
+	}
+	return nil
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

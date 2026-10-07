@@ -196,7 +196,7 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 		msgs = append(msgs, m)
 	}
 	// Each agent is one continuous conversation, so its id is a stable session id.
-	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools()}, nil
+	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: toolsFor(agent)}, nil
 }
 
 // reportError tells the user, in the agent's DM, that the agent couldn't finish its turn. The
