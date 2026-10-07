@@ -4,6 +4,7 @@ package model
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,20 @@ type Message struct {
 	ReasoningContent string     `json:"reasoning_content,omitempty"`
 	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string     `json:"tool_call_id,omitempty"`
+	// ImageRefs are attachment ids of images on a user message (kept in the stored context);
+	// Images holds their bytes for one request only and is never stored.
+	ImageRefs []string `json:"barn_images,omitempty"`
+	Images    []Image  `json:"-"`
+}
+
+// Image is an image shown to the model with a user message.
+type Image struct {
+	MediaType string // e.g. "image/png"
+	Data      []byte
+}
+
+func (i Image) dataURL() string {
+	return "data:" + i.MediaType + ";base64," + base64.StdEncoding.EncodeToString(i.Data)
 }
 
 func Text(role, content string) Message { return Message{Role: role, Content: &content} }
@@ -117,12 +132,46 @@ type Client struct {
 	protoMu sync.Mutex
 	proto   map[string]*protocol // model id -> protocol that worked
 
+	visionMu sync.Mutex
+	noVision map[string]bool // models that rejected images
+
 	// RetryDelays are the waits before retrying a temporary failure (overloaded, rate limited,
 	// a dropped connection). Tests shorten them.
 	RetryDelays []time.Duration
 }
 
 var defaultRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 12 * time.Second}
+
+func hasImages(req Request) bool {
+	for _, m := range req.Messages {
+		if len(m.Images) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) cantSee(model string) bool {
+	c.visionMu.Lock()
+	defer c.visionMu.Unlock()
+	return c.noVision[model]
+}
+
+// withoutImages drops the images, noting in each message that the model can't see them.
+func withoutImages(req Request) Request {
+	msgs := make([]Message, len(req.Messages))
+	copy(msgs, req.Messages)
+	for i, m := range msgs {
+		if len(m.Images) == 0 {
+			continue
+		}
+		text := m.Text() + "\n(You can't see images with this model; the attached images are saved as files at the paths above.)"
+		m.Content, m.Images = &text, nil
+		msgs[i] = m
+	}
+	req.Messages = msgs
+	return req
+}
 
 // transient reports whether a failed model call is worth retrying as is.
 func transient(err error) bool {
@@ -160,8 +209,25 @@ func (c *Client) Chat(ctx context.Context, req Request) (Response, error) {
 	if delays == nil {
 		delays = defaultRetryDelays
 	}
+	if hasImages(req) && c.cantSee(req.Model) {
+		req = withoutImages(req)
+	}
 	for attempt := 0; ; attempt++ {
 		resp, err := c.chat(ctx, key, req)
+		var api *APIError
+		if hasImages(req) && errors.As(err, &api) && api.Status >= 400 && api.Status < 500 &&
+			api.Status != http.StatusTooManyRequests && api.Status != http.StatusUnauthorized && api.Status != http.StatusForbidden {
+			// Most likely a model that can't take images: try once more without them.
+			if resp, err2 := c.chat(ctx, key, withoutImages(req)); err2 == nil {
+				c.visionMu.Lock()
+				if c.noVision == nil {
+					c.noVision = map[string]bool{}
+				}
+				c.noVision[req.Model] = true
+				c.visionMu.Unlock()
+				return resp, nil
+			}
+		}
 		if err == nil || attempt >= len(delays) || !transient(err) || ctx.Err() != nil {
 			return resp, err
 		}

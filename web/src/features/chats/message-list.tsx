@@ -119,7 +119,7 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
             >
               <PendingRow
                 pending={p}
-                onRetry={() => retry(p.clientId, p.body)}
+                onRetry={() => retry(p)}
                 onDiscard={() => discard(p.clientId)}
               />
             </MessageScrollerItem>

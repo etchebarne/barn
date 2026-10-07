@@ -17,8 +17,17 @@ import { ActivityLine } from "./activity-line"
 import { chatsQueryOptions, useSendMessage } from "./api"
 import { Composer } from "./composer"
 import { useDraftStore } from "./draft-store"
+import { FileDropZone } from "./file-drop-zone"
 import { MessageList } from "./message-list"
 import { dmAgent } from "./preview"
+import {
+  addFiles,
+  removeUpload,
+  retryUpload,
+  takeUploads,
+  useUploadNotice,
+  useUploads,
+} from "./uploads-store"
 
 function HeaderTitle({
   title,
@@ -86,15 +95,28 @@ export function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
 }
 
-function ChatComposer({ chat, members }: { chat: Chat; members: Agent[] }) {
+export function ChatComposer({ chat, members }: { chat: Chat; members: Agent[] }) {
   const draft = useDraftStore((s) => s.drafts[chat.id] ?? "")
   const setDraft = useDraftStore((s) => s.setDraft)
   const { send } = useSendMessage(chat.id)
+  const uploads = useUploads(chat.id)
+  const uploadNotice = useUploadNotice(chat.id)
   return (
     <Composer
       value={draft}
       onChange={(text) => setDraft(chat.id, text)}
-      onSend={send}
+      onSend={(text) => {
+        // Finished uploads go with the message, in the order they were added.
+        const attached = takeUploads(chat.id).flatMap((u) =>
+          u.attachment ? [{ attachment: u.attachment, previewUrl: u.previewUrl }] : [],
+        )
+        send(text, attached)
+      }}
+      uploads={uploads}
+      uploadNotice={uploadNotice}
+      onAddFiles={(files) => addFiles(chat.id, files)}
+      onRemoveUpload={(id) => removeUpload(chat.id, id)}
+      onRetryUpload={(id) => retryUpload(chat.id, id)}
       placeholder={`Message ${chat.name}`}
       mentionCandidates={
         chat.kind === "group" ? members.map((m) => ({ id: m.id, name: m.name })) : undefined
@@ -138,7 +160,7 @@ export function ChatView({ chatId }: { chatId: string }) {
   const dm = dmAgent(chat, agents)
 
   return (
-    <div className="flex h-svh min-w-0 flex-1 flex-col">
+    <FileDropZone onFiles={(files) => addFiles(chat.id, files)}>
       <ChatHeader chat={chat} members={dm ? [dm] : members} />
       <MessageScrollerProvider key={chat.id} autoScroll defaultScrollPosition="last-anchor">
         <MessageList chat={chat} agents={agents} />
@@ -147,6 +169,6 @@ export function ChatView({ chatId }: { chatId: string }) {
         <ActivityLine agents={members} />
         <ChatComposer key={chat.id} chat={chat} members={members} />
       </div>
-    </div>
+    </FileDropZone>
   )
 }

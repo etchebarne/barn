@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -59,7 +60,7 @@ func sendChatCompletions(ctx context.Context, c *Client, key string, req Request
 		} `json:"choices"`
 		Usage Usage `json:"usage"`
 	}
-	if err := c.do(ctx, key, req.Session, http.MethodPost, "/chat/completions", nil, req, &out); err != nil {
+	if err := c.do(ctx, key, req.Session, http.MethodPost, "/chat/completions", nil, toChatRequest(req), &out); err != nil {
 		return Response{}, err
 	}
 	if len(out.Choices) == 0 {
@@ -67,6 +68,47 @@ func sendChatCompletions(ctx context.Context, c *Client, key string, req Request
 	}
 	ch := out.Choices[0]
 	return Response{Message: ch.Message, FinishReason: ch.FinishReason, Usage: out.Usage}, nil
+}
+
+// chatRequest is Request on the wire: user messages with images send their content as parts.
+type chatRequest struct {
+	Model     string        `json:"model"`
+	Messages  []chatMessage `json:"messages"`
+	Tools     []Tool        `json:"tools,omitempty"`
+	MaxTokens int           `json:"max_tokens,omitempty"`
+}
+
+type chatMessage struct {
+	Role             string     `json:"role"`
+	Content          any        `json:"content"` // string, nil, or []chatPart
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
+}
+
+type chatPart struct {
+	Type     string            `json:"type"`
+	Text     string            `json:"text,omitempty"`
+	ImageURL map[string]string `json:"image_url,omitempty"`
+}
+
+func toChatRequest(req Request) chatRequest {
+	out := chatRequest{Model: req.Model, Tools: req.Tools, MaxTokens: req.MaxTokens}
+	for _, m := range req.Messages {
+		cm := chatMessage{Role: m.Role, ReasoningContent: m.ReasoningContent, ToolCalls: m.ToolCalls, ToolCallID: m.ToolCallID}
+		switch {
+		case len(m.Images) > 0:
+			parts := []chatPart{{Type: "text", Text: m.Text()}}
+			for _, img := range m.Images {
+				parts = append(parts, chatPart{Type: "image_url", ImageURL: map[string]string{"url": img.dataURL()}})
+			}
+			cm.Content = parts
+		case m.Content != nil:
+			cm.Content = *m.Content
+		}
+		out.Messages = append(out.Messages, cm)
+	}
+	return out
 }
 
 // ---- /responses (OpenAI Responses API) ----
@@ -83,7 +125,7 @@ type responsesRequest struct {
 type responsesItem struct {
 	Type      string `json:"type,omitempty"`
 	Role      string `json:"role,omitempty"`
-	Content   string `json:"content,omitempty"`
+	Content   any    `json:"content,omitempty"` // string, or []map for text with images
 	CallID    string `json:"call_id,omitempty"`
 	Name      string `json:"name,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
@@ -105,7 +147,15 @@ func toResponsesRequest(req Request) responsesRequest {
 		case "system":
 			instructions = append(instructions, m.Text())
 		case "user":
-			out.Input = append(out.Input, responsesItem{Role: "user", Content: m.Text()})
+			var content any = m.Text()
+			if len(m.Images) > 0 {
+				parts := []map[string]string{{"type": "input_text", "text": m.Text()}}
+				for _, img := range m.Images {
+					parts = append(parts, map[string]string{"type": "input_image", "image_url": img.dataURL()})
+				}
+				content = parts
+			}
+			out.Input = append(out.Input, responsesItem{Role: "user", Content: content})
 		case "assistant":
 			if text := m.Text(); text != "" {
 				out.Input = append(out.Input, responsesItem{Role: "assistant", Content: text})
@@ -215,6 +265,13 @@ type anthropicBlock struct {
 	Input     json.RawMessage `json:"input,omitempty"`
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   string          `json:"content,omitempty"`
+	Source    *anthropicImage `json:"source,omitempty"`
+}
+
+type anthropicImage struct {
+	Type      string `json:"type"` // "base64"
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
 }
 
 type anthropicTool struct {
@@ -246,7 +303,12 @@ func toAnthropicRequest(req Request) anthropicRequest {
 		case "system":
 			system = append(system, m.Text())
 		case "user":
-			add("user", anthropicBlock{Type: "text", Text: m.Text()})
+			blocks := []anthropicBlock{{Type: "text", Text: m.Text()}}
+			for _, img := range m.Images {
+				blocks = append(blocks, anthropicBlock{Type: "image", Source: &anthropicImage{
+					Type: "base64", MediaType: img.MediaType, Data: base64.StdEncoding.EncodeToString(img.Data)}})
+			}
+			add("user", blocks...)
 		case "assistant":
 			var blocks []anthropicBlock
 			if text := m.Text(); text != "" {

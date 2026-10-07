@@ -17,7 +17,7 @@ import { randomId } from "@/lib/ids"
 import { queryKeys } from "@/lib/query-keys"
 import { toggleUserReaction } from "@/lib/reactions"
 
-import { pendingStore } from "./pending-store"
+import { pendingStore, type PendingAttachment, type PendingMessage } from "./pending-store"
 
 export const MESSAGE_PAGE_SIZE = 50
 
@@ -52,13 +52,21 @@ export function useSendMessage(chatId: string) {
   const { add, remove, confirm, fail, retrying } = pendingStore.getState()
 
   const mutation = useMutation({
-    mutationFn: ({ clientId, body }: { clientId: string; body: string }) =>
+    mutationFn: ({
+      clientId,
+      body,
+      attachmentIds,
+    }: {
+      clientId: string
+      body: string
+      attachmentIds: string[]
+    }) =>
       unwrap(
         api.POST("/chats/{chatId}/messages", {
           params: { path: { chatId } },
-          // Echoed back on the response and the WS event, so the optimistic bubble is matched
-          // exactly to the stored message.
-          body: { body, clientId },
+          // `clientId` is echoed back on the response and the WS event, so the optimistic bubble
+          // is matched exactly to the stored message.
+          body: attachmentIds.length > 0 ? { body, clientId, attachmentIds } : { body, clientId },
         }),
       ),
     onSuccess: (message: Message, { clientId }) => {
@@ -71,14 +79,18 @@ export function useSendMessage(chatId: string) {
   })
 
   return {
-    send: (body: string) => {
+    send: (body: string, attachments: PendingAttachment[] = []) => {
       const clientId = randomId()
-      add(chatId, { clientId, body, status: "sending", createdAt: Date.now() })
-      mutation.mutate({ clientId, body })
+      add(chatId, { clientId, body, attachments, status: "sending", createdAt: Date.now() })
+      mutation.mutate({ clientId, body, attachmentIds: attachments.map((a) => a.attachment.id) })
     },
-    retry: (clientId: string, body: string) => {
-      retrying(chatId, clientId)
-      mutation.mutate({ clientId, body })
+    retry: (pending: Pick<PendingMessage, "clientId" | "body" | "attachments">) => {
+      retrying(chatId, pending.clientId)
+      mutation.mutate({
+        clientId: pending.clientId,
+        body: pending.body,
+        attachmentIds: (pending.attachments ?? []).map((a) => a.attachment.id),
+      })
     },
     discard: (clientId: string) => remove(chatId, clientId),
   }

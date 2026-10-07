@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -129,4 +131,43 @@ func (t *tail) String() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return string(t.buf)
+}
+
+// CopyOut streams a file out of the sandbox (binary-safe), refusing files over max bytes.
+func (m *Manager) CopyOut(ctx context.Context, sandboxID, path string, max int64) (io.ReadCloser, int64, error) {
+	if err := m.Ensure(ctx, sandboxID); err != nil {
+		return nil, 0, err
+	}
+	out, err := m.run(ctx, nil, "exec", containerName(sandboxID), "stat", "-L", "-c", "%s %F", "--", path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("no file at %s", path)
+	}
+	var size int64
+	var kind string
+	fmt.Sscanf(strings.TrimSpace(string(out)), "%d %s", &size, &kind)
+	if kind != "regular" {
+		return nil, 0, fmt.Errorf("%s isn't a regular file", path)
+	}
+	if size > max {
+		return nil, size, fmt.Errorf("%s is %d bytes, over the %d byte limit", path, size, max)
+	}
+	cmd := exec.CommandContext(ctx, m.docker, "exec", containerName(sandboxID), "cat", "--", path)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, 0, err
+	}
+	return &cmdReader{ReadCloser: stdout, cmd: cmd}, size, nil
+}
+
+type cmdReader struct {
+	io.ReadCloser
+	cmd *exec.Cmd
+}
+
+func (r *cmdReader) Close() error {
+	r.ReadCloser.Close()
+	return r.cmd.Wait()
 }

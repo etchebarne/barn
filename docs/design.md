@@ -226,6 +226,26 @@ Messages in a group are visible to every participant; DMs are visible only to th
   for just `/hooks/*`, or a reverse proxy); the Settings UI shows the full webhook URL to paste.
 - Connector content is untrusted input; external actions stay gated unless the agent is trusted.
 
+## 7b. Attachments
+
+- **Upload**: `POST /chats/{id}/attachments` (multipart, ≤ 25 MB) stores the file under
+  `<data>/shared/attachments/<id>/<name>` (every sandbox sees it at `/shared/attachments/…`) and
+  records it unsent; `SendMessageRequest.attachmentIds` (≤ 10) attaches uploads from the same chat
+  to the message in one transaction. Unsent uploads and files without a record are cleaned up
+  hourly (after a day). Types are sniffed from the content; image dimensions are recorded.
+- **Serving**: `GET /api/attachments/{id}` needs the session. Only images (PNG, JPEG, GIF, WebP)
+  and PDFs are served inline with their type; everything else is
+  `application/octet-stream` + `attachment` (no HTML/SVG can run in barn's origin), with
+  `nosniff` and a sandboxing CSP.
+- **Agents**: each attachment is listed as `<attachment name type size path/>`; small text files
+  (≤ 32 KB) are inlined; images are shown to the model as image parts in all three protocols.
+  Stored context keeps only image ids (`barn_images`); bytes are loaded per request, for the 3
+  most recent messages with images. A model that rejects images gets the request again without
+  them (and a note that they're files), and is remembered as text-only.
+- **Agents sending files**: `send_message` takes `files` (paths in the sandbox, or `/shared/…`
+  read on the host after cleaning the path); they're copied out (binary-safe, size checked)
+  and attached.
+
 ## 8. Sandboxes
 
 - Docker, through the CLI. Each agent gets a long-lived container (`barn-sbx-<id>`) on first

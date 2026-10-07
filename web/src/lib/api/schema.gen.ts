@@ -139,6 +139,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{chatId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Upload a file to attach to a message in this chat (then pass its id in
+         *     SendMessageRequest.attachmentIds). Up to 25 MB. Uploads that are never sent are removed
+         *     after a day.
+         */
+        post: operations["uploadAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attachments/{attachmentId}": {
+        parameters: {
+            query?: {
+                /** @description Send as a download even if the browser could show it */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description The file's contents. Images (PNG, JPEG, GIF, WebP) and PDFs are shown in the browser;
+         *     everything else downloads.
+         */
+        get: operations["getAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{chatId}/messages": {
         parameters: {
             query?: never;
@@ -1006,6 +1054,8 @@ export interface components {
             failure?: components["schemas"]["MessageFailure"] | null;
             /** @description Agents @mentioned in the message (group chats) */
             mentions: string[];
+            /** @description Files and images attached to the message, in order */
+            attachments: components["schemas"]["Attachment"][];
             /** @description Emoji reactions, in the order each emoji was first used */
             reactions: components["schemas"]["Reaction"][];
             /**
@@ -1129,8 +1179,29 @@ export interface components {
             messages: components["schemas"]["Message"][];
             hasMore: boolean;
         };
+        Attachment: {
+            id: string;
+            /** @description The file name */
+            name: string;
+            /** @description e.g. "image/png", "application/pdf" */
+            mime: string;
+            /**
+             * Format: int64
+             * @description Bytes
+             */
+            size: number;
+            /** @description Where to fetch it (same origin */
+            url: string;
+            /** @description Pixels */
+            width: number | null;
+            /** @description Pixels */
+            height: number | null;
+        };
         SendMessageRequest: {
+            /** @description The text; may be empty when the message has attachments */
             body: string;
+            /** @description Uploaded attachments (from uploadAttachment in this chat) to send with it */
+            attachmentIds?: string[];
             /** @description Client-generated id, echoed back so the sender can reconcile its optimistic message */
             clientId?: string;
         };
@@ -1458,6 +1529,74 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+        };
+    };
+    uploadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The uploaded file */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The file is over 25 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAttachment: {
+        parameters: {
+            query?: {
+                /** @description Send as a download even if the browser could show it */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listMessages: {

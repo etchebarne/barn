@@ -43,6 +43,10 @@ type Message struct {
 	Reactions []Reaction
 	// Mentions are the agent ids @mentioned in the message.
 	Mentions []string
+	// Attachments are filled by ListMessages, GetMessage and MessagesAfter; on insert, the
+	// unsent uploads with these ids are attached.
+	Attachments []Attachment
+	attachIDs   []string
 }
 
 // Reaction is one emoji on a message and who used it. Reactors are "user" or "agent:<id>".
@@ -341,6 +345,18 @@ func (s *Store) InsertMessage(ctx context.Context, chatID, authorKind string, au
 	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body, Mentions: mentions})
 }
 
+// InsertMessageWithAttachments posts a message and attaches unsent uploads from the same chat
+// to it, in order (ErrBadAttachment if any isn't one).
+func (s *Store) InsertMessageWithAttachments(ctx context.Context, chatID, authorKind string, authorAgentID *string, body string, attachmentIDs []string, mentions ...string) (Message, error) {
+	m, err := s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body, Mentions: mentions, attachIDs: attachmentIDs})
+	if err != nil {
+		return m, err
+	}
+	msgs := []Message{m}
+	err = s.fillAttachments(ctx, msgs)
+	return msgs[0], err
+}
+
 // InsertPrompt posts an agent message that asks the user something.
 func (s *Store) InsertPrompt(ctx context.Context, chatID, agentID string, p Prompt) (Message, error) {
 	p.Status, p.Answer = "pending", nil
@@ -416,8 +432,14 @@ func (s *Store) insertMessage(ctx context.Context, m Message) (Message, error) {
 		v := string(b)
 		mentions = &v
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure, prompt, event, mentions)
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure, prompt, event, mentions); err != nil {
+			return err
+		}
+		return attach(ctx, tx, m.ChatID, m.ID, m.attachIDs)
+	})
+	m.attachIDs = nil
 	return m, err
 }
 
@@ -441,7 +463,10 @@ func (s *Store) GetMessage(ctx context.Context, id string) (Message, error) {
 		return m, err
 	}
 	msgs := []Message{m}
-	err = s.fillReactions(ctx, msgs)
+	if err := s.fillReactions(ctx, msgs); err != nil {
+		return m, err
+	}
+	err = s.fillAttachments(ctx, msgs)
 	return msgs[0], err
 }
 
@@ -543,6 +568,9 @@ func (s *Store) ListMessages(ctx context.Context, chatID, before string, limit i
 	if err := s.fillReactions(ctx, out); err != nil {
 		return nil, false, err
 	}
+	if err := s.fillAttachments(ctx, out); err != nil {
+		return nil, false, err
+	}
 	return out, hasMore, nil
 }
 
@@ -571,7 +599,11 @@ func (s *Store) MessagesAfter(ctx context.Context, chatID, afterID string, limit
 		}
 		out = append(out, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	return out, s.fillAttachments(ctx, out)
 }
 
 // ReadMarker returns how far a reader ("user" or "agent:<id>") has read a chat ("" if never).

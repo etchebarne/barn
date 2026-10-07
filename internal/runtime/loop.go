@@ -28,6 +28,7 @@ type loop struct {
 	wake    chan struct{}
 	stop    context.CancelFunc
 	handled []string // events consumed by the current turn
+	images  []string // image attachments of the event being rendered
 }
 
 func (l *loop) poke() {
@@ -183,6 +184,7 @@ func (l *loop) consume(ctx context.Context, events []store.Event) (int, error) {
 	ids := make([]string, 0, len(events))
 	entries := make([]json.RawMessage, 0, len(events))
 	for _, e := range events {
+		l.images = nil
 		text, err := l.renderEvent(ctx, e)
 		if err != nil {
 			return 0, fmt.Errorf("render event %s: %w", e.ID, err)
@@ -192,7 +194,9 @@ func (l *loop) consume(ctx context.Context, events []store.Event) (int, error) {
 		if text == "" {
 			continue
 		}
-		b, err := json.Marshal(model.Text("user", text))
+		entry := model.Text("user", text)
+		entry.ImageRefs = l.images
+		b, err := json.Marshal(entry)
 		if err != nil {
 			return 0, err
 		}
@@ -240,6 +244,7 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 		}
 		msgs = append(msgs, m)
 	}
+	l.loadImages(ctx, msgs)
 	// Each agent is one continuous conversation, so its id is a stable session id.
 	tools := toolsFor(agent, l.m.sandboxesAvailable())
 	if l.m.Connectors != nil {

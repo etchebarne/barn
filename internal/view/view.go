@@ -10,17 +10,32 @@ import (
 
 func Message(m store.Message) gen.Message {
 	return gen.Message{
-		Id:        m.ID,
-		ChatId:    m.ChatID,
-		Author:    gen.MessageAuthor{Kind: gen.MessageAuthorKind(m.AuthorKind), AgentId: m.AuthorAgentID},
-		Body:      m.Body,
-		CreatedAt: store.Time(m.CreatedAt),
-		Failure:   failure(m.Failure),
-		Prompt:    prompt(m.Prompt),
-		Event:     event(m.Event),
-		Reactions: reactions(m.Reactions),
-		Mentions:  mentions(m.Mentions),
+		Id:          m.ID,
+		ChatId:      m.ChatID,
+		Author:      gen.MessageAuthor{Kind: gen.MessageAuthorKind(m.AuthorKind), AgentId: m.AuthorAgentID},
+		Body:        m.Body,
+		CreatedAt:   store.Time(m.CreatedAt),
+		Failure:     failure(m.Failure),
+		Prompt:      prompt(m.Prompt),
+		Event:       event(m.Event),
+		Reactions:   reactions(m.Reactions),
+		Mentions:    mentions(m.Mentions),
+		Attachments: attachmentList(m.Attachments),
 	}
+}
+
+// Attachment is how clients see an attached file.
+func Attachment(a store.Attachment) gen.Attachment {
+	return gen.Attachment{Id: a.ID, Name: a.Name, Mime: a.Mime, Size: a.Size,
+		Url: "/api/attachments/" + a.ID, Width: a.Width, Height: a.Height}
+}
+
+func attachmentList(as []store.Attachment) []gen.Attachment {
+	out := make([]gen.Attachment, 0, len(as))
+	for _, a := range as {
+		out = append(out, Attachment(a))
+	}
+	return out
 }
 
 func mentions(ids []string) []string {

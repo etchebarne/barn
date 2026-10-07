@@ -1,9 +1,10 @@
-import { ArrowUpIcon } from "lucide-react"
+import { ArrowUpIcon, PaperclipIcon } from "lucide-react"
 import {
   useId,
   useLayoutEffect,
   useRef,
   useState,
+  type ClipboardEvent,
   type KeyboardEvent,
   type SyntheticEvent,
 } from "react"
@@ -22,7 +23,24 @@ import {
 } from "@/lib/mentions"
 import { shake } from "@/lib/shake"
 
+import { AttachmentRow } from "./attachment-row"
 import { MentionPopover, mentionOptionId } from "./mention-popover"
+import { uploadsState, type PendingUpload } from "./uploads-store"
+
+const NO_UPLOADS: PendingUpload[] = []
+
+/** Files on the clipboard (screenshots, or files copied in a file manager). */
+export function clipboardFiles(data: DataTransfer | null): File[] {
+  if (!data) return []
+  const files = [...data.files]
+  if (files.length > 0) return files
+  return [...data.items]
+    .filter((item) => item.kind === "file")
+    .flatMap((item) => {
+      const file = item.getAsFile()
+      return file ? [file] : []
+    })
+}
 
 /** The request schema caps message bodies at 32k characters. */
 export const MAX_MESSAGE_LENGTH = 32_000
@@ -40,17 +58,33 @@ export function Composer({
   onSend,
   placeholder,
   mentionCandidates,
+  uploads = NO_UPLOADS,
+  uploadNotice = null,
+  onAddFiles,
+  onRemoveUpload,
+  onRetryUpload,
 }: {
   value: string
   onChange: (value: string) => void
+  /** Called with the trimmed text (may be empty when files are attached). */
   onSend: (text: string) => void
   placeholder?: string
   mentionCandidates?: MentionTarget[]
+  /** Files added to this message; enables attaching when `onAddFiles` is set. */
+  uploads?: PendingUpload[]
+  uploadNotice?: string | null
+  onAddFiles?: (files: File[]) => void
+  onRemoveUpload?: (localId: string) => void
+  onRetryUpload?: (localId: string) => void
 }) {
   const groupRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const tooLong = value.length > MAX_MESSAGE_LENGTH
+  const { uploading, ready } = uploadsState(uploads)
+  // Text or a finished upload, nothing still uploading, and not over the length limit.
+  const canSend = (value.trim() !== "" || ready > 0) && !uploading && !tooLong
 
   // @mention autocomplete state.
   const [caret, setCaret] = useState(0)
@@ -119,7 +153,7 @@ export function Composer({
 
   function submit(fromPointer: boolean) {
     const text = value.trim()
-    if (!text || tooLong) {
+    if (!canSend) {
       // Explain the blocked action with a small shake, but only for pointer input:
       // keyboard actions are never animated.
       if (fromPointer) shake(groupRef.current)
@@ -149,6 +183,12 @@ export function Composer({
     >
       {/* Nested radius: group radius = button radius (--radius) + addon padding (0.5rem). */}
       <InputGroup ref={groupRef} className="rounded-[calc(var(--radius)+0.5rem)] bg-background">
+        <AttachmentRow
+          uploads={uploads}
+          notice={uploadNotice}
+          onRemove={(id) => onRemoveUpload?.(id)}
+          onRetry={(id) => onRetryUpload?.(id)}
+        />
         <InputGroupTextarea
           ref={textareaRef}
           aria-label="Message"
@@ -164,6 +204,14 @@ export function Composer({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={onKeyDown}
+          onPaste={(event: ClipboardEvent<HTMLTextAreaElement>) => {
+            if (!onAddFiles) return
+            const files = clipboardFiles(event.clipboardData)
+            if (files.length === 0) return
+            // Attach the files instead of pasting their names or nothing.
+            event.preventDefault()
+            onAddFiles(files)
+          }}
           {...(mentionCandidates
             ? {
                 role: "combobox",
@@ -178,7 +226,18 @@ export function Composer({
           className="max-h-[40svh] min-h-11 px-3.5 pt-3"
         />
         <InputGroupAddon align="block-end" className="justify-between">
-          <span className="text-xs text-destructive tabular-nums" aria-live="polite">
+          {onAddFiles && (
+            <InputGroupButton
+              type="button"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label="Attach files"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <PaperclipIcon />
+            </InputGroupButton>
+          )}
+          <span className="mr-auto text-xs text-destructive tabular-nums" aria-live="polite">
             {tooLong
               ? `${value.length.toLocaleString()} / ${MAX_MESSAGE_LENGTH.toLocaleString()}`
               : ""}
@@ -189,12 +248,28 @@ export function Composer({
             size="icon-sm"
             className="rounded-(--radius)"
             aria-label="Send message"
-            aria-disabled={!value.trim() || tooLong || undefined}
+            aria-disabled={!canSend || undefined}
           >
             <ArrowUpIcon />
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
+      {onAddFiles && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          aria-hidden="true"
+          tabIndex={-1}
+          data-testid="attach-input"
+          onChange={(event) => {
+            onAddFiles([...(event.target.files ?? [])])
+            // Allow picking the same file again later.
+            event.target.value = ""
+          }}
+        />
+      )}
       {mentionCandidates && (
         <MentionPopover
           open={mentionOpen}

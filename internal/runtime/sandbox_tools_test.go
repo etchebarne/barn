@@ -1,7 +1,10 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -17,11 +20,27 @@ type fakeSandbox struct {
 	calls   []string
 	stdin   []string
 	removed []string
+	files   map[string][]byte
 }
 
 func (f *fakeSandbox) Available() bool                       { return true }
 func (f *fakeSandbox) Status(context.Context, string) string { return "running" }
 func (f *fakeSandbox) Restart(context.Context, string) error { return nil }
+
+// CopyOut serves files set in f.files.
+func (f *fakeSandbox) CopyOut(_ context.Context, _, path string, max int64) (io.ReadCloser, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, ok := f.files[path]
+	if !ok {
+		return nil, 0, fmt.Errorf("no file at %s", path)
+	}
+	if int64(len(b)) > max {
+		return nil, int64(len(b)), fmt.Errorf("too large")
+	}
+	return io.NopCloser(bytes.NewReader(b)), int64(len(b)), nil
+}
+
 func (f *fakeSandbox) Remove(_ context.Context, id string) error {
 	f.removed = append(f.removed, id)
 	return nil

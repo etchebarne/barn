@@ -1,16 +1,22 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	pngenc "image/png"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/etchebarne/barn/internal/attachments"
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/connectors"
 	"github.com/etchebarne/barn/internal/connectors/oauthtest"
@@ -49,6 +55,8 @@ func newTestServerWithProvider(t *testing.T, providerURL string) (*httptest.Serv
 	srv := New(st, b, rt, llm, set, nil, Options{PublicURL: "https://barn.example.com"})
 	conns := connectors.NewManager(st, box)
 	rt.Connectors, srv.Connectors = conns, conns
+	files := &attachments.Files{Dir: filepath.Join(dir, "shared", "attachments"), Store: st}
+	rt.Files, srv.Files = files, files
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(func() {
 		ts.Close()
@@ -646,5 +654,95 @@ func TestDeleteAgentAPI(t *testing.T) {
 	}
 	if resp, _ := c.do("DELETE", "/api/agents/"+admin.ID, "", false); resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("without the CSRF header: %d", resp.StatusCode)
+	}
+}
+
+// upload posts a file to a chat's attachments.
+func (c *client) upload(chatID, name string, data []byte) (*http.Response, map[string]any) {
+	c.t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("file", name)
+	fw.Write(data)
+	mw.Close()
+	req, _ := http.NewRequest("POST", c.base+"/api/chats/"+chatID+"/attachments", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set(csrfHeader, "1")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	json.NewDecoder(resp.Body).Decode(&out)
+	return resp, out
+}
+
+func TestAttachmentsAPI(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	_, dm, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	_, other, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "b", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+
+	// A PNG: type sniffed, dimensions read.
+	img := image.NewRGBA(image.Rect(0, 0, 40, 30))
+	var png bytes.Buffer
+	pngenc.Encode(&png, img)
+	resp, shot := c.upload(dm, "../../screen shot.png", png.Bytes())
+	if resp.StatusCode != http.StatusCreated || shot["mime"] != "image/png" || shot["width"] != float64(40) ||
+		shot["height"] != float64(30) || shot["name"] != "screen shot.png" {
+		t.Fatalf("upload: %d %v", resp.StatusCode, shot)
+	}
+	// HTML is stored, but never served as a page.
+	_, page := c.upload(dm, "evil.html", []byte("<script>alert(1)</script>"))
+
+	// Sending with attachments (and an empty body).
+	body := `{"body":"","attachmentIds":["` + shot["id"].(string) + `","` + page["id"].(string) + `"]}`
+	resp, msg := c.do("POST", "/api/chats/"+dm+"/messages", body, true)
+	atts, _ := msg["attachments"].([]any)
+	if resp.StatusCode != http.StatusCreated || len(atts) != 2 || atts[0].(map[string]any)["name"] != "screen shot.png" {
+		t.Fatalf("send: %d %v", resp.StatusCode, msg)
+	}
+	// An upload is sent once, and only in its own chat.
+	if resp, _ := c.do("POST", "/api/chats/"+dm+"/messages", body, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("resend: %d", resp.StatusCode)
+	}
+	_, stray := c.upload(dm, "x.txt", []byte("hi"))
+	if resp, _ := c.do("POST", "/api/chats/"+other+"/messages", `{"body":"x","attachmentIds":["`+stray["id"].(string)+`"]}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("other chat: %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("POST", "/api/chats/"+dm+"/messages", `{"body":""}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("empty message: %d", resp.StatusCode)
+	}
+
+	// Serving: images inline, HTML as a download with a harmless type.
+	get := func(url string) *http.Response {
+		r, err := c.http.Get(c.base + url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		return r
+	}
+	r := get(shot["url"].(string))
+	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "image/png" || !strings.HasPrefix(r.Header.Get("Content-Disposition"), "inline") {
+		t.Fatalf("image: %d %v", r.StatusCode, r.Header)
+	}
+	r = get(page["url"].(string))
+	if r.Header.Get("Content-Type") != "application/octet-stream" || !strings.HasPrefix(r.Header.Get("Content-Disposition"), "attachment") ||
+		r.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("html: %v", r.Header)
+	}
+	if r := get(shot["url"].(string) + "?download=1"); !strings.HasPrefix(r.Header.Get("Content-Disposition"), "attachment") {
+		t.Fatal("download=1 should force a download")
+	}
+	anon, _ := http.Get(c.base + shot["url"].(string))
+	if anon.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("files need the session: %d", anon.StatusCode)
+	}
+
+	// Over 25 MB is refused.
+	if resp, _ := c.upload(dm, "big.bin", make([]byte, attachments.MaxSize+1)); resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("too large: %d", resp.StatusCode)
 	}
 }

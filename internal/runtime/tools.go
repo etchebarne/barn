@@ -46,7 +46,8 @@ var (
 			"type": "object",
 			"properties": {
 				"chat_id": {"type": "string", "description": "The chat to post in (from your chat list)."},
-				"text": {"type": "string", "description": "The message, in Markdown."}
+				"text": {"type": "string", "description": "The message, in Markdown. May be empty when you attach files."},
+				"files": {"type": "array", "items": {"type": "string"}, "description": "Files from your computer to attach (up to 10, 25 MB each), e.g. /home/agent/report.pdf or /shared/chart.png. Images show in the chat."}
 			},
 			"required": ["chat_id", "text"],
 			"additionalProperties": false
@@ -366,20 +367,25 @@ func (l *loop) memberChat(ctx context.Context, agent store.Agent, chatID string)
 
 func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
 	var args struct {
-		ChatID string `json:"chat_id"`
-		Text   string `json:"text"`
+		ChatID string   `json:"chat_id"`
+		Text   string   `json:"text"`
+		Files  []string `json:"files"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return toolError("invalid arguments: %v", err), false
 	}
-	if strings.TrimSpace(args.Text) == "" {
+	if strings.TrimSpace(args.Text) == "" && len(args.Files) == 0 {
 		return toolError("text is empty"), false
 	}
 	chat, err := l.memberChat(ctx, agent, args.ChatID)
 	if err != nil {
 		return toolError("%v", err), false
 	}
-	msg, err := l.m.postMessage(ctx, chat.ID, "agent", &agent.ID, args.Text)
+	attached, err := l.attachFiles(ctx, agent, chat.ID, args.Files)
+	if err != nil {
+		return toolError("couldn't attach: %v", err), false
+	}
+	msg, err := l.m.postMessage(ctx, chat.ID, "agent", &agent.ID, args.Text, attached...)
 	if err != nil {
 		logger(agent.ID).Error("send_message", "err", err)
 		return toolError("failed to send the message"), false

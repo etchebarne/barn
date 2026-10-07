@@ -1,4 +1,5 @@
 import type { Agent, Chat, Message } from "@/lib/api-client"
+import { attachmentSummary } from "@/lib/attachments"
 
 /** One-line plain-text preview of a markdown message body. */
 export function plainPreview(body: string, max = 120): string {
@@ -38,7 +39,8 @@ export function authorName(message: Message, agents: Map<string, Agent>): string
 export function chatPreview(chat: Chat, agents: Map<string, Agent>): string {
   const message = chat.lastMessage
   if (!message) return "No messages yet"
-  const text = plainPreview(message.body)
+  // Attachments-only messages preview as "🖼 Image" or "📎 name".
+  const text = plainPreview(message.body) || attachmentSummary(message.attachments) || ""
   if (message.author.kind === "user") return `You: ${text}`
   if (chat.kind === "group" && message.author.kind === "agent") {
     return `${authorName(message, agents)}: ${text}`

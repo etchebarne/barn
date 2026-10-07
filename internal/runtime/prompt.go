@@ -195,9 +195,11 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 		case msg.AuthorKind == "system":
 			from = "system"
 		}
-		return fmt.Sprintf("<message message_id=%q chat_id=%q chat=%q from=%q sent_at=%q>\n%s\n</message>",
+		files, images := l.renderAttachments(msg)
+		l.images = append(l.images, images...)
+		return fmt.Sprintf("<message message_id=%q chat_id=%q chat=%q from=%q sent_at=%q>\n%s%s\n</message>",
 			msg.ID, chat.ID, describeChat(chat, user.Username, l.agentID, names), from,
-			store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339), msg.Body), nil
+			store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339), msg.Body, files), nil
 
 	case EventSystem:
 		var p struct {

@@ -19,6 +19,7 @@ import type { Row } from "./grouping"
 import { formatDay, formatTime } from "./grouping"
 import { Markdown } from "./markdown"
 import { MentionText } from "./mention-text"
+import { MessageAttachments, type ShownAttachment } from "./message-attachments"
 import { MessageReactions, ReactButton } from "./message-reactions"
 import type { PendingMessage } from "./pending-store"
 import { agentAuthorName } from "./preview"
@@ -126,6 +127,8 @@ export function MessageRow({
   // Rows clip what overflows them (content-visibility), so reacted bubbles reserve room for the
   // reactions badge hanging below them: 3/4 of its height plus its ring.
   const reacted = message.reactions.length > 0
+  // A message can be only attachments: then there's no text bubble.
+  const hasText = message.body.trim() !== ""
   const mentions = mentionTargets(message.mentions, agents)
   const time = (
     <time dateTime={message.createdAt} className="hidden tabular-nums sm:inline">
@@ -137,14 +140,23 @@ export function MessageRow({
     return (
       <Message align="end">
         <MessageContent>
-          <Bubble variant="default" align="end" className={cn(reacted && "mb-6")}>
-            <BubbleContent className="whitespace-pre-wrap">
-              <MentionText text={message.body} mentions={mentions} />
-            </BubbleContent>
+          {hasText && <MessageAttachments attachments={message.attachments} align="end" />}
+          <Bubble
+            variant={hasText ? "default" : "ghost"}
+            align="end"
+            className={cn(reacted && "mb-6")}
+          >
+            {hasText ? (
+              <BubbleContent className="whitespace-pre-wrap">
+                <MentionText text={message.body} mentions={mentions} />
+              </BubbleContent>
+            ) : (
+              <MessageAttachments attachments={message.attachments} align="end" />
+            )}
             <MessageReactions message={message} agents={agents} align="start" />
             <MessageActions side="end">
               <ReactButton message={message} />
-              <CopyButton text={message.body} />
+              {hasText && <CopyButton text={message.body} />}
               {time}
             </MessageActions>
           </Bubble>
@@ -195,17 +207,24 @@ export function MessageRow({
             <MessageReactions message={message} agents={agents} align="end" />
           </Bubble>
         ) : (
-          <Bubble variant="muted" className={cn(reacted && "mb-6")}>
-            <BubbleContent>
-              <Markdown mentions={mentions}>{message.body}</Markdown>
-            </BubbleContent>
-            <MessageReactions message={message} agents={agents} align="end" />
-            <MessageActions side="start">
-              <CopyButton text={message.body} />
-              <ReactButton message={message} />
-              {time}
-            </MessageActions>
-          </Bubble>
+          <>
+            {hasText && <MessageAttachments attachments={message.attachments} align="start" />}
+            <Bubble variant={hasText ? "muted" : "ghost"} className={cn(reacted && "mb-6")}>
+              {hasText ? (
+                <BubbleContent>
+                  <Markdown mentions={mentions}>{message.body}</Markdown>
+                </BubbleContent>
+              ) : (
+                <MessageAttachments attachments={message.attachments} align="start" />
+              )}
+              <MessageReactions message={message} agents={agents} align="end" />
+              <MessageActions side="start">
+                {hasText && <CopyButton text={message.body} />}
+                <ReactButton message={message} />
+                {time}
+              </MessageActions>
+            </Bubble>
+          </>
         )}
       </MessageContent>
     </Message>
@@ -222,14 +241,24 @@ export function PendingRow({
   onDiscard: () => void
 }) {
   const failed = pending.status === "failed"
+  const attachments: ShownAttachment[] = (pending.attachments ?? []).map((a) =>
+    Object.assign({}, a.attachment, { previewUrl: a.previewUrl }),
+  )
   return (
     <Message align="end">
       <MessageContent>
-        <Bubble variant={failed ? "destructive" : "default"} align="end">
-          <BubbleContent className={cn("whitespace-pre-wrap", !failed && "opacity-70")}>
-            {pending.body}
-          </BubbleContent>
-        </Bubble>
+        {attachments.length > 0 && (
+          <div className={cn(!failed && "opacity-70")}>
+            <MessageAttachments attachments={attachments} align="end" />
+          </div>
+        )}
+        {pending.body.trim() !== "" && (
+          <Bubble variant={failed ? "destructive" : "default"} align="end">
+            <BubbleContent className={cn("whitespace-pre-wrap", !failed && "opacity-70")}>
+              {pending.body}
+            </BubbleContent>
+          </Bubble>
+        )}
         {failed ? (
           <div
             className="flex items-center justify-end gap-1 text-xs text-destructive"

@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/etchebarne/barn/internal/api/gen"
+	"github.com/etchebarne/barn/internal/attachments"
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/connectors"
 	"github.com/etchebarne/barn/internal/model"
@@ -52,6 +53,8 @@ type Manager struct {
 	Timezone Timezone
 	// Connectors gives agents tools and signals from external services; nil disables them.
 	Connectors *connectors.Manager
+	// Files stores attachments (nil: none).
+	Files *attachments.Files
 	// Push sends a notification to the user's devices; nil disables notifications.
 	Push func(ctx context.Context, title, body, chatID string)
 
@@ -341,9 +344,9 @@ func (m *Manager) DeliverAnswer(ctx context.Context, msg store.Message) error {
 
 // postMessage stores a message and broadcasts it. An agent's message in a group starts (or
 // extends) that group's turn cycle so the others get to respond.
-func (m *Manager) postMessage(ctx context.Context, chatID, authorKind string, agentID *string, body string) (store.Message, error) {
+func (m *Manager) postMessage(ctx context.Context, chatID, authorKind string, agentID *string, body string, attachmentIDs ...string) (store.Message, error) {
 	mentions := m.MentionsIn(ctx, chatID, body)
-	msg, err := m.store.InsertMessage(ctx, chatID, authorKind, agentID, body, mentions...)
+	msg, err := m.store.InsertMessageWithAttachments(ctx, chatID, authorKind, agentID, body, attachmentIDs, mentions...)
 	if err != nil {
 		return msg, err
 	}

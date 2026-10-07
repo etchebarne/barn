@@ -324,8 +324,10 @@ func (l *loop) renderGroupTurn(ctx context.Context, payload json.RawMessage) (st
 		if slices.Contains(msg.Mentions, l.agentID) {
 			mentioned = ` mentions_you="true"`
 		}
-		fmt.Fprintf(&b, "<message message_id=%q from=%q sent_at=%q%s>\n%s\n</message>\n",
-			msg.ID, from, store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339), mentioned, msg.Body)
+		files, images := l.renderAttachments(msg)
+		l.images = append(l.images, images...)
+		fmt.Fprintf(&b, "<message message_id=%q from=%q sent_at=%q%s>\n%s%s\n</message>\n",
+			msg.ID, from, store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339), mentioned, msg.Body, files)
 	}
 	b.WriteString("It's your turn in this group. Reply (send_message to this chat_id) only if something is " +
 		"directed at you or you have something useful to add that others haven't said; otherwise react or stay " +

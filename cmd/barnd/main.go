@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/etchebarne/barn/internal/api"
+	"github.com/etchebarne/barn/internal/attachments"
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/config"
 	"github.com/etchebarne/barn/internal/connectors"
@@ -103,6 +104,19 @@ func run() error {
 	conns := connectors.NewManager(st, box)
 	conns.OnSignal = rt.DeliverSignal
 	rt.Connectors = conns
+	// Attachments live in the shared folder, which every sandbox mounts at /shared.
+	files := &attachments.Files{Dir: filepath.Join(cfg.DataDir, "shared", "attachments"), Store: st}
+	rt.Files = files
+	go func() {
+		for {
+			files.Clean(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Hour):
+			}
+		}
+	}()
 	srv := api.New(st, b, rt, llm, set, notifier, api.Options{
 		PublicURL:      cfg.PublicURL,
 		SecureCookies:  cfg.SecureCookies,
@@ -111,6 +125,7 @@ func run() error {
 	})
 
 	srv.Connectors = conns
+	srv.Files = files
 	if err := rt.Start(ctx); err != nil {
 		return err
 	}

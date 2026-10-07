@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for AgentTrustMode.
@@ -466,6 +467,28 @@ type AgentActivity struct {
 // AgentActivityState defines model for AgentActivity.State.
 type AgentActivityState string
 
+// Attachment defines model for Attachment.
+type Attachment struct {
+	// Height Pixels
+	Height *int   `json:"height"`
+	Id     string `json:"id"`
+
+	// Mime e.g. "image/png", "application/pdf"
+	Mime string `json:"mime"`
+
+	// Name The file name
+	Name string `json:"name"`
+
+	// Size Bytes
+	Size int64 `json:"size"`
+
+	// Url Where to fetch it (same origin
+	Url string `json:"url"`
+
+	// Width Pixels
+	Width *int `json:"width"`
+}
+
 // AuthStatus defines model for AuthStatus.
 type AuthStatus struct {
 	// SetupRequired True when no account exists yet
@@ -653,7 +676,9 @@ type Memory struct {
 
 // Message defines model for Message.
 type Message struct {
-	Author MessageAuthor `json:"author"`
+	// Attachments Files and images attached to the message, in order
+	Attachments []Attachment  `json:"attachments"`
+	Author      MessageAuthor `json:"author"`
 
 	// Body Markdown
 	Body   string `json:"body"`
@@ -874,6 +899,10 @@ type SandboxStatus string
 
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
+	// AttachmentIds Uploaded attachments (from uploadAttachment in this chat) to send with it
+	AttachmentIds *[]string `json:"attachmentIds,omitempty"`
+
+	// Body The text; may be empty when the message has attachments
 	Body string `json:"body"`
 
 	// ClientId Client-generated id, echoed back so the sender can reconcile its optimistic message
@@ -1110,6 +1139,17 @@ type WsMessageUpdatedType string
 // ChatId defines model for ChatId.
 type ChatId = string
 
+// GetAttachmentParams defines parameters for GetAttachment.
+type GetAttachmentParams struct {
+	// Download Send as a download even if the browser could show it
+	Download *bool `form:"download,omitempty" json:"download,omitempty"`
+}
+
+// UploadAttachmentMultipartBody defines parameters for UploadAttachment.
+type UploadAttachmentMultipartBody struct {
+	File openapi_types.File `json:"file"`
+}
+
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
 	// Before Return messages older than this message id
@@ -1125,6 +1165,9 @@ type LoginJSONRequestBody = Credentials
 
 // SetupAccountJSONRequestBody defines body for SetupAccount for application/json ContentType.
 type SetupAccountJSONRequestBody = Credentials
+
+// UploadAttachmentMultipartRequestBody defines body for UploadAttachment for multipart/form-data ContentType.
+type UploadAttachmentMultipartRequestBody UploadAttachmentMultipartBody
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendMessageRequest
@@ -1563,6 +1606,9 @@ type ServerInterface interface {
 	// (GET /agents/{agentId}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (GET /attachments/{attachmentId})
+	GetAttachment(w http.ResponseWriter, r *http.Request, attachmentId string, params GetAttachmentParams)
+
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
 
@@ -1577,6 +1623,9 @@ type ServerInterface interface {
 
 	// (GET /chats)
 	ListChats(w http.ResponseWriter, r *http.Request)
+
+	// (POST /chats/{chatId}/attachments)
+	UploadAttachment(w http.ResponseWriter, r *http.Request, chatId ChatId)
 
 	// (GET /chats/{chatId}/messages)
 	ListMessages(w http.ResponseWriter, r *http.Request, chatId ChatId, params ListMessagesParams)
@@ -1984,6 +2033,48 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetAttachment operation middleware
+func (siw *ServerInterfaceWrapper) GetAttachment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "attachmentId" -------------
+	var attachmentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attachmentId", r.PathValue("attachmentId"), &attachmentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attachmentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAttachmentParams
+
+	// ------------- Optional query parameter "download" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "download", r.URL.Query(), &params.Download, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "download"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "download", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAttachment(w, r, attachmentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
 
@@ -2045,6 +2136,32 @@ func (siw *ServerInterfaceWrapper) ListChats(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListChats(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadAttachment operation middleware
+func (siw *ServerInterfaceWrapper) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "chatId" -------------
+	var chatId ChatId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "chatId", r.PathValue("chatId"), &chatId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "chatId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadAttachment(w, r, chatId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2708,6 +2825,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings/provider", wrapper.GetProviderSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/provider", wrapper.UpdateProviderSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/chats", wrapper.ListChats)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/attachments", wrapper.UploadAttachment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/attachments/{attachmentId}", wrapper.GetAttachment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/chats/{chatId}/messages", wrapper.ListMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/messages", wrapper.SendMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/read", wrapper.MarkChatRead)

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/etchebarne/barn/internal/api/gen"
+	"github.com/etchebarne/barn/internal/attachments"
 	"github.com/etchebarne/barn/internal/auth"
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/connectors"
@@ -48,6 +49,8 @@ type Server struct {
 
 	// Connectors manages connected apps (set before Handler).
 	Connectors *connectors.Manager
+	// Files stores attachments (nil: uploads are turned off).
+	Files *attachments.Files
 
 	loginLimiter *auth.Limiter
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ type Sandboxer interface {
 	Status(ctx context.Context, sandboxID string) string
 	Restart(ctx context.Context, sandboxID string) error
 	Remove(ctx context.Context, sandboxID string) error
+	CopyOut(ctx context.Context, sandboxID, path string, max int64) (io.ReadCloser, int64, error)
 }
 
 // SandboxState is an agent's sandbox status ("unavailable", "none", "stopped", "running") and

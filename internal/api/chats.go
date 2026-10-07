@@ -59,7 +59,15 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request, chatID gen.
 	if !decode(w, r, &req) {
 		return
 	}
-	if strings.TrimSpace(req.Body) == "" || utf8.RuneCountInString(req.Body) > 32000 {
+	var attachmentIDs []string
+	if req.AttachmentIds != nil {
+		attachmentIDs = *req.AttachmentIds
+	}
+	if len(attachmentIDs) > 10 {
+		writeError(w, http.StatusBadRequest, "at most 10 attachments per message")
+		return
+	}
+	if (strings.TrimSpace(req.Body) == "" && len(attachmentIDs) == 0) || utf8.RuneCountInString(req.Body) > 32000 {
 		writeError(w, http.StatusBadRequest, "message must be 1–32000 characters")
 		return
 	}
@@ -70,7 +78,11 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request, chatID gen.
 	if !s.chatExists(w, r, chatID) {
 		return
 	}
-	msg, err := s.store.InsertMessage(ctx, chatID, "user", nil, req.Body, s.runtime.MentionsIn(ctx, chatID, req.Body)...)
+	msg, err := s.store.InsertMessageWithAttachments(ctx, chatID, "user", nil, req.Body, attachmentIDs, s.runtime.MentionsIn(ctx, chatID, req.Body)...)
+	if errors.Is(err, store.ErrBadAttachment) {
+		writeError(w, http.StatusBadRequest, "an attachment isn't an upload in this chat, or was already sent")
+		return
+	}
 	if err != nil {
 		internalError(w, err)
 		return
