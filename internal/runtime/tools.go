@@ -46,7 +46,8 @@ var (
 		"Ask the user a question they answer by clicking, instead of typing. Use it whenever "+
 			"there are clear options. kind=single: pick one; kind=multi: pick any number; "+
 			"kind=text: free-text answer (no options). Set allow_other to also offer \"type your "+
-			"own\". The answer arrives later as a <prompt_answer>, so end your turn after asking.",
+			"own\". Asking ends your turn: send anything else first, in the same reply. The answer "+
+			"arrives later as a <prompt_answer>.",
 		`{
 			"type": "object",
 			"properties": {
@@ -233,7 +234,7 @@ func (l *loop) askUser(ctx context.Context, agent store.Agent, raw []byte) (stri
 	l.m.publishMessage(msg)
 	return toolOK(map[string]string{
 		"prompt_id": msg.ID,
-		"note":      "Asked. End your turn now; the answer arrives as a <prompt_answer>.",
+		"note":      "Asked. Your turn ends here; the answer will arrive as a <prompt_answer>.",
 	}), true
 }
 

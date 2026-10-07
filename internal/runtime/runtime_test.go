@@ -306,7 +306,7 @@ func TestAskUserAndAnswer(t *testing.T) {
 				"options": []map[string]string{{"label": "ChatGPT"}, {"label": "Claude"}},
 			})
 		},
-		func(model.Request) model.Message { return model.Text("assistant", "") },
+		// Asking ends the turn, so the next call is the one that sees the answer.
 		func(req model.Request) model.Message {
 			last := req.Messages[len(req.Messages)-1].Text()
 			if !strings.Contains(last, "<prompt_answer") || !strings.Contains(last, `Chose: "Claude"`) ||
@@ -461,5 +461,31 @@ func TestNonAdminCannotCreateAgents(t *testing.T) {
 	f.waitIdle(t)
 	if agents, _ := f.store.ListAgents(context.Background()); len(agents) != 1 {
 		t.Fatalf("no agent should have been created, have %d", len(agents))
+	}
+}
+
+func TestAskingEndsTheTurn(t *testing.T) {
+	var f fixture
+	f = setup(t,
+		func(model.Request) model.Message {
+			m := toolCall(toolAskUser, map[string]any{
+				"chat_id": f.chatID, "question": "Which model?", "kind": "single",
+				"options": []map[string]string{{"label": "a"}, {"label": "b"}},
+			})
+			// A message sent alongside the question in the same reply is still delivered.
+			m.ToolCalls = append([]model.ToolCall{sendCall(f.chatID, "one more thing").ToolCalls[0]}, m.ToolCalls...)
+			return m
+		},
+		// What a model did in practice after asking: post filler. It must never be called.
+		func(model.Request) model.Message { return sendCall(f.chatID, "test") },
+	)
+	f.userSays(t, "hi")
+	f.waitIdle(t)
+	msgs, _, _ := f.store.ListMessages(context.Background(), f.chatID, "", 10)
+	if len(msgs) != 3 || msgs[1].Body != "one more thing" || msgs[2].Prompt == nil {
+		t.Fatalf("expected the message and the question only, got %+v", msgs)
+	}
+	if n := f.llm.calls(); n != 1 {
+		t.Fatalf("expected the turn to end after asking (1 model call), got %d", n)
 	}
 }

@@ -112,11 +112,15 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			return
 		}
 
+		asked := false
 		for _, call := range reply.ToolCalls {
 			l.m.setActivity(agent.ID, view.Working(toolLabel(call.Function.Name)))
 			result, ok := l.runTool(ctx, agent, call)
-			if ok && call.Function.Name == toolSendMessage {
+			if ok && (call.Function.Name == toolSendMessage || call.Function.Name == toolAskUser) {
 				spoke = true
+			}
+			if ok && call.Function.Name == toolAskUser {
+				asked = true
 			}
 			if err := l.appendEntries(ctx, model.Message{
 				Role: "tool", Content: &result, ToolCallID: call.ID,
@@ -124,6 +128,12 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 				log.Error("append tool result", "err", err)
 				return
 			}
+		}
+
+		// Asking the user a question ends the turn: the answer arrives later as an event. Models
+		// don't reliably stop on their own and tend to post filler after asking.
+		if asked {
+			return
 		}
 
 		// Let the agent notice anything that arrived while it was working.
