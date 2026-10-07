@@ -5,7 +5,6 @@ import {
   CreditCardIcon,
   GitPullRequestIcon,
   HashIcon,
-  HouseIcon,
   NotebookTextIcon,
   ShieldCheckIcon,
   type LucideIcon,
@@ -16,7 +15,9 @@ import {
   WebhookIcon,
 } from "lucide-react"
 
-const ICONS: Record<string, LucideIcon> = {
+import { LogoGlyph } from "@/components/brand-mark"
+
+const ICONS: Record<string, LucideIcon | typeof LogoGlyph> = {
   slack: HashIcon,
   github: GitPullRequestIcon,
   linear: SquareKanbanIcon,
@@ -29,7 +30,7 @@ const ICONS: Record<string, LucideIcon> = {
   sentry: BugIcon,
   stripe: CreditCardIcon,
   // openbot's own actions (e.g. archiving an agent).
-  openbot: HouseIcon,
+  openbot: LogoGlyph,
   "always-allow": ShieldCheckIcon,
 }
 

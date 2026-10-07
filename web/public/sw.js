@@ -30,8 +30,8 @@ self.addEventListener("push", (event) => {
         body: payload.body || "",
         tag: payload.tag,
         data: { url },
-        icon: "/favicon.svg",
-        badge: "/favicon.svg",
+        icon: "/icon-192.png",
+        badge: "/badge-96.png",
       })
     }),
   )

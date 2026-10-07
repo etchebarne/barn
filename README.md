@@ -1,3 +1,5 @@
+<img src="web/public/icon-192.png" alt="" width="64" height="64">
+
 # openbot
 
 Self-hosted, single-user platform for persistent AI agents. Each agent is a named coworker
