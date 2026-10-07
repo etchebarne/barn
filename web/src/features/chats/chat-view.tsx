@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
 import { UsersIcon } from "lucide-react"
-import { useState } from "react"
 
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { MessageScrollerProvider } from "@/components/ui/message-scroller"
 import { Skeleton } from "@/components/ui/skeleton"
-import { activityLabel, AgentAvatar, AgentDetailsSheet, useAgentsById } from "@/features/agents"
+import { activityLabel, AgentAvatar, openAgentDetails, useAgentsById } from "@/features/agents"
 import type { Agent, Chat } from "@/lib/api-client"
 
 import { ActivityLine } from "./activity-line"
@@ -38,7 +37,6 @@ function HeaderTitle({
 }
 
 function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
-  const [detailsOpen, setDetailsOpen] = useState(false)
   const agent = members[0]
 
   if (chat.kind === "dm") {
@@ -52,13 +50,12 @@ function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
               variant="ghost"
               className="-ml-1.5 h-11 min-w-0 justify-start gap-3 rounded-xl px-1.5"
               aria-haspopup="dialog"
-              onClick={() => setDetailsOpen(true)}
+              aria-label={`${agent.name}: agent details`}
+              onClick={() => openAgentDetails(agent.id)}
             >
               <AgentAvatar name={agent.name} />
               <HeaderTitle title={chat.name} status={status} inButton />
-              <span className="sr-only">(agent details)</span>
             </Button>
-            <AgentDetailsSheet agent={agent} open={detailsOpen} onOpenChange={setDetailsOpen} />
           </>
         ) : (
           <>

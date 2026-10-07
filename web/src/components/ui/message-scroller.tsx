@@ -92,6 +92,7 @@ function MessageScrollerButton({
   return (
     <MessageScrollerPrimitive.Button
       data-slot="message-scroller-button"
+      aria-label={direction === "end" ? "Scroll to latest message" : "Scroll to first message"}
       data-direction={direction}
       data-variant={variant}
       data-size={size}

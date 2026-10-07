@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -18,12 +19,17 @@ type fakeModel struct {
 	mu        sync.Mutex
 	responses []func(req model.Request) model.Message
 	requests  []model.Request
+	failNext  error
 }
 
 func (f *fakeModel) Chat(_ context.Context, req model.Request) (model.Response, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.requests = append(f.requests, req)
+	if err := f.failNext; err != nil {
+		f.failNext = nil
+		return model.Response{}, err
+	}
 	if len(f.responses) == 0 {
 		return model.Response{Message: model.Text("assistant", "")}, nil
 	}
@@ -225,5 +231,48 @@ func TestSendMessageRejectsForeignChat(t *testing.T) {
 	msgs := f.waitForMessages(t, 2)
 	if msgs[1].Body != "sorry" {
 		t.Fatalf("unexpected reply: %+v", msgs[1])
+	}
+}
+
+func TestFailedTurnCanBeRetried(t *testing.T) {
+	var f fixture
+	f = setup(t,
+		func(model.Request) model.Message { return sendCall(f.chatID, "here after all") },
+		func(model.Request) model.Message { return model.Text("assistant", "") },
+	)
+	f.llm.mu.Lock()
+	f.llm.failNext = fmt.Errorf("%w (upstream says no)", model.ErrTrainsOnData)
+	f.llm.mu.Unlock()
+
+	f.userSays(t, "hi")
+	msgs := f.waitForMessages(t, 2)
+	failure := msgs[1].Failure
+	if msgs[1].AuthorKind != "system" || failure == nil || failure.Reason != "model_blocked" || !failure.Retryable {
+		t.Fatalf("expected a retryable model_blocked failure, got %+v (failure %+v)", msgs[1], failure)
+	}
+	f.waitIdle(t)
+	if failed, _ := f.rt.LastTurnFailed(context.Background(), f.agent.ID); !failed {
+		t.Fatal("LastTurnFailed should be true")
+	}
+
+	if err := f.rt.Retry(context.Background(), f.agent.ID); err != nil {
+		t.Fatal(err)
+	}
+	msgs = f.waitForMessages(t, 3)
+	if msgs[2].Body != "here after all" {
+		t.Fatalf("unexpected reply after retry: %+v", msgs[2])
+	}
+	f.waitIdle(t)
+
+	// The retry re-ran the model on the same context: the user's message is still the last input.
+	f.llm.mu.Lock()
+	retryReq := f.llm.requests[1]
+	f.llm.mu.Unlock()
+	last := retryReq.Messages[len(retryReq.Messages)-1]
+	if last.Role != "user" || !strings.Contains(last.Text(), "hi") {
+		t.Fatalf("retry should resend the same context, last message was %+v", last)
+	}
+	if failed, _ := f.rt.LastTurnFailed(context.Background(), f.agent.ID); failed {
+		t.Fatal("LastTurnFailed should be false after a successful retry")
 	}
 }

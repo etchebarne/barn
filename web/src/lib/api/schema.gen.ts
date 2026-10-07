@@ -210,6 +210,28 @@ export interface paths {
         patch: operations["updateAgent"];
         trace?: never;
     };
+    "/agents/{agentId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Re-run the agent's last turn after a failure, from exactly where it stopped. The result
+         *     arrives as usual over the WebSocket.
+         */
+        post: operations["retryAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/models": {
         parameters: {
             query?: never;
@@ -330,11 +352,23 @@ export interface components {
             body: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description Set on system messages reporting that an agent's turn failed */
+            failure?: components["schemas"]["MessageFailure"] | null;
             /**
              * @description Echo of SendMessageRequest.clientId. Only present on the sendMessage response and the
              *     matching message.created event.
              */
             clientId?: string;
+        };
+        MessageFailure: {
+            agentId: string;
+            /**
+             * @description model_blocked: OpenCode refuses the agent's model (its provider trains on request
+             *     data and the workspace's privacy settings forbid that). Offer to change the model.
+             * @enum {string}
+             */
+            reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps";
+            retryable: boolean;
         };
         MessagePage: {
             messages: components["schemas"]["Message"][];
@@ -756,6 +790,37 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    retryAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retry queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The agent is busy and will pick up pending work on its own */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listModels: {

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -32,6 +33,15 @@ type Message struct {
 	AuthorAgentID *string
 	Body          string
 	CreatedAt     int64
+	// Failure is set on system messages that report a failed agent turn.
+	Failure *Failure
+}
+
+// Failure describes a failed agent turn.
+type Failure struct {
+	AgentID   string `json:"agentId"`
+	Reason    string `json:"reason"`
+	Retryable bool   `json:"retryable"`
 }
 
 const readerUser = "user"
@@ -171,21 +181,51 @@ func sortChatsByActivity(chats []Chat) {
 	slices.SortFunc(chats, func(a, b Chat) int { return strings.Compare(activity(b), activity(a)) })
 }
 
-const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at`
+const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at, failure`
 
 func scanMessage(row interface{ Scan(...any) error }) (Message, error) {
 	var m Message
-	err := row.Scan(&m.ID, &m.ChatID, &m.AuthorKind, &m.AuthorAgentID, &m.Body, &m.CreatedAt)
+	var failure sql.NullString
+	err := row.Scan(&m.ID, &m.ChatID, &m.AuthorKind, &m.AuthorAgentID, &m.Body, &m.CreatedAt, &failure)
+	if err == nil && failure.Valid {
+		m.Failure = &Failure{}
+		err = json.Unmarshal([]byte(failure.String), m.Failure)
+	}
 	return m, err
 }
 
 func (s *Store) InsertMessage(ctx context.Context, chatID, authorKind string, authorAgentID *string, body string) (Message, error) {
-	m := Message{
-		ID: ids.New(), ChatID: chatID, AuthorKind: authorKind,
-		AuthorAgentID: authorAgentID, Body: body, CreatedAt: now(),
+	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body})
+}
+
+// InsertFailure posts a system message reporting a failed agent turn.
+func (s *Store) InsertFailure(ctx context.Context, chatID, body string, f Failure) (Message, error) {
+	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: "system", Body: body, Failure: &f})
+}
+
+func (s *Store) insertMessage(ctx context.Context, m Message) (Message, error) {
+	m.ID, m.CreatedAt = ids.New(), now()
+	var failure *string
+	if m.Failure != nil {
+		b, err := json.Marshal(m.Failure)
+		if err != nil {
+			return m, err
+		}
+		f := string(b)
+		failure = &f
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?)`,
-		m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure)
+	return m, err
+}
+
+// LastMessage returns the most recent message in a chat.
+func (s *Store) LastMessage(ctx context.Context, chatID string) (Message, error) {
+	m, err := scanMessage(s.db.QueryRowContext(ctx,
+		`SELECT `+messageColumns+` FROM messages WHERE chat_id = ? ORDER BY id DESC LIMIT 1`, chatID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return m, ErrNotFound
+	}
 	return m, err
 }
 

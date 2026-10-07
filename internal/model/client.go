@@ -169,6 +169,18 @@ func (c *Client) VerifyKey(ctx context.Context, key string) error {
 	return err
 }
 
+// ProbeModel checks that a model is usable with the configured key by sending a one-token
+// request. It returns ErrTrainsOnData if the workspace's privacy settings block the model.
+func (c *Client) ProbeModel(ctx context.Context, model string) error {
+	_, err := c.Chat(ctx, Request{
+		Session:   "barn-probe-" + ids.New(),
+		Model:     model,
+		Messages:  []Message{Text("user", "ok")},
+		MaxTokens: 1,
+	})
+	return err
+}
+
 func pickCheapModel(models []string) string {
 	for _, m := range models {
 		if strings.Contains(m, "flash") {

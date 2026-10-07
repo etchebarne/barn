@@ -13,6 +13,18 @@ func Message(m store.Message) gen.Message {
 		Author:    gen.MessageAuthor{Kind: gen.MessageAuthorKind(m.AuthorKind), AgentId: m.AuthorAgentID},
 		Body:      m.Body,
 		CreatedAt: store.Time(m.CreatedAt),
+		Failure:   failure(m.Failure),
+	}
+}
+
+func failure(f *store.Failure) *gen.MessageFailure {
+	if f == nil {
+		return nil
+	}
+	return &gen.MessageFailure{
+		AgentId:   f.AgentID,
+		Reason:    gen.MessageFailureReason(f.Reason),
+		Retryable: f.Retryable,
 	}
 }
 

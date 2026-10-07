@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -74,13 +73,7 @@ func (s *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "agent name must be 1–64 characters")
 		return
 	}
-	models, err := s.llm.Models(ctx)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, "couldn't load models: "+err.Error())
-		return
-	}
-	if !slices.Contains(models, req.Model) {
-		writeError(w, http.StatusBadRequest, "unknown model "+req.Model)
+	if !s.checkModel(w, r, req.Model) {
 		return
 	}
 

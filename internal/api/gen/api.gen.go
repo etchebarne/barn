@@ -90,6 +90,33 @@ func (e MessageAuthorKind) Valid() bool {
 	}
 }
 
+// Defines values for MessageFailureReason.
+const (
+	InvalidKey    MessageFailureReason = "invalid_key"
+	ModelBlocked  MessageFailureReason = "model_blocked"
+	NoKey         MessageFailureReason = "no_key"
+	ProviderError MessageFailureReason = "provider_error"
+	TooManySteps  MessageFailureReason = "too_many_steps"
+)
+
+// Valid indicates whether the value is a known member of the MessageFailureReason enum.
+func (e MessageFailureReason) Valid() bool {
+	switch e {
+	case InvalidKey:
+		return true
+	case ModelBlocked:
+		return true
+	case NoKey:
+		return true
+	case ProviderError:
+		return true
+	case TooManySteps:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProviderSettingsProvider.
 const (
 	OpencodeGo ProviderSettingsProvider = "opencode-go"
@@ -272,6 +299,9 @@ type Message struct {
 	ClientId  *string   `json:"clientId,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 
+	// Failure Set on system messages reporting that an agent's turn failed
+	Failure *MessageFailure `json:"failure,omitempty"`
+
 	// Id ULID; lexicographic order is chronological order
 	Id string `json:"id"`
 }
@@ -284,6 +314,20 @@ type MessageAuthor struct {
 
 // MessageAuthorKind defines model for MessageAuthor.Kind.
 type MessageAuthorKind string
+
+// MessageFailure defines model for MessageFailure.
+type MessageFailure struct {
+	AgentId string `json:"agentId"`
+
+	// Reason model_blocked: OpenCode refuses the agent's model (its provider trains on request
+	// data and the workspace's privacy settings forbid that). Offer to change the model.
+	Reason    MessageFailureReason `json:"reason"`
+	Retryable bool                 `json:"retryable"`
+}
+
+// MessageFailureReason model_blocked: OpenCode refuses the agent's model (its provider trains on request
+// data and the workspace's privacy settings forbid that). Offer to change the model.
+type MessageFailureReason string
 
 // MessagePage defines model for MessagePage.
 type MessagePage struct {
@@ -599,6 +643,9 @@ type ServerInterface interface {
 	// (PATCH /agents/{agentId})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (POST /agents/{agentId}/retry)
+	RetryAgent(w http.ResponseWriter, r *http.Request, agentId string)
+
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
 
@@ -679,6 +726,32 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryAgent operation middleware
+func (siw *ServerInterfaceWrapper) RetryAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryAgent(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1069,6 +1142,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/read", wrapper.MarkChatRead)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/models", wrapper.ListModels)
 
 	return m

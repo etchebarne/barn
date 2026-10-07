@@ -151,15 +151,46 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 }
 
-func TestUpdateAgentModel(t *testing.T) {
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": "model-a"}, {"id": "model-b"}}})
+// fakeProvider serves a model list and chat completions. "blocked" behaves like a model whose
+// provider trains on request data.
+func fakeProvider(t *testing.T) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/models" {
+			json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{
+				{"id": "model-a"}, {"id": "model-b"}, {"id": "blocked"},
+			}})
+			return
+		}
+		var req struct {
+			Model string `json:"model"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Model == "blocked" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":{"message":"Upstream request failed: This Go model trains on request data."}}`))
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": ""}}},
+		})
 	}))
-	defer provider.Close()
-	ts, st := newTestServerWithProvider(t, provider.URL)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func setupWithKey(t *testing.T) (*client, *store.Store) {
+	t.Helper()
+	ts, st := newTestServerWithProvider(t, fakeProvider(t).URL)
 	c := newClient(t, ts)
 	c.do("POST", "/api/auth/setup", `{"username":"martin","password":"a long enough password"}`, true)
+	if resp, body := c.do("PUT", "/api/settings/provider", `{"apiKey":"test-key"}`, true); resp.StatusCode != http.StatusOK {
+		t.Fatalf("save key: %d %v", resp.StatusCode, body)
+	}
+	return c, st
+}
 
+func TestUpdateAgentModel(t *testing.T) {
+	c, st := setupWithKey(t)
 	agent, _, err := st.CreateAgentWithDM(context.Background(), store.Agent{
 		Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
 	})
@@ -174,11 +205,45 @@ func TestUpdateAgentModel(t *testing.T) {
 	if resp, _ := c.do("PATCH", "/api/agents/"+agent.ID, `{"model":"nope"}`, true); resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 for unknown model, got %d", resp.StatusCode)
 	}
+	resp, body = c.do("PATCH", "/api/agents/"+agent.ID, `{"model":"blocked"}`, true)
+	if msg, _ := body["message"].(string); resp.StatusCode != http.StatusBadRequest || !strings.Contains(msg, "Privacy settings") {
+		t.Fatalf("expected a privacy error for a blocked model, got %d %v", resp.StatusCode, body)
+	}
 	if resp, _ := c.do("PATCH", "/api/agents/missing", `{"model":"model-a"}`, true); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404 for unknown agent, got %d", resp.StatusCode)
 	}
 	got, _ := st.GetAgent(context.Background(), agent.ID)
 	if got.Model != "model-b" {
 		t.Fatalf("stored model = %q", got.Model)
+	}
+}
+
+func TestOnboardingRejectsBlockedModel(t *testing.T) {
+	c, st := setupWithKey(t)
+	resp, body := c.do("POST", "/api/onboarding/complete", `{"model":"blocked"}`, true)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d %v", resp.StatusCode, body)
+	}
+	if n, _ := st.CountAgents(context.Background()); n != 0 {
+		t.Fatalf("no agent should be created for a blocked model, got %d", n)
+	}
+	if resp, body := c.do("POST", "/api/onboarding/complete", `{"model":"model-a"}`, true); resp.StatusCode != http.StatusOK {
+		t.Fatalf("onboarding with an allowed model failed: %d %v", resp.StatusCode, body)
+	}
+}
+
+func TestRetryAgent(t *testing.T) {
+	c, st := setupWithKey(t)
+	agent, _, err := st.CreateAgentWithDM(context.Background(), store.Agent{
+		Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, _ := c.do("POST", "/api/agents/"+agent.ID+"/retry", "", true); resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("POST", "/api/agents/missing/retry", "", true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp.StatusCode)
 	}
 }

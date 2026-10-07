@@ -104,10 +104,9 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
               {row.startsDay && <DaySeparator iso={row.message.createdAt} />}
               <MessageRow
                 row={row}
-                agent={
-                  row.message.author.agentId ? agents.get(row.message.author.agentId) : undefined
-                }
+                agents={agents}
                 showAuthorName={isGroup}
+                isLatest={i === rows.length - 1 && pending.length === 0}
               />
             </MessageScrollerItem>
           ))}

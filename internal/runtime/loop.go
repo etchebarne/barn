@@ -15,6 +15,8 @@ import (
 // maxSteps bounds model calls in a single turn.
 const maxSteps = 40
 
+var errTooManySteps = errors.New("too many steps in one turn")
+
 const nudgeText = "[system] Your last reply was plain text, which nobody can see. " +
 	"If you meant to say something, call send_message. Otherwise end your turn without text."
 
@@ -138,7 +140,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 		}
 		l.m.setActivity(agent.ID, view.Working("thinking"))
 	}
-	l.reportError(ctx, agent, fmt.Errorf("stopped after %d steps in one turn", maxSteps))
+	l.reportError(ctx, agent, errTooManySteps)
 }
 
 func (l *loop) consume(ctx context.Context, events []store.Event) error {
@@ -149,11 +151,14 @@ func (l *loop) consume(ctx context.Context, events []store.Event) error {
 		if err != nil {
 			return fmt.Errorf("render event %s: %w", e.ID, err)
 		}
+		ids = append(ids, e.ID)
+		if text == "" {
+			continue
+		}
 		b, err := json.Marshal(model.Text("user", text))
 		if err != nil {
 			return err
 		}
-		ids = append(ids, e.ID)
 		entries = append(entries, b)
 	}
 	return l.m.store.ConsumeEvents(ctx, l.agentID, ids, entries)
@@ -194,28 +199,38 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools()}, nil
 }
 
-// reportError tells the user, in the agent's DM, that the agent couldn't finish its turn.
+// reportError tells the user, in the agent's DM, that the agent couldn't finish its turn. The
+// message carries a structured failure so the client can offer Retry (and Change model).
 func (l *loop) reportError(ctx context.Context, agent store.Agent, err error) {
 	chatID, dmErr := l.m.store.DMChatID(ctx, agent.ID)
 	if dmErr != nil {
 		logger(agent.ID).Error("find DM for error report", "err", dmErr)
 		return
 	}
-	var text string
+	reason, text := describeFailure(agent, err)
+	msg, err := l.m.store.InsertFailure(ctx, chatID, text, store.Failure{
+		AgentID: agent.ID, Reason: reason, Retryable: true,
+	})
+	if err != nil {
+		logger(agent.ID).Error("post error report", "err", err)
+		return
+	}
+	l.m.bus.Publish(view.MessageCreated(view.Message(msg)))
+}
+
+func describeFailure(agent store.Agent, err error) (reason, text string) {
 	switch {
 	case errors.Is(err, model.ErrNoKey):
-		text = "No model provider is configured. Add your OpenCode Go API key in Settings."
+		return "no_key", "No model provider is configured. Add your OpenCode Go API key in Settings, then retry."
 	case errors.Is(err, model.ErrInvalidKey):
-		text = "OpenCode Go rejected the API key. Replace it in Settings."
+		return "invalid_key", "OpenCode Go rejected the API key. Replace it in Settings, then retry."
 	case errors.Is(err, model.ErrTrainsOnData):
-		text = fmt.Sprintf("%s can't use %s: that model's provider trains on request data, "+
-			"which your OpenCode workspace's Privacy settings don't allow. Switch %s to another model "+
-			"(open %s's details from the chat header), or allow these models in your OpenCode Privacy settings.",
-			agent.Name, agent.Model, agent.Name, agent.Name)
+		return "model_blocked", fmt.Sprintf("%s can't use %s: that model's provider trains on request data, "+
+			"which your OpenCode workspace's Privacy settings don't allow. Pick another model for %s, "+
+			"or allow these models in your OpenCode Privacy settings and retry.", agent.Name, agent.Model, agent.Name)
+	case errors.Is(err, errTooManySteps):
+		return "too_many_steps", fmt.Sprintf("%s stopped after %d steps without finishing.", agent.Name, maxSteps)
 	default:
-		text = fmt.Sprintf("%s couldn't finish responding: %v", agent.Name, err)
-	}
-	if _, err := l.m.postMessage(ctx, chatID, "system", nil, text); err != nil {
-		logger(agent.ID).Error("post error report", "err", err)
+		return "provider_error", fmt.Sprintf("%s couldn't finish responding: %v", agent.Name, err)
 	}
 }

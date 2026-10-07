@@ -16,6 +16,7 @@ export function ProviderSection() {
 
   return (
     <SettingsSection
+      id="model-provider"
       title="Model provider"
       description="Agents use your OpenCode Go subscription for every model call."
     >

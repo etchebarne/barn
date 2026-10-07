@@ -9,6 +9,8 @@ import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/compone
 import { AgentAvatar } from "@/features/agents"
 import type { Agent } from "@/lib/api-client"
 
+import { messageFailure } from "./failure"
+import { FailureNotice } from "./failure-notice"
 import type { Row } from "./grouping"
 import { formatDay, formatTime } from "./grouping"
 import { Markdown } from "./markdown"
@@ -39,14 +41,30 @@ export function DaySeparator({ iso }: { iso: string }) {
 
 export function MessageRow({
   row,
-  agent,
+  agents,
   showAuthorName,
+  isLatest,
 }: {
   row: Row
-  agent: Agent | undefined
+  agents: Map<string, Agent>
   showAuthorName: boolean
+  /** Last message in the chat (nothing newer, not even a pending send). */
+  isLatest: boolean
 }) {
   const { message, startsRun, endsRun } = row
+  const agent = message.author.agentId ? agents.get(message.author.agentId) : undefined
+
+  const failure = messageFailure(message)
+  if (failure) {
+    return (
+      <FailureNotice
+        message={message}
+        failure={failure}
+        agent={agents.get(failure.agentId)}
+        isLatest={isLatest}
+      />
+    )
+  }
 
   if (message.author.kind === "system") {
     return (

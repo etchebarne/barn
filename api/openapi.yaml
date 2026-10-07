@@ -252,6 +252,28 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "502": { $ref: "#/components/responses/Error" }
 
+  /agents/{agentId}/retry:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: retryAgent
+      tags: [agents]
+      description: |
+        Re-run the agent's last turn after a failure, from exactly where it stopped. The result
+        arrives as usual over the WebSocket.
+      responses:
+        "202": { description: Retry queued }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The agent is busy and will pick up pending work on its own
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /models:
     get:
       operationId: listModels
@@ -451,11 +473,28 @@ components:
           type: string
           description: Markdown
         createdAt: { type: string, format: date-time }
+        failure:
+          allOf: [{ $ref: "#/components/schemas/MessageFailure" }]
+          nullable: true
+          description: Set on system messages reporting that an agent's turn failed
         clientId:
           type: string
           description: |
             Echo of SendMessageRequest.clientId. Only present on the sendMessage response and the
             matching message.created event.
+
+    MessageFailure:
+      type: object
+      required: [agentId, reason, retryable]
+      properties:
+        agentId: { type: string }
+        reason:
+          type: string
+          enum: [no_key, invalid_key, model_blocked, provider_error, too_many_steps]
+          description: |
+            model_blocked: OpenCode refuses the agent's model (its provider trains on request
+            data and the workspace's privacy settings forbid that). Offer to change the model.
+        retryable: { type: boolean }
 
     MessagePage:
       type: object

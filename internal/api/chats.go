@@ -2,12 +2,15 @@ package api
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/etchebarne/barn/internal/api/gen"
+	"github.com/etchebarne/barn/internal/model"
+	"github.com/etchebarne/barn/internal/runtime"
 	"github.com/etchebarne/barn/internal/store"
 	"github.com/etchebarne/barn/internal/view"
 )
@@ -151,17 +154,18 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID str
 	if !decode(w, r, &req) {
 		return
 	}
+	if _, err := s.store.GetAgent(ctx, agentID); errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	} else if err != nil {
+		internalError(w, err)
+		return
+	}
 	if req.Model != nil {
-		models, err := s.llm.Models(ctx)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "couldn't load models: "+err.Error())
+		if !s.checkModel(w, r, *req.Model) {
 			return
 		}
-		if !slices.Contains(models, *req.Model) {
-			writeError(w, http.StatusBadRequest, "unknown model "+*req.Model)
-			return
-		}
-		err = s.store.UpdateAgentModel(ctx, agentID, *req.Model)
+		err := s.store.UpdateAgentModel(ctx, agentID, *req.Model)
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "agent not found")
 			return
@@ -182,5 +186,64 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID str
 	}
 	out := view.Agent(agent, s.runtime.Activity(agent.ID))
 	s.bus.Publish(gen.WsAgentUpdated{Type: "agent.updated", Agent: out})
+
+	// A new model is the usual fix for a failed turn, so pick up where the agent left off.
+	if req.Model != nil {
+		if failed, err := s.runtime.LastTurnFailed(ctx, agentID); err != nil {
+			slog.Warn("check last turn", "agent", agentID, "err", err)
+		} else if failed {
+			if err := s.runtime.Retry(ctx, agentID); err != nil && !errors.Is(err, runtime.ErrBusy) {
+				slog.Warn("retry after model change", "agent", agentID, "err", err)
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) RetryAgent(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx := r.Context()
+	if _, err := s.store.GetAgent(ctx, agentID); errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	} else if err != nil {
+		internalError(w, err)
+		return
+	}
+	err := s.runtime.Retry(ctx, agentID)
+	if errors.Is(err, runtime.ErrBusy) {
+		writeError(w, http.StatusConflict, "the agent is already working")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// checkModel verifies a model exists and is usable with the saved key (a one-token request),
+// writing a user-facing error and returning false if not.
+func (s *Server) checkModel(w http.ResponseWriter, r *http.Request, id string) bool {
+	ctx := r.Context()
+	models, err := s.llm.Models(ctx)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "couldn't load models: "+err.Error())
+		return false
+	}
+	if !slices.Contains(models, id) {
+		writeError(w, http.StatusBadRequest, "unknown model "+id)
+		return false
+	}
+	switch err := s.llm.ProbeModel(ctx, id); {
+	case err == nil:
+		return true
+	case errors.Is(err, model.ErrTrainsOnData):
+		writeError(w, http.StatusBadRequest, id+" is blocked by your OpenCode workspace's Privacy settings "+
+			"(its provider trains on request data). Pick another model, or allow these models in OpenCode.")
+	case errors.Is(err, model.ErrInvalidKey), errors.Is(err, model.ErrNoKey):
+		writeError(w, http.StatusBadRequest, "OpenCode Go rejected your API key. Replace it in Settings.")
+	default:
+		writeError(w, http.StatusBadGateway, "couldn't reach "+id+": "+err.Error())
+	}
+	return false
 }

@@ -249,6 +249,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
     <Button
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
+      aria-label="Toggle sidebar"
       variant="ghost"
       size="icon-sm"
       className={cn(className)}

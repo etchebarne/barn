@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router"
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { AgentDetailsSheet } from "@/features/agents"
 import { ChatSidebar } from "@/features/chats"
 
 import { useRealtime } from "./realtime"
@@ -14,6 +15,7 @@ export function AppShell() {
       <SidebarInset className="min-w-0">
         <Outlet />
       </SidebarInset>
+      <AgentDetailsSheet />
     </SidebarProvider>
   )
 }

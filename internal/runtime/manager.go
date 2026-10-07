@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 
@@ -23,7 +24,11 @@ type ChatModel interface {
 const (
 	EventMessage = "message" // payload: {"messageId": "..."}
 	EventSystem  = "system"  // payload: {"text": "..."}
+	EventRetry   = "retry"   // payload: {}; re-runs the model on the current context
 )
+
+// ErrBusy is returned by Retry when the agent is already working or has pending events.
+var ErrBusy = errors.New("agent is busy")
 
 type Manager struct {
 	store *store.Store
@@ -130,6 +135,41 @@ func (m *Manager) Notify(ctx context.Context, agentID, text string) error {
 	}
 	m.wake(agentID)
 	return nil
+}
+
+// Retry re-runs an agent's turn from its current context, e.g. after a failure.
+func (m *Manager) Retry(ctx context.Context, agentID string) error {
+	if m.Activity(agentID).State == "working" {
+		return ErrBusy
+	}
+	pending, err := m.store.PendingEvents(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	if len(pending) > 0 {
+		return ErrBusy
+	}
+	if _, err := m.store.InsertEvent(ctx, agentID, EventRetry, struct{}{}); err != nil {
+		return err
+	}
+	m.wake(agentID)
+	return nil
+}
+
+// LastTurnFailed reports whether the latest message in the agent's DM is a failure report.
+func (m *Manager) LastTurnFailed(ctx context.Context, agentID string) (bool, error) {
+	chatID, err := m.store.DMChatID(ctx, agentID)
+	if err != nil {
+		return false, err
+	}
+	last, err := m.store.LastMessage(ctx, chatID)
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return last.Failure != nil && last.Failure.AgentID == agentID, nil
 }
 
 // postMessage stores a message and broadcasts it.

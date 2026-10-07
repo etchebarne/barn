@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import type { Ref } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -21,8 +22,10 @@ export function ModelPicker({
   onValueChange,
   disabled,
   invalid,
+  inputRef,
 }: {
   id?: string
+  inputRef?: Ref<HTMLInputElement>
   value: string | null
   onValueChange: (model: string | null) => void
   disabled?: boolean
@@ -47,6 +50,7 @@ export function ModelPicker({
   return (
     <Combobox items={items} value={value} onValueChange={onValueChange}>
       <ComboboxInput
+        ref={inputRef}
         id={id}
         className="w-full"
         placeholder={models.isPending ? "Loading models…" : "Search models"}

@@ -81,7 +81,8 @@ func (l *loop) agentNames(ctx context.Context) (map[string]string, error) {
 	return names, nil
 }
 
-// renderEvent turns an inbox event into the text the agent sees.
+// renderEvent turns an inbox event into the text the agent sees. Empty means the event adds
+// nothing to the context.
 func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 	switch e.Kind {
 	case EventMessage:
@@ -126,6 +127,9 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 			return "", err
 		}
 		return "<system_notice>\n" + p.Text + "\n</system_notice>", nil
+
+	case EventRetry:
+		return "", nil // no new input; the turn re-runs on the existing context
 
 	default:
 		return "", fmt.Errorf("unknown event kind %q", e.Kind)

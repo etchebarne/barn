@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { ApiError } from "@/lib/api-client"
 
 import { DEFAULT_AGENT_NAME, useCompleteOnboarding } from "./api"
 
@@ -13,6 +14,13 @@ export function AgentStep({ onComplete }: { onComplete: (chatId: string) => void
   const [name, setName] = useState(DEFAULT_AGENT_NAME)
   const [model, setModel] = useState<string | null>(null)
   const [errors, setErrors] = useState<{ name?: string; model?: string }>({})
+
+  // A 400 means the server rejected the model (e.g. blocked by OpenCode workspace privacy
+  // settings); show it on the model field so the user picks another one.
+  const rejection =
+    complete.error instanceof ApiError && complete.error.status === 400 ? complete.error : null
+  const modelRejected = rejection !== null
+  const modelError = errors.model ?? rejection?.message
 
   function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -46,20 +54,22 @@ export function AgentStep({ onComplete }: { onComplete: (chatId: string) => void
             <FieldDescription>You can rename it later by asking it.</FieldDescription>
           )}
         </Field>
-        <Field data-invalid={!!errors.model || undefined}>
+        <Field data-invalid={!!modelError || undefined}>
           <FieldLabel htmlFor="agent-model">Model</FieldLabel>
           <ModelPicker
             id="agent-model"
             value={model}
-            invalid={!!errors.model}
+            invalid={!!modelError}
             onValueChange={(value) => {
               setModel(value)
+              // A different model gets a fresh check on the next submit.
+              if (modelRejected) complete.reset()
               if (value) setErrors((e) => ({ ...e, model: undefined }))
             }}
           />
-          <FieldError>{errors.model}</FieldError>
+          <FieldError>{modelError}</FieldError>
         </Field>
-        {complete.error && <FieldError>{complete.error.message}</FieldError>}
+        {complete.error && !modelRejected && <FieldError>{complete.error.message}</FieldError>}
         <Button type="submit" size="lg" disabled={complete.isPending}>
           {complete.isPending && <Spinner />}
           Create agent
