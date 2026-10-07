@@ -11,9 +11,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { Agent } from "@/lib/api-client"
 import { clearHistoryCopy, useAgentDm, useClearChatHistory } from "@/lib/chat-history"
-import { useLeaveRemovedChats } from "@/lib/leave-removed-chats"
 
-import { useArchiveAgent, useDeleteAgent, useUpdateAgent } from "./api"
+import { useDeleteAgent, useUpdateAgent } from "./api"
 import { AUTO_LANGUAGE, isAutoLanguage, trustChangeNeedsConfirmation } from "./trust"
 
 /**
@@ -366,7 +365,8 @@ export function TrustSection({ agent }: { agent: Agent }) {
         <div className="flex flex-col gap-0.5">
           <FieldLabel htmlFor="agent-trusted">Trusted mode</FieldLabel>
           <FieldDescription>
-            Skip approvals for actions like archiving agents or making changes in connected apps.
+            Skip approvals for actions like making changes in connected apps. Deleting an agent
+            always asks.
           </FieldDescription>
         </div>
         {/* Stays off until the user confirms; Base UI's switch isn't a labelable element, so it
@@ -402,8 +402,8 @@ export function TrustSection({ agent }: { agent: Agent }) {
             update.reset()
           }}
         >
-          It'll take actions that normally need your approval, like archiving agents, without
-          asking.
+          It'll take actions that normally need your approval, like making changes in connected
+          apps, without asking. Deleting an agent still asks.
         </InlineConfirm>
       ) : (
         update.error && <FieldError>{update.error.message}</FieldError>
@@ -448,15 +448,13 @@ export function NotificationsSection({ agent }: { agent: Agent }) {
   )
 }
 
-/** Danger zone: archive (reversible on the server) or delete for good, each confirmed inline. */
-export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: () => void }) {
-  const archive = useArchiveAgent(agent.id)
+/** Danger zone: clear the DM's history, or delete the agent for good, each confirmed inline. */
+export function DangerZone({ agent }: { agent: Agent }) {
   const remove = useDeleteAgent(agent)
-  const leaveRemovedChats = useLeaveRemovedChats()
   const dm = useAgentDm(agent.id)
   const clear = useClearChatHistory({ id: dm?.id ?? "", name: agent.name })
   const clearCopy = clearHistoryCopy(agent.name)
-  const [confirming, setConfirming] = useState<"clear" | "archive" | "delete" | null>(null)
+  const [confirming, setConfirming] = useState<"clear" | "delete" | null>(null)
   const row =
     "flex items-center justify-between gap-4 rounded-[calc(var(--radius-md)+0.75rem)] border border-destructive/30 p-3"
 
@@ -478,29 +476,6 @@ export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: ()
           }}
         >
           {clearCopy.body}
-        </InlineConfirm>
-      ) : confirming === "archive" ? (
-        <InlineConfirm
-          tone="destructive"
-          title={`Archive ${agent.name}?`}
-          confirmLabel="Archive agent"
-          pending={archive.isPending}
-          error={archive.error?.message}
-          onConfirm={() =>
-            archive.mutate(undefined, {
-              onSuccess: (removedChatIds) => {
-                toast.success(`Archived ${agent.name}`)
-                onArchived()
-                leaveRemovedChats(removedChatIds)
-              },
-            })
-          }
-          onCancel={() => {
-            setConfirming(null)
-            archive.reset()
-          }}
-        >
-          It stops working, and its DM is removed from your chats. Group chats keep its messages.
         </InlineConfirm>
       ) : confirming === "delete" ? (
         <InlineConfirm
@@ -531,12 +506,6 @@ export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: ()
               </Button>
             </div>
           )}
-          <div className={row}>
-            <p className="text-sm text-muted-foreground">Stop this agent and remove its DM.</p>
-            <Button variant="destructive" size="sm" onClick={() => setConfirming("archive")}>
-              Archive agent
-            </Button>
-          </div>
           <div className={row}>
             <p className="text-sm text-muted-foreground">
               Removes {agent.name}, its DM, memories, tasks and files for good. Messages it sent in

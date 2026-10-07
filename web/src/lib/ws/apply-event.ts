@@ -5,7 +5,6 @@ import {
   addMessageToCache,
   applyActivityToAgents,
   markChatReadInCache,
-  removeArchivedAgent,
   removeDeletedAgent,
   updateAgentInCache,
   updateMessageInCache,
@@ -17,7 +16,7 @@ import { queryKeys } from "../query-keys"
 import { sidebarChangedRemotely } from "../sidebar-sync"
 
 export type ApplyResult = {
-  /** Chats that no longer exist (e.g. an archived agent's DM); leave them if open. */
+  /** Chats that no longer exist (e.g. a deleted agent's DM); leave them if open. */
   removedChatIds: string[]
 }
 
@@ -33,8 +32,6 @@ export function applyWsEvent(queryClient: QueryClient, event: WsEvent): ApplyRes
       return NOTHING_REMOVED
     case "agent.deleted":
       return { removedChatIds: removeDeletedAgent(queryClient, event.agentId, event.chatId) }
-    case "agent.archived":
-      return { removedChatIds: removeArchivedAgent(queryClient, event.agentId) }
     case "message.created":
       addMessageToCache(queryClient, event.message)
       return NOTHING_REMOVED

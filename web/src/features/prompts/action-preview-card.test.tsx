@@ -99,16 +99,16 @@ describe("ActionPreviewCard", () => {
     renderCard({
       preview: {
         ...preview,
-        appType: null,
+        appType: "openbot",
         appName: null,
-        title: "Archive agent",
-        verb: "Archive",
+        title: "Delete agent",
+        verb: "Delete",
         body: null,
       },
     })
-    expect(screen.getByText("Archive agent")).toBeVisible()
+    expect(screen.getByText("Delete agent")).toBeVisible()
     expect(screen.queryByText(/· /)).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Archive" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "Delete" })).toBeVisible()
   })
 
   it("collapses very long values behind Show more", async () => {

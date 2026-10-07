@@ -18,15 +18,23 @@ const EventApproval = "approval"
 
 // gatedTools need the user's approval unless the agent is trusted.
 var gatedTools = map[string]bool{
-	toolArchiveAgent:       true,
 	toolAllowWithoutAsking: true,
 }
 
+// alwaysAsk need the user's approval every time, trusted or not, and can't be allowed for good:
+// they can't be undone.
+var alwaysAsk = map[string]bool{
+	toolDeleteAgent: true,
+}
+
 func (l *loop) needsApproval(ctx context.Context, agent store.Agent, call model.ToolCall) bool {
+	tool := call.Function.Name
+	if alwaysAsk[tool] {
+		return true
+	}
 	if agent.TrustMode == "trusted" {
 		return false
 	}
-	tool := call.Function.Name
 	gated := gatedTools[tool]
 	if !gated {
 		t, ok := l.connectorTool(ctx, agent, tool)
@@ -81,7 +89,7 @@ func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool strin
 	switch tool {
 	case toolAllowWithoutAsking:
 		return l.describeAllow(ctx, agent, args)
-	case toolArchiveAgent:
+	case toolDeleteAgent:
 		var a struct {
 			AgentID string `json:"agent_id"`
 		}
@@ -93,9 +101,9 @@ func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool strin
 			return "", nil, fmt.Errorf("unknown agent_id %q", a.AgentID)
 		}
 		name, _ := json.Marshal(target.Name)
-		return fmt.Sprintf("Archive %s? It stops working and its chat is hidden. Its history is kept.", target.Name),
-			&store.ActionPreview{Title: "Archive agent", Verb: "Archive",
-				Note:   "It stops working and its chat is hidden. Its history is kept.",
+		const note = "It stops for good, and its DM, memories and tasks are deleted. Its messages in groups stay."
+		return fmt.Sprintf("Delete %s? %s", target.Name, note),
+			&store.ActionPreview{Title: "Delete agent", Verb: "Delete", Note: note,
 				Fields: []store.PreviewField{{Key: "agent", Label: "Agent", Value: name}}}, nil
 	default:
 		if t, ok := l.connectorTool(ctx, agent, tool); ok {

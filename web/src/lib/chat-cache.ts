@@ -242,16 +242,11 @@ export function upsertChat(chats: Chat[], chat: Chat): Chat[] {
   return sortChats([...rest, chat])
 }
 
-/** DMs that belong to `agentId` (group chats are kept when an agent is archived). */
+/** DMs that belong to `agentId` (group chats are kept when an agent is deleted). */
 export function agentDmIds(chats: Chat[], agentId: string): string[] {
   return chats
     .filter((chat) => chat.kind === "dm" && chat.members.some((m) => m.agentId === agentId))
     .map((chat) => chat.id)
-}
-
-/** Removes an archived agent and its DM. Returns the removed chat ids. */
-export function removeArchivedAgent(queryClient: QueryClient, agentId: string): string[] {
-  return removeAgentAndDm(queryClient, agentId)
 }
 
 /**

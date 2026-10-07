@@ -33,7 +33,7 @@ func scanAgent(row interface{ Scan(...any) error }) (Agent, error) {
 
 func (s *Store) ListAgents(ctx context.Context) ([]Agent, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+agentColumns+` FROM agents WHERE archived_at IS NULL ORDER BY id`)
+		`SELECT `+agentColumns+` FROM agents ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (s *Store) UpdateAgent(ctx context.Context, id string, u AgentUpdate) error
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var exists int
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM agents WHERE id = ? AND archived_at IS NULL`, id).Scan(&exists); err != nil {
+			`SELECT COUNT(*) FROM agents WHERE id = ?`, id).Scan(&exists); err != nil {
 			return err
 		}
 		if exists == 0 {
@@ -140,15 +140,18 @@ func (s *Store) UpdateAgent(ctx context.Context, id string, u AgentUpdate) error
 	})
 }
 
-// ErrLastAdmin is returned when archiving would leave no admin agent.
-var ErrLastAdmin = errors.New("the last admin agent can't be archived or deleted")
+// ErrLastAdmin is returned when deleting would leave no admin agent.
+var ErrLastAdmin = errors.New("the last admin agent can't be deleted")
 
-// ArchiveAgent marks an agent archived. Its DM is hidden from the chat list.
-func (s *Store) ArchiveAgent(ctx context.Context, id string) error {
-	return s.tx(ctx, func(tx *sql.Tx) error {
+// DeleteAgent removes an agent and everything that's only its own: its DM (with the messages
+// and prompts in it), memories, tasks, context, events, grants, reactions and read markers.
+// Its messages in group chats stay, without an author, so the conversations still read. It
+// returns the DM's id and the sandbox the agent leaves unused (to remove), if any.
+func (s *Store) DeleteAgent(ctx context.Context, id string) (dmChatID, unusedSandbox string, err error) {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var admin bool
-		err := tx.QueryRowContext(ctx,
-			`SELECT is_admin FROM agents WHERE id = ? AND archived_at IS NULL`, id).Scan(&admin)
+		var sandbox sql.NullString
+		err := tx.QueryRowContext(ctx, `SELECT is_admin, sandbox_id FROM agents WHERE id = ?`, id).Scan(&admin, &sandbox)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -158,38 +161,7 @@ func (s *Store) ArchiveAgent(ctx context.Context, id string) error {
 		if admin {
 			var admins int
 			if err := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM agents WHERE is_admin = 1 AND archived_at IS NULL`).Scan(&admins); err != nil {
-				return err
-			}
-			if admins <= 1 {
-				return ErrLastAdmin
-			}
-		}
-		_, err = tx.ExecContext(ctx, `UPDATE agents SET archived_at = ? WHERE id = ?`, now(), id)
-		return err
-	})
-}
-
-// DeleteAgent removes an agent and everything that's only its own: its DM (with the messages
-// and prompts in it), memories, tasks, context, events, grants, reactions and read markers.
-// Its messages in group chats stay, without an author, so the conversations still read. It
-// returns the DM's id and the sandbox the agent leaves unused (to remove), if any.
-func (s *Store) DeleteAgent(ctx context.Context, id string) (dmChatID, unusedSandbox string, err error) {
-	err = s.tx(ctx, func(tx *sql.Tx) error {
-		var admin bool
-		var archived sql.NullInt64
-		var sandbox sql.NullString
-		err := tx.QueryRowContext(ctx, `SELECT is_admin, archived_at, sandbox_id FROM agents WHERE id = ?`, id).Scan(&admin, &archived, &sandbox)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		if err != nil {
-			return err
-		}
-		if admin && !archived.Valid {
-			var admins int
-			if err := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM agents WHERE is_admin = 1 AND archived_at IS NULL`).Scan(&admins); err != nil {
+				`SELECT COUNT(*) FROM agents WHERE is_admin = 1`).Scan(&admins); err != nil {
 				return err
 			}
 			if admins <= 1 {
@@ -265,7 +237,7 @@ func (s *Store) ShareSandbox(ctx context.Context, agentID, withAgentID string) e
 	if err != nil {
 		return err
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE agents SET sandbox_id = ? WHERE id = ? AND archived_at IS NULL`, target, agentID)
+	res, err := s.db.ExecContext(ctx, `UPDATE agents SET sandbox_id = ? WHERE id = ?`, target, agentID)
 	if err != nil {
 		return err
 	}
@@ -278,7 +250,7 @@ func (s *Store) ShareSandbox(ctx context.Context, agentID, withAgentID string) e
 // SandboxMembers returns the active agents using a sandbox.
 func (s *Store) SandboxMembers(ctx context.Context, sandboxID string) ([]Agent, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+agentColumns+` FROM agents WHERE sandbox_id = ? AND archived_at IS NULL ORDER BY id`, sandboxID)
+		`SELECT `+agentColumns+` FROM agents WHERE sandbox_id = ? ORDER BY id`, sandboxID)
 	if err != nil {
 		return nil, err
 	}

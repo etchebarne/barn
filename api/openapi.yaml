@@ -467,28 +467,6 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
-  /agents/{agentId}/archive:
-    parameters:
-      - name: agentId
-        in: path
-        required: true
-        schema: { type: string }
-    post:
-      operationId: archiveAgent
-      tags: [agents]
-      description: |
-        Archive an agent: it stops working and disappears from the app (its DM is hidden). The
-        last admin agent can't be archived. Broadcasts agent.archived.
-      responses:
-        "204": { description: Archived }
-        "401": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
-        "409":
-          description: The agent can't be archived (e.g. it's the only admin agent)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
   /agents/{agentId}/approvals:
     parameters:
       - name: agentId
@@ -1835,7 +1813,6 @@ components:
         - $ref: "#/components/schemas/WsMessageUpdated"
         - $ref: "#/components/schemas/WsAgentCreated"
         - $ref: "#/components/schemas/WsChatCreated"
-        - $ref: "#/components/schemas/WsAgentArchived"
         - $ref: "#/components/schemas/WsAgentDeleted"
         - $ref: "#/components/schemas/WsSidebarUpdated"
         - $ref: "#/components/schemas/WsChatCleared"
@@ -1849,7 +1826,6 @@ components:
           message.updated: "#/components/schemas/WsMessageUpdated"
           agent.created: "#/components/schemas/WsAgentCreated"
           chat.created: "#/components/schemas/WsChatCreated"
-          agent.archived: "#/components/schemas/WsAgentArchived"
           agent.deleted: "#/components/schemas/WsAgentDeleted"
           sidebar.updated: "#/components/schemas/WsSidebarUpdated"
           chat.cleared: "#/components/schemas/WsChatCleared"
@@ -1915,14 +1891,6 @@ components:
       properties:
         type: { type: string, enum: [chat.cleared] }
         chatId: { type: string }
-
-    WsAgentArchived:
-      type: object
-      required: [type, agentId]
-      description: An agent was archived; drop it and its DM from the app
-      properties:
-        type: { type: string, enum: [agent.archived] }
-        agentId: { type: string }
 
     WsSidebarUpdated:
       type: object

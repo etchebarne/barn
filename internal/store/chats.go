@@ -157,7 +157,7 @@ func (s *Store) ListChats(ctx context.Context) ([]Chat, error) {
 
 // ChatSummary returns one chat as ListChats would (members, unread count, last message).
 func (s *Store) ChatSummary(ctx context.Context, id string) (Chat, error) {
-	chats, err := s.chatSummaries(ctx, "AND c.id = ?", []any{id})
+	chats, err := s.chatSummaries(ctx, "WHERE c.id = ?", []any{id})
 	if err != nil {
 		return Chat{}, err
 	}
@@ -174,11 +174,7 @@ func (s *Store) chatSummaries(ctx context.Context, filter string, args []any) ([
 		         WHERE m.chat_id = c.id AND m.author_kind != 'user'
 		           AND m.id > COALESCE((SELECT last_message_id FROM reads r
 		                                 WHERE r.chat_id = c.id AND r.reader = ?), '')) AS unread
-		FROM chats c
-		-- DMs of archived agents are hidden.
-		WHERE NOT (c.kind = 'dm' AND EXISTS (
-			SELECT 1 FROM chat_members cm JOIN agents a ON a.id = cm.agent_id
-			WHERE cm.chat_id = c.id AND a.archived_at IS NOT NULL)) `+filter,
+		FROM chats c `+filter,
 		append([]any{readerUser}, args...)...)
 	if err != nil {
 		return nil, err

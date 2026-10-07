@@ -16,7 +16,7 @@ describe("deleted agents", () => {
     const message = makeMessage({ author: { kind: "agent", agentId: null } })
     expect(authorName(message, agents)).toBe("Deleted agent")
     expect(agentAuthorName(null, agents)).toEqual({ name: "Deleted agent", deleted: true })
-    expect(agentAuthorName("archived", agents)).toEqual({ name: "Agent", deleted: false })
+    expect(agentAuthorName("not-loaded", agents)).toEqual({ name: "Agent", deleted: false })
     expect(reactorNames({ emoji: "👍", by: [{ kind: "agent", agentId: null }] }, agents)).toBe(
       "a deleted agent",
     )

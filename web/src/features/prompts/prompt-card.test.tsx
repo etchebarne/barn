@@ -15,7 +15,7 @@ import { PromptCard } from "./prompt-card"
 
 const approval: Prompt = {
   kind: "approval",
-  question: "Archive Tracker?",
+  question: "Delete Tracker?",
   options: [{ label: "Approve" }, { label: "Decline" }],
   allowOther: false,
   status: "pending",
@@ -40,7 +40,7 @@ async function renderPrompt(prompt: Prompt) {
 describe("PromptCard approvals", () => {
   it("falls back to the plain question with Approve/Decline when there's no preview", async () => {
     await renderPrompt({ ...approval, preview: null })
-    expect(screen.getByText("Archive Tracker?")).toBeVisible()
+    expect(screen.getByText("Delete Tracker?")).toBeVisible()
     expect(screen.getByRole("button", { name: "Approve" })).toBeVisible()
     expect(screen.queryByText("Needs approval")).not.toBeInTheDocument()
   })
@@ -51,17 +51,17 @@ describe("PromptCard approvals", () => {
       preview: {
         appType: null,
         appName: null,
-        title: "Archive agent",
-        verb: "Archive",
-        note: "Tracker stops working and its DM is removed.",
+        title: "Delete agent",
+        verb: "Delete",
+        note: "Removes Tracker, its DM, memories and files for good.",
         fields: [{ key: "agent", label: "Agent", value: "Tracker" }],
         body: null,
       },
     })
-    expect(screen.getByText("Archive agent")).toBeVisible()
+    expect(screen.getByText("Delete agent")).toBeVisible()
     expect(screen.getByText("Needs approval")).toBeVisible()
-    expect(screen.getByRole("button", { name: "Archive" })).toBeVisible()
-    expect(screen.queryByText("Archive Tracker?")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Delete" })).toBeVisible()
+    expect(screen.queryByText("Delete Tracker?")).not.toBeInTheDocument()
   })
 
   it("offers Always allow on the plain card too when there's a third option", async () => {

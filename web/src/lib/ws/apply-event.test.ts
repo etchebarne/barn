@@ -283,7 +283,7 @@ describe("applyWsEvent", () => {
     })
   })
 
-  describe("agent.archived", () => {
+  describe("agent.deleted with group chats", () => {
     it("drops the agent and its DM, keeps group chats, and reports the removed chat", () => {
       qc.setQueryData<Agent[]>(queryKeys.agents, [makeAgent(), makeAgent({ id: "tracker" })])
       const dm = makeChat({ id: "dm-tracker", members: [{ agentId: "tracker", position: 0 }] })
@@ -298,7 +298,11 @@ describe("applyWsEvent", () => {
       qc.setQueryData<Chat[]>(queryKeys.chats, [makeChat(), dm, group])
       seedMessages(qc, "dm-tracker", { pages: [], pageParams: [] })
 
-      const result = applyWsEvent(qc, { type: "agent.archived", agentId: "tracker" })
+      const result = applyWsEvent(qc, {
+        type: "agent.deleted",
+        agentId: "tracker",
+        chatId: "dm-tracker",
+      })
 
       expect(result.removedChatIds).toEqual(["dm-tracker"])
       expect(qc.getQueryData<Agent[]>(queryKeys.agents)?.map((a) => a.id)).toEqual(["agent-1"])

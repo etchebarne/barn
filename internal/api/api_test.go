@@ -350,7 +350,7 @@ func TestAnswerPrompt(t *testing.T) {
 	}
 }
 
-func TestUserReactionsAndArchiving(t *testing.T) {
+func TestUserReactionsAndDeleting(t *testing.T) {
 	c, st := setupWithKey(t)
 	ctx := context.Background()
 	admin, chatID, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "openbot", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask", IsAdmin: true})
@@ -374,15 +374,15 @@ func TestUserReactionsAndArchiving(t *testing.T) {
 		t.Fatalf("expected 400 for a non-emoji, got %d", resp.StatusCode)
 	}
 
-	if resp, _ := c.do("POST", "/api/agents/"+admin.ID+"/archive", "", true); resp.StatusCode != http.StatusConflict {
-		t.Fatalf("the last admin can't be archived, got %d", resp.StatusCode)
+	if resp, _ := c.do("DELETE", "/api/agents/"+admin.ID, "", true); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("the last admin can't be deleted, got %d", resp.StatusCode)
 	}
-	if resp, _ := c.do("POST", "/api/agents/"+other.ID+"/archive", "", true); resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("archive: %d", resp.StatusCode)
+	if resp, _ := c.do("DELETE", "/api/agents/"+other.ID, "", true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %d", resp.StatusCode)
 	}
 	_, list := c.doList("GET", "/api/chats")
 	if len(list) != 1 {
-		t.Fatalf("the archived agent's DM should be hidden, have %d chats", len(list))
+		t.Fatalf("the deleted agent's DM should be gone, have %d chats", len(list))
 	}
 
 	resp, body = c.do("PATCH", "/api/agents/"+admin.ID, `{"name":"Openbot","trustMode":"trusted","instructions":"Be brief."}`, true)

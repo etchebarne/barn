@@ -29,7 +29,7 @@ const ICONS: Record<string, LucideIcon | typeof LogoGlyph> = {
   notion: NotebookTextIcon,
   sentry: BugIcon,
   stripe: CreditCardIcon,
-  // openbot's own actions (e.g. archiving an agent).
+  // openbot's own actions (e.g. deleting an agent).
   openbot: LogoGlyph,
   "always-allow": ShieldCheckIcon,
 }

@@ -69,7 +69,7 @@ func TestDeleteAgent(t *testing.T) {
 		t.Fatalf("a shared sandbox must stay: %v", sbx.removed)
 	}
 
-	// The last admin can't be deleted (but an archived one can).
+	// The last admin can't be deleted.
 	admin, _, _ := f.store.CreateAgentWithDM(ctx, store.Agent{Name: "openbot", Instructions: "x", Model: "m", Language: "auto", TrustMode: "ask", IsAdmin: true})
 	if err := f.rt.DeleteAgent(ctx, admin.ID); !errors.Is(err, store.ErrLastAdmin) {
 		t.Fatalf("deleting the last admin: %v", err)

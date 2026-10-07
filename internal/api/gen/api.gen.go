@@ -292,21 +292,6 @@ func (e WsAgentActivityType) Valid() bool {
 	}
 }
 
-// Defines values for WsAgentArchivedType.
-const (
-	AgentArchived WsAgentArchivedType = "agent.archived"
-)
-
-// Valid indicates whether the value is a known member of the WsAgentArchivedType enum.
-func (e WsAgentArchivedType) Valid() bool {
-	switch e {
-	case AgentArchived:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for WsAgentCreatedType.
 const (
 	WsAgentCreatedTypeAgentCreated WsAgentCreatedType = "agent.created"
@@ -1149,15 +1134,6 @@ type WsAgentActivity struct {
 // WsAgentActivityType defines model for WsAgentActivity.Type.
 type WsAgentActivityType string
 
-// WsAgentArchived An agent was archived; drop it and its DM from the app
-type WsAgentArchived struct {
-	AgentId string              `json:"agentId"`
-	Type    WsAgentArchivedType `json:"type"`
-}
-
-// WsAgentArchivedType defines model for WsAgentArchived.Type.
-type WsAgentArchivedType string
-
 // WsAgentCreated defines model for WsAgentCreated.
 type WsAgentCreated struct {
 	Agent Agent              `json:"agent"`
@@ -1571,40 +1547,6 @@ func (t *WsEvent) MergeWsChatCreated(v WsChatCreated) error {
 	return err
 }
 
-// AsWsAgentArchived returns the union data inside the WsEvent as a WsAgentArchived
-func (t WsEvent) AsWsAgentArchived() (WsAgentArchived, error) {
-	var body WsAgentArchived
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromWsAgentArchived overwrites any union data inside the WsEvent as the provided WsAgentArchived
-func (t *WsEvent) FromWsAgentArchived(v WsAgentArchived) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.archived"}`))
-	t.union = b
-	return err
-}
-
-// MergeWsAgentArchived performs a merge with any union data inside the WsEvent, using the provided WsAgentArchived
-func (t *WsEvent) MergeWsAgentArchived(v WsAgentArchived) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.archived"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
 // AsWsAgentDeleted returns the union data inside the WsEvent as a WsAgentDeleted
 func (t WsEvent) AsWsAgentDeleted() (WsAgentDeleted, error) {
 	var body WsAgentDeleted
@@ -1723,8 +1665,6 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 	switch discriminator {
 	case "agent.activity":
 		return t.AsWsAgentActivity()
-	case "agent.archived":
-		return t.AsWsAgentArchived()
 	case "agent.created":
 		return t.AsWsAgentCreated()
 	case "agent.deleted":
@@ -1775,9 +1715,6 @@ type ServerInterface interface {
 
 	// (DELETE /agents/{agentId}/approvals/{approvalId})
 	RevokeStandingApproval(w http.ResponseWriter, r *http.Request, agentId string, approvalId string)
-
-	// (POST /agents/{agentId}/archive)
-	ArchiveAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
 	// (GET /agents/{agentId}/memories)
 	ListMemories(w http.ResponseWriter, r *http.Request, agentId string)
@@ -2042,32 +1979,6 @@ func (siw *ServerInterfaceWrapper) RevokeStandingApproval(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeStandingApproval(w, r, agentId, approvalId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ArchiveAgent operation middleware
-func (siw *ServerInterfaceWrapper) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agentId" -------------
-	var agentId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ArchiveAgent(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3170,7 +3081,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/memories", wrapper.ListMemories)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/memories/{memoryId}", wrapper.DeleteMemory)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/archive", wrapper.ArchiveAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/approvals", wrapper.ListStandingApprovals)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/approvals/{approvalId}", wrapper.RevokeStandingApproval)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox", wrapper.GetSandbox)

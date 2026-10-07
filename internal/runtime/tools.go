@@ -16,19 +16,19 @@ import (
 )
 
 const (
-	toolSendMessage  = "send_message"
-	toolReact        = "react"
-	toolDone         = "done"
-	toolAskUser      = "ask_user"
-	toolListModels   = "list_models"
-	toolListAgents   = "list_agents"
-	toolRemember     = "memory_save"
-	toolForget       = "memory_forget"
-	toolCreateAgent  = "create_agent"
-	toolUpdateAgent  = "update_agent"
-	toolArchiveAgent = "archive_agent"
-	toolCreateGroup  = "create_group"
-	toolUpdateGroup  = "update_group"
+	toolSendMessage = "send_message"
+	toolReact       = "react"
+	toolDone        = "done"
+	toolAskUser     = "ask_user"
+	toolListModels  = "list_models"
+	toolListAgents  = "list_agents"
+	toolRemember    = "memory_save"
+	toolForget      = "memory_forget"
+	toolCreateAgent = "create_agent"
+	toolUpdateAgent = "update_agent"
+	toolDeleteAgent = "delete_agent"
+	toolCreateGroup = "create_group"
+	toolUpdateGroup = "update_group"
 )
 
 const maxPromptOptions = 8
@@ -155,9 +155,10 @@ var (
 			"additionalProperties": false
 		}`)
 
-	archiveAgentTool = function(toolArchiveAgent,
-		"Archive an agent: it stops working and its chat is hidden (history is kept). Needs the "+
-			"user's approval unless you're trusted. You can't archive yourself.",
+	deleteAgentTool = function(toolDeleteAgent,
+		"Delete an agent for good: it stops, and its DM, memories and tasks are removed (its "+
+			"messages in groups stay). Only when the user asks; it always needs their approval. "+
+			"You can't delete yourself.",
 		`{
 			"type": "object",
 			"properties": {"agent_id": {"type": "string"}},
@@ -220,7 +221,7 @@ func toolsFor(agent store.Agent, sandboxes bool) []model.Tool {
 		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool)
 	}
 	if agent.IsAdmin {
-		tools = append(tools, createAgentTool, archiveAgentTool, createGroupTool, updateGroupTool)
+		tools = append(tools, createAgentTool, deleteAgentTool, createGroupTool, updateGroupTool)
 	}
 	return tools
 }
@@ -255,8 +256,8 @@ func toolLabel(name string) string {
 		return "writing a file"
 	case toolListFiles:
 		return "looking through files"
-	case toolArchiveAgent:
-		return "archiving an agent"
+	case toolDeleteAgent:
+		return "deleting an agent"
 	case toolCreateGroup:
 		return "setting up a group"
 	case toolUpdateGroup:
@@ -333,8 +334,8 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 		return l.runTaskTool(ctx, agent, call.Function.Name, args)
 	case toolRunCommand, toolReadFile, toolWriteFile, toolListFiles:
 		return l.runSandboxTool(ctx, agent, call.Function.Name, args)
-	case toolArchiveAgent:
-		return l.archiveAgent(ctx, agent, args)
+	case toolDeleteAgent:
+		return l.deleteAgent(ctx, agent, args)
 	case toolCreateGroup:
 		var a struct {
 			Name     string   `json:"name"`
@@ -649,7 +650,7 @@ func (l *loop) updateAgent(ctx context.Context, agent store.Agent, raw []byte) (
 	return toolOK(map[string]string{"agent_id": updated.ID, "name": updated.Name, "model": updated.Model, "language": updated.Language}), true
 }
 
-func (l *loop) archiveAgent(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
+func (l *loop) deleteAgent(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
 	var args struct {
 		AgentID string `json:"agent_id"`
 	}
@@ -657,16 +658,16 @@ func (l *loop) archiveAgent(ctx context.Context, agent store.Agent, raw []byte) 
 		return toolError("invalid arguments: %v", err), false
 	}
 	if args.AgentID == agent.ID {
-		return toolError("you can't archive yourself"), false
+		return toolError("you can't delete yourself"), false
 	}
 	target, err := l.m.store.GetAgent(ctx, args.AgentID)
 	if err != nil {
 		return toolError("unknown agent_id %q", args.AgentID), false
 	}
-	if err := l.m.ArchiveAgent(ctx, target.ID); err != nil {
+	if err := l.m.DeleteAgent(ctx, target.ID); err != nil {
 		return toolError("%v", err), false
 	}
-	return toolOK(map[string]string{"archived": target.Name}), true
+	return toolOK(map[string]string{"deleted": target.Name}), true
 }
 
 func toolOK(v any) string {

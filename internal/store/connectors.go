@@ -171,11 +171,10 @@ func (s *Store) GetSignal(ctx context.Context, id string) (Signal, error) {
 	return sig, err
 }
 
-// SignalTasks returns enabled signal tasks of active agents granted the account.
+// SignalTasks returns enabled signal tasks of agents granted the account.
 func (s *Store) SignalTasks(ctx context.Context, accountID string) ([]Task, error) {
 	return s.queryTasks(ctx, `SELECT `+prefixed("t.", taskColumns)+` FROM tasks t
 		JOIN grants g ON g.agent_id = t.agent_id AND g.account_id = ?
-		JOIN agents a ON a.id = t.agent_id AND a.archived_at IS NULL
 		WHERE t.kind = 'signal' AND t.enabled = 1 AND json_extract(t.spec, '$.accountId') = ?
 		ORDER BY t.id`, accountID, accountID)
 }

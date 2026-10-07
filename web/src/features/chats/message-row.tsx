@@ -87,9 +87,9 @@ function EventMarker({
   agents: Map<string, Agent>
   fallback: string
 }) {
-  // Archived agents aren't in the agents list; their marker stays but no longer links.
+  // Deleted agents aren't in the agents list; their marker stays but no longer links.
   const agent = agents.get(event.agentId)
-  const label = agent ? `Created ${agent.name}` : `${fallback || "Created an agent"} (archived)`
+  const label = agent ? `Created ${agent.name}` : `${fallback || "Created an agent"} (deleted)`
   const content = (
     <>
       <AgentAvatar id={agent?.id ?? event.agentId} name={agent?.name ?? "?"} size="sm" />

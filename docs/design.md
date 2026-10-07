@@ -130,14 +130,15 @@ agents in no groups. Saved memories, personality, settings and tasks are kept.
 | `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events). |
 | `run_command`, `read_file`, `write_file`, `list_files` | The agent's sandbox (when Docker is available). |
 | `<account>__<tool>` | Tools of connector accounts the agent was granted. |
-| `create_agent`, `archive_agent`, `create_group`, `update_group` | Admin agents only (the starter agent is admin). |
+| `create_agent`, `delete_agent`, `create_group`, `update_group` | Admin agents only (the starter agent is admin). |
 
 ### 4.5 Approvals and trust
 - Each agent has a **trust mode**: `ask` (default) or `trusted`.
 - In `ask` mode, **gated** tool calls don't run: the runtime posts an Approve / Decline card in the
   agent's DM and ends its turn. Approving runs the stored call in the harness and delivers the
-  result to the agent as an `<approval_result>`; declining tells it so. Gated: `archive_agent` and
-  every connector tool marked external (posting, creating, deploying). `create_agent` isn't gated:
+  result to the agent as an `<approval_result>`; declining tells it so. Gated: every connector
+  tool marked external (posting, creating, deploying). `delete_agent` always asks, even for
+  trusted agents, and can't be allowed for good: it can't be undone. `create_agent` isn't gated:
   the intro already asks "Want me to set up an agent for that?".
 - Agents can still ask for confirmation themselves with `ask_user` whenever they're unsure.
 - `trusted` mode skips the gate (turning it on is confirmed in the UI).
@@ -407,7 +408,7 @@ passkeys(id, user_id, credential, created_at)
 sessions(id, user_id, expires_at, ...)
 
 agents(id, name, instructions, personality, model, utility_model, language, notifications,
-       trust_mode, is_admin, sandbox_id, created_at, archived_at)
+       trust_mode, is_admin, sandbox_id, created_at)
 sandboxes(id, name, image, container_id, volume, limits_json, created_at)
 
 chats(id, kind /* dm|group */, name, created_at)
@@ -465,10 +466,10 @@ deploy/               docker-compose, example config
 2. **Agent runtime** ✅: inbox, single-loop turns, mid-turn injection, resume after restarts,
    memories, compaction.
 3. **Sandboxes** ✅: Docker sandboxes, command and file tools, `/shared`, shared sandboxes.
-4. **Managing agents from chat** ✅: onboarding intro, create/update/archive agents (deleting
-   is the user's call, from the agent's settings: its DM, memories, tasks, history, grants and
-   unshared sandbox go; its group messages stay without an author), clickable
-   questions, approvals, trusted mode, reactions.
+4. **Managing agents from chat** ✅: onboarding intro, create/update/delete agents (deleting,
+   from the agent's settings or by an admin agent after the user approves, removes its DM,
+   memories, tasks, history, grants and unshared sandbox; its group messages stay without an
+   author), clickable questions, approvals, trusted mode, reactions.
 5. **Tasks** ✅: cron / one-off / signal tasks, time zones, Web Push notifications.
 6. **Groups** ✅: group chats, turn coordinator, @mentions.
 7. **Connectors** ✅: Webhook, GitHub, Linear, Slack, Render, MCP; grants; signal tasks.

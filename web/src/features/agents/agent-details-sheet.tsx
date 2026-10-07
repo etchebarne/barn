@@ -145,7 +145,7 @@ export function AgentDetailsSheet() {
               <MemoriesSection agent={shown} />
               <TasksSection agent={shown} />
               <AgentConnections agentId={shown.id} agentName={shown.name} onNavigate={close} />
-              <DangerZone agent={shown} onArchived={close} />
+              <DangerZone agent={shown} />
             </div>
           </div>
         </SheetContent>

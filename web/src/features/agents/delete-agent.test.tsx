@@ -49,7 +49,7 @@ async function renderDangerZone(path = "/chats/dm-tracker") {
   client.setQueryData<Agent[]>(queryKeys.agents, [makeAgent(), tracker])
   client.setQueryData<Chat[]>(queryKeys.chats, [makeChat(), dm])
   const rootRoute = createRootRoute({ component: Outlet })
-  const page = () => <DangerZone agent={tracker} onArchived={vi.fn<() => void>()} />
+  const page = () => <DangerZone agent={tracker} />
   const routes = [
     createRoute({ getParentRoute: () => rootRoute, path: "/", component: () => <p>home</p> }),
     createRoute({ getParentRoute: () => rootRoute, path: "/chats/$chatId", component: page }),

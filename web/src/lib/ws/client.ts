@@ -33,7 +33,6 @@ const KNOWN_EVENTS = new Set([
   "agent.activity",
   "agent.created",
   "agent.updated",
-  "agent.archived",
   "agent.deleted",
   "chat.created",
   "chat.read",

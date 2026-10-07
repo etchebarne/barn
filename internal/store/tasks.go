@@ -115,19 +115,17 @@ func (s *Store) Tasks(ctx context.Context, agentID string) ([]Task, error) {
 	return s.queryTasks(ctx, `SELECT `+taskColumns+` FROM tasks WHERE agent_id = ? ORDER BY id`, agentID)
 }
 
-// DueTasks returns enabled tasks of active agents whose next run is at or before t.
+// DueTasks returns enabled tasks whose next run is at or before t.
 func (s *Store) DueTasks(ctx context.Context, t int64) ([]Task, error) {
 	return s.queryTasks(ctx, `SELECT `+taskColumns+` FROM tasks
 		WHERE enabled = 1 AND next_fire_at IS NOT NULL AND next_fire_at <= ?
-		AND agent_id IN (SELECT id FROM agents WHERE archived_at IS NULL)
 		ORDER BY next_fire_at`, t)
 }
 
 // NextTaskFireAt returns the earliest upcoming run of any enabled task (0 if none).
 func (s *Store) NextTaskFireAt(ctx context.Context) (int64, error) {
 	var next sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `SELECT MIN(next_fire_at) FROM tasks WHERE enabled = 1
-		AND agent_id IN (SELECT id FROM agents WHERE archived_at IS NULL)`).Scan(&next)
+	err := s.db.QueryRowContext(ctx, `SELECT MIN(next_fire_at) FROM tasks WHERE enabled = 1`).Scan(&next)
 	return next.Int64, err
 }
 

@@ -19,7 +19,7 @@ export const DELETED_AGENT = "Deleted agent"
 
 /**
  * An agent author's display name: its name, "Deleted agent" when the server cleared the id
- * (the agent was deleted), or "Agent" when it isn't loaded (e.g. archived).
+ * (the agent was deleted), or "Agent" when it isn't loaded (yet).
  */
 export function agentAuthorName(
   agentId: string | null,

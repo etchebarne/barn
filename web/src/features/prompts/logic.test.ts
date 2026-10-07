@@ -81,7 +81,7 @@ describe("promptRows", () => {
 function approval(overrides: Partial<Prompt> = {}): Prompt {
   return prompt({
     kind: "approval",
-    question: "Archive Tracker?",
+    question: "Delete Tracker?",
     options: [{ label: "Approve" }, { label: "Decline" }],
     allowOther: false,
     ...overrides,

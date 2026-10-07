@@ -384,28 +384,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{agentId}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agentId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Archive an agent: it stops working and disappears from the app (its DM is hidden). The
-         *     last admin agent can't be archived. Broadcasts agent.archived.
-         */
-        post: operations["archiveAgent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/agents/{agentId}/approvals": {
         parameters: {
             query?: never;
@@ -1341,7 +1319,7 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"] | components["schemas"]["WsChatCleared"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"] | components["schemas"]["WsChatCleared"];
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1411,15 +1389,6 @@ export interface components {
              */
             type: "chat.cleared";
             chatId: string;
-        };
-        /** @description An agent was archived; drop it and its DM from the app */
-        WsAgentArchived: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "agent.archived";
-            agentId: string;
         };
         /** @description The sidebar's categories or order changed (e.g. on another device); refetch */
         WsSidebarUpdated: {
@@ -2101,37 +2070,6 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
-        };
-    };
-    archiveAgent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Archived */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            /** @description The agent can't be archived (e.g. it's the only admin agent) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
         };
     };
     listStandingApprovals: {

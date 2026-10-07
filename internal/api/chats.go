@@ -227,20 +227,6 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID str
 	writeJSON(w, http.StatusOK, view.Agent(agent, s.runtime.Activity(agent.ID)))
 }
 
-func (s *Server) ArchiveAgent(w http.ResponseWriter, r *http.Request, agentID string) {
-	err := s.runtime.ArchiveAgent(r.Context(), agentID)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeError(w, http.StatusNotFound, "agent not found")
-	case errors.Is(err, store.ErrLastAdmin):
-		writeError(w, http.StatusConflict, err.Error())
-	case err != nil:
-		internalError(w, err)
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
 func (s *Server) ToggleReaction(w http.ResponseWriter, r *http.Request, messageID string) {
 	ctx := r.Context()
 	var req gen.ToggleReactionRequest

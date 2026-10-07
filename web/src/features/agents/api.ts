@@ -3,7 +3,7 @@ import { toast } from "sonner"
 
 import { agentsQueryOptions } from "@/lib/agents"
 import { api, ApiError, unwrap, type Agent, type Schemas } from "@/lib/api-client"
-import { removeArchivedAgent, removeDeletedAgent, updateAgentInCache } from "@/lib/chat-cache"
+import { removeDeletedAgent, updateAgentInCache } from "@/lib/chat-cache"
 import { useLeaveRemovedChats } from "@/lib/leave-removed-chats"
 import { queryKeys } from "@/lib/query-keys"
 
@@ -83,19 +83,6 @@ export function useDeleteMemory(agentId: string) {
     },
     onError: (_error, _id, context) => queryClient.setQueryData(key, context?.previous),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
-  })
-}
-
-/** Archives an agent. 409: it can't be archived (e.g. the last admin agent). */
-export function useArchiveAgent(agentId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    // Doesn't wait for the WebSocket: drops the agent and its DM right away, and resolves to the
-    // removed chat ids.
-    mutationFn: async () => {
-      await unwrap(api.POST("/agents/{agentId}/archive", { params: { path: { agentId } } }))
-      return removeArchivedAgent(queryClient, agentId)
-    },
   })
 }
 

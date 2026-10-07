@@ -67,7 +67,7 @@ func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) 
 
 // chatAgents returns a chat's active member agents in position order.
 func (m *Manager) chatAgents(ctx context.Context, chat store.Chat) ([]store.Agent, error) {
-	active, err := m.store.ListAgents(ctx) // excludes archived agents
+	active, err := m.store.ListAgents(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func turnOrder(members []store.ChatMember, priority []string, skip string) []str
 // finish (or time out), and reports whether it posted in the group.
 func (m *Manager) groupTurn(ctx context.Context, chatID, agentID string) (bool, error) {
 	if _, ok := m.loopFor(agentID); !ok {
-		return false, nil // archived or not running
+		return false, nil // not running
 	}
 	marker, err := m.store.ReadMarker(ctx, chatID, "agent:"+agentID)
 	if err != nil {

@@ -134,7 +134,7 @@ func (m *Manager) AddAgent(agentID string) {
 	}()
 }
 
-// stopAgent ends an agent's loop (e.g. when it's archived).
+// stopAgent ends an agent's loop (when it's deleted).
 func (m *Manager) stopAgent(agentID string) {
 	m.mu.Lock()
 	l := m.loops[agentID]
@@ -200,16 +200,6 @@ func (m *Manager) UpdateAgent(ctx context.Context, agentID string, u store.Agent
 		}
 	}
 	return agent, nil
-}
-
-// ArchiveAgent archives an agent, stops it, and tells clients to drop it.
-func (m *Manager) ArchiveAgent(ctx context.Context, agentID string) error {
-	if err := m.store.ArchiveAgent(ctx, agentID); err != nil {
-		return err
-	}
-	m.stopAgent(agentID)
-	m.bus.Publish(gen.WsAgentArchived{Type: "agent.archived", AgentId: agentID})
-	return nil
 }
 
 // DeleteAgent stops an agent and removes it for good (see store.DeleteAgent), along with its

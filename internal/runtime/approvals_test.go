@@ -40,7 +40,7 @@ func answerApproval(t *testing.T, f fixture, msg store.Message, approve bool) {
 	}
 }
 
-func TestArchiveNeedsApproval(t *testing.T) {
+func TestDeleteNeedsApproval(t *testing.T) {
 	for _, approve := range []bool{true, false} {
 		t.Run(map[bool]string{true: "approved", false: "declined"}[approve], func(t *testing.T) {
 			f := setup(t)
@@ -54,35 +54,38 @@ func TestArchiveNeedsApproval(t *testing.T) {
 				}
 				last := req.Messages[len(req.Messages)-1]
 				switch {
-				case last.Role == "user" && strings.Contains(last.Text(), "archive Notes"):
-					return toolCall(toolArchiveAgent, map[string]string{"agent_id": target.ID})
+				case last.Role == "user" && strings.Contains(last.Text(), "delete Notes"):
+					return toolCall(toolDeleteAgent, map[string]string{"agent_id": target.ID})
 				case last.Role == "user" && strings.Contains(last.Text(), "<approval_result"):
 					outcome = last.Text()
 				}
 				return model.Text("assistant", "")
 			}
-			f.userSays(t, "please archive Notes")
+			f.userSays(t, "please delete Notes")
 			msgs := f.waitForMessages(t, 2)
 			f.waitIdle(t)
 			card := msgs[1]
-			if card.Prompt == nil || card.Prompt.Kind != "approval" || !strings.Contains(card.Prompt.Question, "Archive Notes?") {
+			if card.Prompt == nil || card.Prompt.Kind != "approval" || !strings.Contains(card.Prompt.Question, "Delete Notes?") {
 				t.Fatalf("expected an approval card, got %+v", card)
+			}
+			if card.Prompt.Action == nil || card.Prompt.Action.Rule != nil {
+				t.Fatalf("deleting can't be allowed for good: %+v", card.Prompt.Action)
 			}
 			if a, _ := f.store.GetAgent(context.Background(), target.ID); a.ID == "" {
 				t.Fatal("target vanished before approval")
 			}
 			if agents, _ := f.store.ListAgents(context.Background()); len(agents) != 2 {
-				t.Fatal("nothing should be archived before the user approves")
+				t.Fatal("nothing should be deleted before the user approves")
 			}
 
 			answerApproval(t, f, card, approve)
 			f.waitIdle(t)
 			agents, _ := f.store.ListAgents(context.Background())
 			if approve && len(agents) != 1 {
-				t.Fatalf("expected Notes archived after approval, have %d agents", len(agents))
+				t.Fatalf("expected Notes deleted after approval, have %d agents", len(agents))
 			}
 			if !approve && len(agents) != 2 {
-				t.Fatalf("declining must not archive, have %d agents", len(agents))
+				t.Fatalf("declining must not delete, have %d agents", len(agents))
 			}
 			want := `"approved":` + map[bool]string{true: "true", false: "false"}[approve]
 			if !strings.Contains(outcome, want) {
@@ -92,7 +95,7 @@ func TestArchiveNeedsApproval(t *testing.T) {
 	}
 }
 
-func TestTrustedAgentsSkipApproval(t *testing.T) {
+func TestTrustedAgentsStillConfirmDeletes(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	f.store.SetAgentAdmin(ctx, f.agent.ID, true)
@@ -102,17 +105,18 @@ func TestTrustedAgentsSkipApproval(t *testing.T) {
 	f.llm.handler = func(req model.Request) model.Message {
 		last := req.Messages[len(req.Messages)-1]
 		if strings.HasPrefix(req.Messages[0].Text(), "You are openbot,") && last.Role == "user" {
-			return toolCall(toolArchiveAgent, map[string]string{"agent_id": target.ID})
+			return toolCall(toolDeleteAgent, map[string]string{"agent_id": target.ID})
 		}
 		return model.Text("assistant", "")
 	}
-	f.userSays(t, "archive Notes")
+	f.userSays(t, "delete Notes")
 	f.waitIdle(t)
-	if agents, _ := f.store.ListAgents(ctx); len(agents) != 1 {
-		t.Fatalf("a trusted agent should archive without asking, have %d agents", len(agents))
+	if agents, _ := f.store.ListAgents(ctx); len(agents) != 2 {
+		t.Fatalf("even a trusted agent asks before deleting, have %d agents", len(agents))
 	}
-	if msgs, _, _ := f.store.ListMessages(ctx, f.chatID, "", 10); len(msgs) != 1 {
-		t.Fatalf("no approval card expected, got %+v", msgs)
+	msgs, _, _ := f.store.ListMessages(ctx, f.chatID, "", 10)
+	if len(msgs) != 2 || msgs[1].Prompt == nil || msgs[1].Prompt.Kind != "approval" {
+		t.Fatalf("expected an approval card, got %+v", msgs)
 	}
 }
 
