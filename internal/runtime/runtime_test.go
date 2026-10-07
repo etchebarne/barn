@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -376,10 +377,14 @@ func TestCreateAgent(t *testing.T) {
 		if strings.HasPrefix(sys, "You are Notes,") {
 			// The new agent: introduce itself once, in its own DM.
 			if strings.Contains(last.Text(), "You were just created by barn") {
-				mu.Lock()
-				id := newChatID
-				mu.Unlock()
-				return sendCall(id, "hi, I'm Notes")
+				// Its DM is listed in its own system prompt; it may run before the creator's
+				// tool result is processed.
+				dm := regexp.MustCompile(`chat_id (\S+): DM`).FindStringSubmatch(sys)
+				if dm == nil {
+					t.Errorf("new agent's prompt has no DM: %s", sys)
+					return model.Text("assistant", "")
+				}
+				return sendCall(dm[1], "hi, I'm Notes")
 			}
 			return model.Text("assistant", "")
 		}
