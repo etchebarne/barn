@@ -201,6 +201,27 @@ func (m *Manager) ArchiveAgent(ctx context.Context, agentID string) error {
 	return nil
 }
 
+// DeleteAgent stops an agent and removes it for good (see store.DeleteAgent), along with its
+// sandbox when no other agent shares it.
+func (m *Manager) DeleteAgent(ctx context.Context, agentID string) error {
+	dm, sandboxID, err := m.store.DeleteAgent(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	m.stopAgent(agentID)
+	if sandboxID != "" && m.sandboxesAvailable() {
+		if err := m.Sandboxes.Remove(ctx, sandboxID); err != nil {
+			logger(agentID).Warn("remove sandbox", "sandbox", sandboxID, "err", err)
+		}
+	}
+	ev := gen.WsAgentDeleted{Type: "agent.deleted", AgentId: agentID}
+	if dm != "" {
+		ev.ChatId = &dm
+	}
+	m.bus.Publish(ev)
+	return nil
+}
+
 func (m *Manager) wake(agentID string) {
 	m.mu.Lock()
 	l := m.loops[agentID]

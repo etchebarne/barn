@@ -20,6 +20,7 @@ type Sandboxer interface {
 	Exec(ctx context.Context, sandboxID, command, workdir string, stdin []byte, timeout time.Duration) (sandbox.Result, error)
 	Status(ctx context.Context, sandboxID string) string
 	Restart(ctx context.Context, sandboxID string) error
+	Remove(ctx context.Context, sandboxID string) error
 }
 
 // SandboxState is an agent's sandbox status ("unavailable", "none", "stopped", "running") and

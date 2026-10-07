@@ -434,7 +434,9 @@ deploy/               docker-compose, example config
 2. **Agent runtime** ✅: inbox, single-loop turns, mid-turn injection, resume after restarts,
    memories, compaction.
 3. **Sandboxes** ✅: Docker sandboxes, command and file tools, `/shared`, shared sandboxes.
-4. **Managing agents from chat** ✅: onboarding intro, create/update/archive agents, clickable
+4. **Managing agents from chat** ✅: onboarding intro, create/update/archive agents (deleting
+   is the user's call, from the agent's settings: its DM, memories, tasks, history, grants and
+   unshared sandbox go; its group messages stay without an author), clickable
    questions, approvals, trusted mode, reactions.
 5. **Tasks** ✅: cron / one-off / signal tasks, time zones, Web Push notifications.
 6. **Groups** ✅: group chats, turn coordinator, @mentions.

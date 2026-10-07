@@ -11,7 +11,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { Agent } from "@/lib/api-client"
 import { useLeaveRemovedChats } from "@/lib/leave-removed-chats"
 
-import { useArchiveAgent, useUpdateAgent } from "./api"
+import { useArchiveAgent, useDeleteAgent, useUpdateAgent } from "./api"
 import { AUTO_LANGUAGE, isAutoLanguage, trustChangeNeedsConfirmation } from "./trust"
 
 /**
@@ -407,18 +407,21 @@ export function NotificationsSection({ agent }: { agent: Agent }) {
   )
 }
 
-/** Danger zone: archive the agent, after confirming. */
+/** Danger zone: archive (reversible on the server) or delete for good, each confirmed inline. */
 export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: () => void }) {
   const archive = useArchiveAgent(agent.id)
+  const remove = useDeleteAgent(agent)
   const leaveRemovedChats = useLeaveRemovedChats()
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
+  const row =
+    "flex items-center justify-between gap-4 rounded-[calc(var(--radius-md)+0.75rem)] border border-destructive/30 p-3"
 
   return (
     <section aria-labelledby="agent-danger-zone" className="flex flex-col gap-3">
       <h3 id="agent-danger-zone" className="text-sm font-medium text-destructive">
         Danger zone
       </h3>
-      {confirming ? (
+      {confirming === "archive" ? (
         <InlineConfirm
           tone="destructive"
           title={`Archive ${agent.name}?`}
@@ -435,19 +438,46 @@ export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: ()
             })
           }
           onCancel={() => {
-            setConfirming(false)
+            setConfirming(null)
             archive.reset()
           }}
         >
           It stops working, and its DM is removed from your chats. Group chats keep its messages.
         </InlineConfirm>
+      ) : confirming === "delete" ? (
+        <InlineConfirm
+          tone="destructive"
+          title={`Delete ${agent.name}? This can't be undone.`}
+          confirmLabel="Delete"
+          pending={remove.isPending}
+          error={remove.error?.message}
+          onConfirm={() => remove.mutate()}
+          onCancel={() => {
+            setConfirming(null)
+            remove.reset()
+          }}
+        >
+          Removes {agent.name}, its DM, memories, tasks and files for good. Messages it sent in
+          group chats stay.
+        </InlineConfirm>
       ) : (
-        <div className="flex items-center justify-between gap-4 rounded-[calc(var(--radius-md)+0.75rem)] border border-destructive/30 p-3">
-          <p className="text-sm text-muted-foreground">Stop this agent and remove its DM.</p>
-          <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
-            Archive agent
-          </Button>
-        </div>
+        <>
+          <div className={row}>
+            <p className="text-sm text-muted-foreground">Stop this agent and remove its DM.</p>
+            <Button variant="destructive" size="sm" onClick={() => setConfirming("archive")}>
+              Archive agent
+            </Button>
+          </div>
+          <div className={row}>
+            <p className="text-sm text-muted-foreground">
+              Removes {agent.name}, its DM, memories, tasks and files for good. Messages it sent in
+              group chats stay.
+            </p>
+            <Button variant="destructive" size="sm" onClick={() => setConfirming("delete")}>
+              Delete agent
+            </Button>
+          </div>
+        </>
       )}
     </section>
   )

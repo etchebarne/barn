@@ -27,7 +27,8 @@ export function failureActions(
   { isLatest, agent }: { isLatest: boolean; agent: Agent | undefined },
 ): FailureActions {
   return {
-    retry: failure.retryable && isLatest,
+    // No retry for an agent that's gone (deleted or archived).
+    retry: failure.retryable && isLatest && agent !== undefined,
     changeModel: isLatest && failure.reason === "model_blocked" && agent !== undefined,
     openSettings: isLatest && (failure.reason === "no_key" || failure.reason === "invalid_key"),
     disabled: agent?.activity.state === "working",

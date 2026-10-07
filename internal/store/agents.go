@@ -139,7 +139,7 @@ func (s *Store) UpdateAgent(ctx context.Context, id string, u AgentUpdate) error
 }
 
 // ErrLastAdmin is returned when archiving would leave no admin agent.
-var ErrLastAdmin = errors.New("the last admin agent can't be archived")
+var ErrLastAdmin = errors.New("the last admin agent can't be archived or deleted")
 
 // ArchiveAgent marks an agent archived. Its DM is hidden from the chat list.
 func (s *Store) ArchiveAgent(ctx context.Context, id string) error {
@@ -166,6 +166,69 @@ func (s *Store) ArchiveAgent(ctx context.Context, id string) error {
 		_, err = tx.ExecContext(ctx, `UPDATE agents SET archived_at = ? WHERE id = ?`, now(), id)
 		return err
 	})
+}
+
+// DeleteAgent removes an agent and everything that's only its own: its DM (with the messages
+// and prompts in it), memories, tasks, context, events, grants, reactions and read markers.
+// Its messages in group chats stay, without an author, so the conversations still read. It
+// returns the DM's id and the sandbox the agent leaves unused (to remove), if any.
+func (s *Store) DeleteAgent(ctx context.Context, id string) (dmChatID, unusedSandbox string, err error) {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		var admin bool
+		var archived sql.NullInt64
+		var sandbox sql.NullString
+		err := tx.QueryRowContext(ctx, `SELECT is_admin, archived_at, sandbox_id FROM agents WHERE id = ?`, id).Scan(&admin, &archived, &sandbox)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if admin && !archived.Valid {
+			var admins int
+			if err := tx.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM agents WHERE is_admin = 1 AND archived_at IS NULL`).Scan(&admins); err != nil {
+				return err
+			}
+			if admins <= 1 {
+				return ErrLastAdmin
+			}
+		}
+		err = tx.QueryRowContext(ctx, `SELECT c.id FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
+			WHERE c.kind = 'dm' AND cm.agent_id = ?`, id).Scan(&dmChatID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		reader := "agent:" + id
+		for _, q := range []struct {
+			sql  string
+			args []any
+		}{
+			{`DELETE FROM chats WHERE id = ?`, []any{dmChatID}}, // cascades to its messages, reads and members
+			{`UPDATE messages SET author_agent_id = NULL WHERE author_agent_id = ?`, []any{id}},
+			{`DELETE FROM reactions WHERE reactor = ?`, []any{reader}},
+			{`DELETE FROM reads WHERE reader = ?`, []any{reader}},
+			{`DELETE FROM agents WHERE id = ?`, []any{id}}, // cascades to its memories, tasks, context, events, grants
+		} {
+			if _, err := tx.ExecContext(ctx, q.sql, q.args...); err != nil {
+				return err
+			}
+		}
+		if sandbox.Valid {
+			var users int
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM agents WHERE sandbox_id = ?`, sandbox.String).Scan(&users); err != nil {
+				return err
+			}
+			if users == 0 {
+				if _, err := tx.ExecContext(ctx, `DELETE FROM sandboxes WHERE id = ?`, sandbox.String); err != nil {
+					return err
+				}
+				unusedSandbox = sandbox.String
+			}
+		}
+		return nil
+	})
+	return dmChatID, unusedSandbox, err
 }
 
 // SandboxFor returns the agent's sandbox id, creating its own sandbox on first use.

@@ -241,14 +241,40 @@ export function agentDmIds(chats: Chat[], agentId: string): string[] {
 
 /** Removes an archived agent and its DM. Returns the removed chat ids. */
 export function removeArchivedAgent(queryClient: QueryClient, agentId: string): string[] {
-  const removed = agentDmIds(queryClient.getQueryData<Chat[]>(queryKeys.chats) ?? [], agentId)
+  return removeAgentAndDm(queryClient, agentId)
+}
+
+/**
+ * Removes a deleted agent and its DM (`chatId` from the event, plus any DM still cached).
+ * Returns the chat ids that were actually removed, so a second call (the WebSocket event after
+ * the request, or the other way round) removes and returns nothing.
+ */
+export function removeDeletedAgent(
+  queryClient: QueryClient,
+  agentId: string,
+  chatId: string | null = null,
+): string[] {
+  return removeAgentAndDm(queryClient, agentId, chatId)
+}
+
+function removeAgentAndDm(
+  queryClient: QueryClient,
+  agentId: string,
+  chatId: string | null = null,
+): string[] {
+  const cached = queryClient.getQueryData<Chat[]>(queryKeys.chats) ?? []
+  const removed = agentDmIds(cached, agentId)
+  if (chatId && !removed.includes(chatId) && cached.some((c) => c.id === chatId)) {
+    removed.push(chatId)
+  }
+  if (chatId) queryClient.removeQueries({ queryKey: queryKeys.messages(chatId) })
   queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) =>
     agents?.filter((agent) => agent.id !== agentId),
   )
   queryClient.setQueryData<Chat[]>(queryKeys.chats, (chats) =>
     chats?.filter((chat) => !removed.includes(chat.id)),
   )
-  for (const chatId of removed) queryClient.removeQueries({ queryKey: queryKeys.messages(chatId) })
+  for (const id of removed) queryClient.removeQueries({ queryKey: queryKeys.messages(id) })
   return removed
 }
 

@@ -643,3 +643,17 @@ func (s *Server) accountNames(ctx context.Context) (map[string]string, error) {
 	}
 	return names, nil
 }
+
+func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, agentID string) {
+	err := s.runtime.DeleteAgent(r.Context(), agentID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "agent not found")
+	case errors.Is(err, store.ErrLastAdmin):
+		writeError(w, http.StatusConflict, "barn needs at least one admin agent, so this one can't be deleted")
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

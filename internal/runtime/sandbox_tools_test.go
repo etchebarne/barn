@@ -13,14 +13,19 @@ import (
 )
 
 type fakeSandbox struct {
-	mu    sync.Mutex
-	calls []string
-	stdin []string
+	mu      sync.Mutex
+	calls   []string
+	stdin   []string
+	removed []string
 }
 
 func (f *fakeSandbox) Available() bool                       { return true }
 func (f *fakeSandbox) Status(context.Context, string) string { return "running" }
 func (f *fakeSandbox) Restart(context.Context, string) error { return nil }
+func (f *fakeSandbox) Remove(_ context.Context, id string) error {
+	f.removed = append(f.removed, id)
+	return nil
+}
 func (f *fakeSandbox) Exec(_ context.Context, id, command, workdir string, stdin []byte, timeout time.Duration) (sandbox.Result, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

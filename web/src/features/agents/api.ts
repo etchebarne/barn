@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 import { agentsQueryOptions } from "@/lib/agents"
 import { api, ApiError, unwrap, type Agent, type Schemas } from "@/lib/api-client"
-import { removeArchivedAgent, updateAgentInCache } from "@/lib/chat-cache"
+import { removeArchivedAgent, removeDeletedAgent, updateAgentInCache } from "@/lib/chat-cache"
+import { useLeaveRemovedChats } from "@/lib/leave-removed-chats"
 import { queryKeys } from "@/lib/query-keys"
 
+import { useAgentDetailsStore } from "./details-store"
 import type { Task } from "./schedule"
 
 export { agentsQueryOptions }
@@ -92,6 +95,27 @@ export function useArchiveAgent(agentId: string) {
     mutationFn: async () => {
       await unwrap(api.POST("/agents/{agentId}/archive", { params: { path: { agentId } } }))
       return removeArchivedAgent(queryClient, agentId)
+    },
+  })
+}
+
+/**
+ * Deletes an agent for good. The cache, toast, closing the sheet and leaving its DM happen
+ * here (not in the caller) so they still run if the sheet unmounts because the WebSocket's
+ * `agent.deleted` removed the agent first. 409: it's the last admin agent.
+ */
+export function useDeleteAgent(agent: Pick<Agent, "id" | "name">) {
+  const queryClient = useQueryClient()
+  const leaveRemovedChats = useLeaveRemovedChats()
+  return useMutation({
+    mutationFn: async () => {
+      await unwrap(api.DELETE("/agents/{agentId}", { params: { path: { agentId: agent.id } } }))
+      return removeDeletedAgent(queryClient, agent.id)
+    },
+    onSuccess: (removedChatIds) => {
+      toast.success(`Deleted ${agent.name}`)
+      useAgentDetailsStore.getState().close()
+      leaveRemovedChats(removedChatIds)
     },
   })
 }

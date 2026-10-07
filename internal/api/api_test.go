@@ -629,3 +629,22 @@ func TestSignInAPI(t *testing.T) {
 		t.Fatalf("denied redirect: %s", r.Header.Get("Location"))
 	}
 }
+
+func TestDeleteAgentAPI(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	admin, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask", IsAdmin: true})
+	helper, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "Tracker", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	if resp, _ := c.do("DELETE", "/api/agents/"+helper.ID, "", true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("DELETE", "/api/agents/"+helper.ID, "", true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("delete again: %d", resp.StatusCode)
+	}
+	if resp, body := c.do("DELETE", "/api/agents/"+admin.ID, "", true); resp.StatusCode != http.StatusConflict || !strings.Contains(body["message"].(string), "admin") {
+		t.Fatalf("last admin: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := c.do("DELETE", "/api/agents/"+admin.ID, "", false); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("without the CSRF header: %d", resp.StatusCode)
+	}
+}

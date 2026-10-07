@@ -6,6 +6,7 @@ import {
   applyActivityToAgents,
   markChatReadInCache,
   removeArchivedAgent,
+  removeDeletedAgent,
   updateAgentInCache,
   updateMessageInCache,
   upsertAgent,
@@ -23,6 +24,8 @@ const NOTHING_REMOVED: ApplyResult = { removedChatIds: [] }
 /** Applies one realtime event to the TanStack Query cache (the single source of truth). */
 export function applyWsEvent(queryClient: QueryClient, event: WsEvent): ApplyResult {
   switch (event.type) {
+    case "agent.deleted":
+      return { removedChatIds: removeDeletedAgent(queryClient, event.agentId, event.chatId) }
     case "agent.archived":
       return { removedChatIds: removeArchivedAgent(queryClient, event.agentId) }
     case "message.created":

@@ -14,7 +14,11 @@ import { useToggleReaction } from "./api"
 /** "barn", "barn and Tracker", "barn, Tracker and you". */
 export function reactorNames(reaction: Reaction, agents: Map<string, Agent>): string {
   const names = reaction.by.map((author) =>
-    author.kind === "agent" ? (agents.get(author.agentId ?? "")?.name ?? "An agent") : "you",
+    author.kind !== "agent"
+      ? "you"
+      : author.agentId === null
+        ? "a deleted agent"
+        : (agents.get(author.agentId)?.name ?? "An agent"),
   )
   if (names.length <= 1) return names[0] ?? ""
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`

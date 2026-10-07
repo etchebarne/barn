@@ -203,7 +203,13 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * @description Delete an agent for good: its DM and the messages in it, memories, tasks, conversation
+         *     history, access to connections, and its sandbox when no other agent shares it. Its
+         *     messages in group chats stay, without an author. The last admin agent can't be deleted.
+         *     Broadcasts agent.deleted.
+         */
+        delete: operations["deleteAgent"];
         options?: never;
         head?: never;
         /** @description Change an agent's settings. Broadcasts an agent.updated event. */
@@ -938,6 +944,7 @@ export interface components {
         MessageAuthor: {
             /** @enum {string} */
             kind: "user" | "agent" | "system";
+            /** @description The agent that wrote it; null on an agent message means the agent was deleted */
             agentId: string | null;
         };
         Message: {
@@ -1086,7 +1093,7 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"] | components["schemas"]["WsAgentDeleted"];
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1156,6 +1163,19 @@ export interface components {
              */
             type: "agent.archived";
             agentId: string;
+        };
+        /**
+         * @description An agent was deleted: drop it and its DM (chatId) from the app. Its messages in group
+         *     chats now have no author (show them as from a deleted agent).
+         */
+        WsAgentDeleted: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "agent.deleted";
+            agentId: string;
+            chatId: string | null;
         };
     };
     responses: {
@@ -1495,6 +1515,37 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+        };
+    };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description It's the last admin agent */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     updateAgent: {

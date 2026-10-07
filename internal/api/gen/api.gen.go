@@ -321,6 +321,21 @@ func (e WsAgentCreatedType) Valid() bool {
 	}
 }
 
+// Defines values for WsAgentDeletedType.
+const (
+	AgentDeleted WsAgentDeletedType = "agent.deleted"
+)
+
+// Valid indicates whether the value is a known member of the WsAgentDeletedType enum.
+func (e WsAgentDeletedType) Valid() bool {
+	switch e {
+	case AgentDeleted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WsAgentUpdatedType.
 const (
 	AgentUpdated WsAgentUpdatedType = "agent.updated"
@@ -671,6 +686,7 @@ type Message struct {
 
 // MessageAuthor defines model for MessageAuthor.
 type MessageAuthor struct {
+	// AgentId The agent that wrote it; null on an agent message means the agent was deleted
 	AgentId *string           `json:"agentId"`
 	Kind    MessageAuthorKind `json:"kind"`
 }
@@ -1017,6 +1033,17 @@ type WsAgentCreated struct {
 
 // WsAgentCreatedType defines model for WsAgentCreated.Type.
 type WsAgentCreatedType string
+
+// WsAgentDeleted An agent was deleted: drop it and its DM (chatId) from the app. Its messages in group
+// chats now have no author (show them as from a deleted agent).
+type WsAgentDeleted struct {
+	AgentId string             `json:"agentId"`
+	ChatId  *string            `json:"chatId"`
+	Type    WsAgentDeletedType `json:"type"`
+}
+
+// WsAgentDeletedType defines model for WsAgentDeleted.Type.
+type WsAgentDeletedType string
 
 // WsAgentUpdated An agent's settings changed
 type WsAgentUpdated struct {
@@ -1405,6 +1432,40 @@ func (t *WsEvent) MergeWsAgentArchived(v WsAgentArchived) error {
 	return err
 }
 
+// AsWsAgentDeleted returns the union data inside the WsEvent as a WsAgentDeleted
+func (t WsEvent) AsWsAgentDeleted() (WsAgentDeleted, error) {
+	var body WsAgentDeleted
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsAgentDeleted overwrites any union data inside the WsEvent as the provided WsAgentDeleted
+func (t *WsEvent) FromWsAgentDeleted(v WsAgentDeleted) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.deleted"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsAgentDeleted performs a merge with any union data inside the WsEvent, using the provided WsAgentDeleted
+func (t *WsEvent) MergeWsAgentDeleted(v WsAgentDeleted) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.deleted"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -1425,6 +1486,8 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 		return t.AsWsAgentArchived()
 	case "agent.created":
 		return t.AsWsAgentCreated()
+	case "agent.deleted":
+		return t.AsWsAgentDeleted()
 	case "agent.updated":
 		return t.AsWsAgentUpdated()
 	case "chat.created":
@@ -1455,6 +1518,9 @@ type ServerInterface interface {
 
 	// (GET /agents)
 	ListAgents(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /agents/{agentId})
+	DeleteAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
 	// (PATCH /agents/{agentId})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId string)
@@ -1588,6 +1654,32 @@ func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAgents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAgent operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAgent(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2542,6 +2634,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/messages", wrapper.SendMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/read", wrapper.MarkChatRead)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}", wrapper.DeleteAgent)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/memories", wrapper.ListMemories)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/memories/{memoryId}", wrapper.DeleteMemory)

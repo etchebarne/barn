@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
+import { UserRoundXIcon } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { CopyButton } from "@/components/copy-button"
@@ -20,6 +21,7 @@ import { Markdown } from "./markdown"
 import { MentionText } from "./mention-text"
 import { MessageReactions, ReactButton } from "./message-reactions"
 import type { PendingMessage } from "./pending-store"
+import { agentAuthorName } from "./preview"
 
 /** Per-message actions, revealed on hover or keyboard focus (always shown on touch screens). */
 function MessageActions({ side, children }: { side: "start" | "end"; children: ReactNode }) {
@@ -149,14 +151,29 @@ export function MessageRow({
     )
   }
 
-  const name = agent?.name ?? "Agent"
+  const { name, deleted } = agentAuthorName(message.author.agentId, agents)
   return (
     <Message align="start">
       <MessageAvatar className="size-8 bg-transparent">
-        {endsRun ? <AgentAvatar id={agent?.id} name={name} /> : null}
+        {endsRun ? (
+          deleted ? (
+            <span
+              aria-hidden="true"
+              className="flex size-8 items-center justify-center rounded-full border border-dashed text-muted-foreground"
+            >
+              <UserRoundXIcon className="size-4" />
+            </span>
+          ) : (
+            <AgentAvatar id={agent?.id} name={name} />
+          )
+        ) : null}
       </MessageAvatar>
       <MessageContent>
-        {showAuthorName && startsRun && <MessageHeader>{name}</MessageHeader>}
+        {(showAuthorName || deleted) && startsRun && (
+          <MessageHeader className={cn(deleted && "font-normal text-muted-foreground")}>
+            {name}
+          </MessageHeader>
+        )}
         {message.prompt ? (
           <Bubble
             variant="muted"
