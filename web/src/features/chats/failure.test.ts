@@ -2,11 +2,19 @@ import { describe, expect, it } from "vitest"
 
 import { makeAgent, makeMessage } from "@/test/fixtures"
 
-import { failureActions, messageFailure, type Failure } from "./failure"
+import { failureActions, failureTone, messageFailure, type Failure } from "./failure"
 
 const blocked: Failure = { agentId: "agent-1", reason: "model_blocked", retryable: true }
 const idle = makeAgent()
 const working = makeAgent({ activity: { state: "working", label: null } })
+
+describe("failureTone", () => {
+  it("treats a turn that reached the step limit as paused, not failed", () => {
+    expect(failureTone("too_many_steps")).toBe("neutral")
+    expect(failureTone("model_blocked")).toBe("warning")
+    expect(failureTone("provider_error")).toBe("destructive")
+  })
+})
 
 describe("failureActions", () => {
   it("offers Retry only on the latest message", () => {

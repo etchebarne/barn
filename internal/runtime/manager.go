@@ -48,6 +48,8 @@ type Manager struct {
 
 	// CompactAtTokens overrides DefaultCompactAtTokens (set before Start).
 	CompactAtTokens int
+	// MaxSteps overrides DefaultMaxSteps (set before Start).
+	MaxSteps int
 	// Sandboxes runs agents' commands; nil means no sandbox tools (set before Start).
 	Sandboxes Sandboxer
 	// Timezone is the user's time zone for schedules and prompts (set before Start).
@@ -105,6 +107,13 @@ func (m *Manager) Start(ctx context.Context) error {
 		m.runScheduler(ctx)
 	}()
 	return nil
+}
+
+func (m *Manager) maxSteps() int {
+	if m.MaxSteps > 0 {
+		return m.MaxSteps
+	}
+	return DefaultMaxSteps
 }
 
 func (m *Manager) compactAt() int {

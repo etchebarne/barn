@@ -70,6 +70,7 @@ func run() error {
 	llm := model.New(cfg.OpenCodeBaseURL, "openbot/"+strings.TrimPrefix(version, "v"), set.APIKey)
 	rt := runtime.New(st, b, llm)
 	rt.CompactAtTokens = cfg.CompactAtTokens
+	rt.MaxSteps = cfg.MaxSteps
 	rt.Timezone = set.Location
 	if cfg.Sandboxes == "docker" {
 		sbx := sandbox.New(sandbox.Options{Image: cfg.SandboxImage, SharedDir: filepath.Join(cfg.DataDir, "shared")})

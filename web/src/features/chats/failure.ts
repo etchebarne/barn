@@ -3,8 +3,12 @@ import type { Agent, Message, Schemas } from "@/lib/api-client"
 export type Failure = Schemas["MessageFailure"]
 export type FailureReason = Failure["reason"]
 
-/** Configuration problems the user fixes (warning); everything else is an error (destructive). */
-export function failureTone(reason: FailureReason): "warning" | "destructive" {
+/**
+ * A long turn that reached the step limit just paused (neutral); configuration problems the user
+ * fixes are warnings; everything else is an error (destructive).
+ */
+export function failureTone(reason: FailureReason): "neutral" | "warning" | "destructive" {
+  if (reason === "too_many_steps") return "neutral"
   return reason === "no_key" || reason === "invalid_key" || reason === "model_blocked"
     ? "warning"
     : "destructive"

@@ -21,6 +21,8 @@ type Config struct {
 
 	// CompactAtTokens is when agents' context gets compacted (0 = default).
 	CompactAtTokens int
+	// MaxSteps bounds model calls in one agent turn (0 = default).
+	MaxSteps int
 
 	// PublicURL is where external services reach openbotd (webhook URLs), e.g. a Tailscale Funnel
 	// or reverse-proxy URL. Empty: the host the browser used.
@@ -48,6 +50,11 @@ func Load() (Config, error) {
 	var err error
 	if c.SecureCookies, err = envBool("OPENBOT_SECURE_COOKIES", false); err != nil {
 		return c, err
+	}
+	if v := getenv("OPENBOT_MAX_STEPS"); v != "" {
+		if c.MaxSteps, err = strconv.Atoi(v); err != nil || c.MaxSteps < 5 {
+			return c, fmt.Errorf("OPENBOT_MAX_STEPS must be a number ≥ 5")
+		}
 	}
 	if v := getenv("OPENBOT_COMPACT_AT_TOKENS"); v != "" {
 		if c.CompactAtTokens, err = strconv.Atoi(v); err != nil || c.CompactAtTokens < 1000 {

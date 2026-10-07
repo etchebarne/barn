@@ -686,3 +686,40 @@ func TestIsEmoji(t *testing.T) {
 		}
 	}
 }
+
+func TestStepLimitPausesWithAnUpdate(t *testing.T) {
+	var f fixture
+	f = setup(t)
+	f.rt.MaxSteps = 5
+	var calls int
+	f.llm.handler = func(req model.Request) model.Message {
+		calls++
+		last := req.Messages[len(req.Messages)-1].Text()
+		if strings.Contains(last, "the most one turn allows") {
+			// Asked to wrap up: a progress note, plus a command that mustn't run.
+			m := sendCall(f.chatID, "Done: setup. Left: auth.")
+			m.ToolCalls = append(m.ToolCalls, toolCall(toolListAgents, map[string]string{}).ToolCalls...)
+			m.ToolCalls[1].ID = "extra"
+			return m
+		}
+		return toolCall(toolListAgents, map[string]string{})
+	}
+	f.userSays(t, "do a long job")
+	msgs := f.waitForMessages(t, 3)
+	f.waitIdle(t)
+	if calls != 6 {
+		t.Fatalf("expected 5 steps and a wrap-up call, got %d", calls)
+	}
+	if msgs[1].Body != "Done: setup. Left: auth." {
+		t.Fatalf("progress update: %+v", msgs[1])
+	}
+	if msgs[2].Failure == nil || msgs[2].Failure.Reason != "too_many_steps" || !msgs[2].Failure.Retryable ||
+		!strings.Contains(msgs[2].Body, "paused after 5 steps") {
+		t.Fatalf("pause notice: %+v", msgs[2])
+	}
+	entries, _ := f.store.Context(context.Background(), f.agent.ID)
+	last := string(entries[len(entries)-1].Entry)
+	if !strings.Contains(last, "not run: this turn reached its step limit") {
+		t.Fatalf("the extra call should be answered as not run: %s", last)
+	}
+}

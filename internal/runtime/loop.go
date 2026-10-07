@@ -13,8 +13,14 @@ import (
 	"github.com/etchebarne/openbot/internal/view"
 )
 
-// maxSteps bounds model calls in a single turn.
-const maxSteps = 40
+// DefaultMaxSteps bounds model calls in a single turn. Work on an agent's computer easily takes
+// dozens of commands, so it's generous; it's there to stop a runaway turn.
+const DefaultMaxSteps = 200
+
+// wrapUpText asks for a progress update when a turn reaches the step limit.
+const wrapUpText = "[system] You've taken %d steps in this turn, the most one turn allows, so it pauses here. " +
+	"Don't start anything new: send the user a short progress update (what's done, what's left, what " +
+	"you'd do next). They can tell you to continue."
 
 var errTooManySteps = errors.New("too many steps in one turn")
 
@@ -118,7 +124,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 	}
 
 	spoke, nudged := false, false
-	for range maxSteps {
+	for range l.m.maxSteps() {
 		l.maybeCompact(ctx, agent)
 		req, err := l.request(ctx, agent)
 		if err != nil {
@@ -200,7 +206,38 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 		}
 		l.m.setActivity(agent.ID, view.Working("thinking"))
 	}
+	l.wrapUp(ctx, agent)
 	l.reportError(ctx, agent, errTooManySteps)
+}
+
+// wrapUp gives an agent that reached the step limit one more call to tell the user where it
+// stands. Only messages run; any other tool call is answered as not run.
+func (l *loop) wrapUp(ctx context.Context, agent store.Agent) {
+	l.aside = []model.Message{model.Text("user", fmt.Sprintf(wrapUpText, l.m.maxSteps()))}
+	req, err := l.request(ctx, agent)
+	l.aside = nil
+	if err != nil {
+		return
+	}
+	resp, err := l.m.llm.Chat(ctx, req)
+	if err != nil {
+		return
+	}
+	reply := resp.Message
+	reply.Role = "assistant"
+	if err := l.appendEntries(ctx, reply); err != nil {
+		return
+	}
+	for _, call := range reply.ToolCalls {
+		result := toolError("not run: this turn reached its step limit")
+		if call.Function.Name == toolSendMessage {
+			call.Function.Arguments = l.fixProse(ctx, agent, call)
+			result, _ = l.runTool(ctx, agent, call)
+		}
+		if err := l.appendEntries(ctx, model.Message{Role: "tool", Content: &result, ToolCallID: call.ID}); err != nil {
+			return
+		}
+	}
 }
 
 // consume renders events into the context and marks them consumed. It returns how many context
@@ -288,7 +325,7 @@ func (l *loop) reportError(ctx context.Context, agent store.Agent, err error) {
 		logger(agent.ID).Error("find DM for error report", "err", dmErr)
 		return
 	}
-	reason, text := describeFailure(agent, err)
+	reason, text := describeFailure(agent, err, l.m.maxSteps())
 	msg, err := l.m.store.InsertFailure(ctx, chatID, text, store.Failure{
 		AgentID: agent.ID, Reason: reason, Retryable: true,
 	})
@@ -299,7 +336,7 @@ func (l *loop) reportError(ctx context.Context, agent store.Agent, err error) {
 	l.m.bus.Publish(view.MessageCreated(view.Message(msg)))
 }
 
-func describeFailure(agent store.Agent, err error) (reason, text string) {
+func describeFailure(agent store.Agent, err error, maxSteps int) (reason, text string) {
 	switch {
 	case errors.Is(err, model.ErrNoKey):
 		return "no_key", "No model provider is configured. Add your OpenCode Go API key in Settings, then retry."
@@ -310,7 +347,7 @@ func describeFailure(agent store.Agent, err error) (reason, text string) {
 			"which your OpenCode workspace's Privacy settings don't allow. Pick another model for %s, "+
 			"or allow these models in your OpenCode Privacy settings and retry.", agent.Name, agent.Model, agent.Name)
 	case errors.Is(err, errTooManySteps):
-		return "too_many_steps", fmt.Sprintf("%s stopped after %d steps without finishing.", agent.Name, maxSteps)
+		return "too_many_steps", fmt.Sprintf("%s paused after %d steps. Continue to let it keep going.", agent.Name, maxSteps)
 	default:
 		return "provider_error", fmt.Sprintf("%s couldn't finish responding: %v", agent.Name, err)
 	}
