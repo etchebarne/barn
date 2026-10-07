@@ -19,7 +19,7 @@ import (
 )
 
 // Registry is every connector type barn supports.
-var Registry = []Type{Webhook{}, GitHub{}, Linear{}, Slack{}, Render{}, MCP{}}
+var Registry = []Type{Webhook{}, GitHub{}, Linear{}, Slack{}, Render{}, MCP{}, MCPLocal{}}
 
 // TypeByName finds a connector type in the Registry.
 func TypeByName(name string) (Type, bool) { return typeByName(name) }
@@ -137,7 +137,11 @@ func (m *Manager) Save(ctx context.Context, id, typeName, name string, creds, co
 			return store.ConnectorAccount{}, userErr("%s is required", f.Label)
 		}
 	}
-	vctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	timeout := 20 * time.Second
+	if v, ok := t.(interface{ VerifyTimeout() time.Duration }); ok {
+		timeout = v.VerifyTimeout()
+	}
+	vctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := t.Verify(vctx, Account{ID: id, Type: typeName, Name: name, Credentials: creds, Config: config}); err != nil {
 		return store.ConnectorAccount{}, err
@@ -158,12 +162,14 @@ func (m *Manager) Save(ctx context.Context, id, typeName, name string, creds, co
 		return sa, err
 	}
 	m.restartListener(sa.ID)
+	CloseLocal(sa.ID)
 	return sa, nil
 }
 
 // Delete removes an account and stops its listener.
 func (m *Manager) Delete(ctx context.Context, id string) error {
 	m.stopListener(id)
+	CloseLocal(id)
 	return m.store.DeleteAccount(ctx, id)
 }
 

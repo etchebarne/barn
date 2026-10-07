@@ -6,7 +6,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       bash ca-certificates curl wget git openssh-client \
       python3 python3-pip python3-venv nodejs npm \
       build-essential jq ripgrep less nano procps unzip zip file tree \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --break-system-packages uv
 
 ENV HOME=/home/agent
 WORKDIR /home/agent

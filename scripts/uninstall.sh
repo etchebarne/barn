@@ -56,6 +56,32 @@ confirm() {
   case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
 
+# Sandbox containers (agents' and the one for local MCP servers) restart with Docker, so they
+# always go. Their home volumes are data: they're kept unless purging, and a reinstall reuses them.
+remove_sandboxes() {
+  local purge=$1 ids volumes images
+  command -v docker >/dev/null 2>&1 || return 0
+  ids=$(as_root docker ps -aq --filter label=barn.sandbox 2>/dev/null) || return 0
+  if [ -n "$ids" ]; then
+    # shellcheck disable=SC2086 # one id per word
+    as_root docker rm -f $ids >/dev/null
+    ok "Removed barn's sandbox containers"
+  fi
+  if $purge; then
+    volumes=$(as_root docker volume ls -q --filter name=barn-sbx- 2>/dev/null) || true
+    if [ -n "$volumes" ]; then
+      # shellcheck disable=SC2086
+      as_root docker volume rm -f $volumes >/dev/null
+    fi
+    images=$(as_root docker image ls -q barn-sandbox 2>/dev/null | sort -u) || true
+    if [ -n "$images" ]; then
+      # shellcheck disable=SC2086
+      as_root docker rmi -f $images >/dev/null 2>&1 || true
+    fi
+    ok "Deleted sandbox files and images"
+  fi
+}
+
 main() {
   local purge=false yes=false
   while [ $# -gt 0 ]; do
@@ -73,7 +99,7 @@ main() {
 
   if $purge && ! $yes; then
     printf '%sThis permanently deletes all barn data in %s:%s\n' "$red" "$DATA_DIR" "$reset"
-    printf 'your account, agents, chats, memories, and stored credentials.\n'
+    printf 'your account, agents, chats, memories, sandbox files, and stored credentials.\n'
     confirm "Delete everything?" || die "aborted; nothing was removed"
   fi
 
@@ -84,6 +110,8 @@ main() {
     as_root systemctl daemon-reload
     as_root systemctl reset-failed barn 2>/dev/null || true
   fi
+
+  remove_sandboxes "$purge"
 
   as_root rm -f "$BIN"
   as_root rm -rf "$CONF_DIR"

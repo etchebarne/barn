@@ -184,8 +184,19 @@ Messages in a group are visible to every participant; DMs are visible only to th
 - **Types** (`internal/connectors`): Webhook (any JSON POST, secret token in the URL), GitHub
   (REST + `X-Hub-Signature-256` webhooks), Linear (GraphQL + `Linear-Signature` webhooks), Slack
   (Web API + Socket Mode, so no public URL is needed), Render (REST + Standard Webhooks
-  signatures with a replay window), and MCP servers over Streamable HTTP (JSON or SSE responses;
-  tools the server marks read-only aren't gated).
+  signatures with a replay window), MCP servers over Streamable HTTP (JSON or SSE responses), and
+  local MCP servers over stdio (`npx …`, `uvx …`). For both MCP kinds, tools the server marks
+  read-only aren't gated.
+- **Local MCP servers** run in a container of their own (`barn-sbx-mcp`, always the default
+  image with Node.js, Python and uv), never in an agent's sandbox: an agent could read the
+  server's environment there, and that's where its secrets are. Secrets are entered as
+  `KEY=value` pairs and handed to `docker exec -e KEY` through the client's environment, so they
+  don't appear in the host's process list. Servers start on first use, are shared by the
+  agents granted the account, answer the server's `ping` requests, stop after 10 idle minutes
+  or when the account is edited or removed (the whole process tree inside the container), and
+  report the end of their stderr when they crash. Tool lists are cached for an hour so an idle
+  server can stay stopped between turns. Verifying allows 2 minutes for the first download, and
+  barnd builds the image in the background at startup.
 - **Accounts** are added in Settings → Connectors, or proposed by an agent with `connect_app`:
   the agent fills in the type, name, non-secret config (e.g. an MCP server URL) and who gets
   access, and a connect card appears in its DM. The user types any secrets on the card

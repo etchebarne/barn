@@ -7,6 +7,7 @@ import {
   PlugIcon,
   ServerIcon,
   SquareKanbanIcon,
+  SquareTerminalIcon,
   WebhookIcon,
 } from "lucide-react"
 
@@ -16,6 +17,7 @@ const ICONS: Record<string, LucideIcon> = {
   linear: SquareKanbanIcon,
   render: ServerIcon,
   mcp: BlocksIcon,
+  mcp_local: SquareTerminalIcon,
   webhook: WebhookIcon,
 }
 

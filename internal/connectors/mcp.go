@@ -66,16 +66,93 @@ func (MCP) connect(ctx context.Context, acct Account) (*mcpSession, error) {
 		return nil, userErr("the server URL must start with https:// or http://")
 	}
 	s := &mcpSession{url: u, auth: acct.Credentials["authorization"]}
+	if err := mcpInitialize(ctx, s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// mcpConn is one MCP transport: Streamable HTTP (mcpSession) or stdio (stdioConn).
+type mcpConn interface {
+	rpc(ctx context.Context, method string, params any, out any) error
+	notify(ctx context.Context, method string) error
+}
+
+func mcpInitialize(ctx context.Context, c mcpConn) error {
 	var init map[string]any
-	if err := s.rpc(ctx, "initialize", map[string]any{
+	if err := c.rpc(ctx, "initialize", map[string]any{
 		"protocolVersion": mcpProtocol,
 		"capabilities":    map[string]any{},
 		"clientInfo":      map[string]string{"name": "barn", "version": "1"},
 	}, &init); err != nil {
+		return err
+	}
+	_ = c.notify(ctx, "notifications/initialized")
+	return nil
+}
+
+func mcpListTools(ctx context.Context, c mcpConn) ([]Tool, error) {
+	var out struct {
+		Tools []mcpTool `json:"tools"`
+	}
+	if err := c.rpc(ctx, "tools/list", map[string]any{}, &out); err != nil {
 		return nil, err
 	}
-	_ = s.notify(ctx, "notifications/initialized")
-	return s, nil
+	tools := make([]Tool, 0, len(out.Tools))
+	for _, t := range out.Tools {
+		schema := t.InputSchema
+		if len(schema) == 0 {
+			schema = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		tools = append(tools, Tool{Name: t.Name, Description: truncateStr(t.Description, 1000), Parameters: schema, External: !t.Annotations.ReadOnlyHint})
+	}
+	return tools, nil
+}
+
+func mcpCallTool(ctx context.Context, c mcpConn, tool string, args json.RawMessage) (any, error) {
+	if len(args) == 0 {
+		args = json.RawMessage(`{}`)
+	}
+	var out struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if err := c.rpc(ctx, "tools/call", map[string]any{"name": tool, "arguments": args}, &out); err != nil {
+		return nil, err
+	}
+	var text []string
+	for _, c := range out.Content {
+		if c.Type == "text" {
+			text = append(text, c.Text)
+		} else {
+			text = append(text, "["+c.Type+" content]")
+		}
+	}
+	joined := truncateStr(strings.Join(text, "\n"), 32000)
+	if out.IsError {
+		return nil, userErr("%s", joined)
+	}
+	return map[string]string{"content": joined}, nil
+}
+
+// mcpResponse decodes a JSON-RPC response for request id.
+func mcpResponse(method string, raw []byte, out any) error {
+	var msg struct {
+		Result json.RawMessage `json:"result"`
+		Error  *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return fmt.Errorf("MCP %s: %w", method, err)
+	}
+	if msg.Error != nil {
+		return userErr("MCP %s: %s", method, msg.Error.Message)
+	}
+	return json.Unmarshal(msg.Result, out)
 }
 
 func (s *mcpSession) post(ctx context.Context, msg map[string]any) (*http.Response, error) {
@@ -192,21 +269,7 @@ func (m MCP) listTools(ctx context.Context, acct Account) ([]Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out struct {
-		Tools []mcpTool `json:"tools"`
-	}
-	if err := s.rpc(ctx, "tools/list", map[string]any{}, &out); err != nil {
-		return nil, err
-	}
-	tools := make([]Tool, 0, len(out.Tools))
-	for _, t := range out.Tools {
-		schema := t.InputSchema
-		if len(schema) == 0 {
-			schema = json.RawMessage(`{"type":"object","properties":{}}`)
-		}
-		tools = append(tools, Tool{Name: t.Name, Description: truncateStr(t.Description, 1000), Parameters: schema, External: !t.Annotations.ReadOnlyHint})
-	}
-	return tools, nil
+	return mcpListTools(ctx, s)
 }
 
 func (m MCP) Call(ctx context.Context, acct Account, tool string, args json.RawMessage) (any, error) {
@@ -214,32 +277,7 @@ func (m MCP) Call(ctx context.Context, acct Account, tool string, args json.RawM
 	if err != nil {
 		return nil, err
 	}
-	if len(args) == 0 {
-		args = json.RawMessage(`{}`)
-	}
-	var out struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-		IsError bool `json:"isError"`
-	}
-	if err := s.rpc(ctx, "tools/call", map[string]any{"name": tool, "arguments": args}, &out); err != nil {
-		return nil, err
-	}
-	var text []string
-	for _, c := range out.Content {
-		if c.Type == "text" {
-			text = append(text, c.Text)
-		} else {
-			text = append(text, "["+c.Type+" content]")
-		}
-	}
-	joined := truncateStr(strings.Join(text, "\n"), 32000)
-	if out.IsError {
-		return nil, userErr("%s", joined)
-	}
-	return map[string]string{"content": joined}, nil
+	return mcpCallTool(ctx, s, tool, args)
 }
 
 func (m MCP) Verify(ctx context.Context, acct Account) error {

@@ -22,8 +22,9 @@ export function fieldId(field: Pick<FormField, "group" | "key">): string {
 }
 
 /**
- * The form for a connector type: credentials first, then config. When editing, credentials
- * with a saved value aren't required (leaving them empty keeps the saved one).
+ * The form for a connector type: required config (what to connect to, like a server URL or
+ * command), then credentials, then optional config. When editing, credentials with a saved
+ * value aren't required (leaving them empty keeps the saved one).
  */
 export function buildFormFields(type: ConnectorType, connector?: Connector): FormField[] {
   const saved = new Set(connector?.credentialsSet ?? [])
@@ -42,7 +43,7 @@ export function buildFormFields(type: ConnectorType, connector?: Connector): For
     // Config fields that already have a value are pre-filled, so the rule is the same.
     required: !field.optional,
   }))
-  return [...credentials, ...config]
+  return [...config.filter((f) => f.required), ...credentials, ...config.filter((f) => !f.required)]
 }
 
 /** Starting values: empty credentials (never returned), current config when editing. */

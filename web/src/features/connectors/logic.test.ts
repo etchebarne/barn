@@ -48,13 +48,21 @@ const saved: Connector = {
 
 describe("form generation", () => {
   it("makes secret fields password inputs and marks optional ones not required", () => {
-    const fields = buildFormFields(slack)
+    // What to connect to first, then secrets, then optional settings.
+    const fields = buildFormFields({
+      ...slack,
+      configFields: [
+        ...slack.configFields,
+        { key: "region", label: "Region", secret: false, optional: true },
+      ],
+    })
     expect(fields.map((f) => [fieldId(f), f.input, f.required])).toEqual([
+      ["config.team", "text", true],
       ["credentials.botToken", "secret", true],
       ["credentials.appToken", "secret", false],
-      ["config.team", "text", true],
+      ["config.region", "text", false],
     ])
-    expect(fields[0]?.help).toBe("Starts with xoxb-")
+    expect(fields[1]?.help).toBe("Starts with xoxb-")
   })
 
   it("doesn't require saved credentials when editing, and pre-fills config", () => {

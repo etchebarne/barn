@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"bufio"
 	"context"
 	"os"
 	"path/filepath"
@@ -70,5 +71,45 @@ func TestSandbox(t *testing.T) {
 	res, _ = m.Exec(ctx, id, "seq 1 20000", "", nil, 10*time.Second)
 	if res.Dropped == 0 || !strings.HasPrefix(res.Output, "1\n") || !strings.HasSuffix(strings.TrimSpace(res.Output), "20000") {
 		t.Fatalf("expected clipped output with head and tail, dropped=%d", res.Dropped)
+	}
+
+	// Long-running processes talk over stdin/stdout and see their env; secrets stay out of the
+	// docker command line.
+	proc, err := m.Start(ctx, id, `echo starting >&2; while read -r l; do echo "$SECRET:$l"; done`, map[string]string{"SECRET": "s3cret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(proc.cmd.Args, " "), "s3cret") {
+		t.Fatal("the secret must not be in the docker arguments")
+	}
+	proc.Write([]byte("hi\n"))
+	line, err := bufio.NewReader(proc).ReadString('\n')
+	if err != nil || line != "s3cret:hi\n" {
+		t.Fatalf("line = %q %v", line, err)
+	}
+	for i := 0; i < 40 && !strings.Contains(proc.Stderr(), "starting"); i++ {
+		time.Sleep(50 * time.Millisecond) // stderr is copied separately
+	}
+	if !strings.Contains(proc.Stderr(), "starting") {
+		t.Fatalf("stderr = %q", proc.Stderr())
+	}
+	proc.Close()
+	<-proc.Done()
+
+	// A process that ignores stdin is killed with its children on Close.
+	proc, err = m.Start(ctx, id, `sh -c 'sleep 300' & sleep 301; wait`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	proc.Close()
+	select {
+	case <-proc.Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("the process should have exited")
+	}
+	sleeping := `for p in /proc/[0-9]*; do tr '\0' ' ' < $p/cmdline 2>/dev/null; echo; done | grep -c '^sleep 30[01]' || true`
+	if res, _ := m.Exec(ctx, id, sleeping, "", nil, 10*time.Second); strings.TrimSpace(res.Output) != "0" {
+		t.Fatalf("the process tree should be gone, found %q", res.Output)
 	}
 }

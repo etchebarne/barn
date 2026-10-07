@@ -22,7 +22,7 @@ var dockerfile []byte
 
 // DefaultImage is built from the embedded Dockerfile when it's missing. Bump the tag when the
 // Dockerfile changes.
-const DefaultImage = "barn-sandbox:1"
+const DefaultImage = "barn-sandbox:2"
 
 // ErrUnavailable means Docker isn't usable on this server.
 var ErrUnavailable = errors.New("sandboxes aren't available on this server (Docker isn't installed or barn can't use it)")
@@ -105,6 +105,14 @@ func (m *Manager) ensureImage(ctx context.Context) error {
 	}
 	m.imageOK = true
 	return nil
+}
+
+// Prepare builds or pulls the image ahead of the first use, so that use isn't slowed down by it.
+func (m *Manager) Prepare(ctx context.Context) error {
+	if !m.Available() {
+		return ErrUnavailable
+	}
+	return m.ensureImage(ctx)
 }
 
 func (m *Manager) lockFor(sandboxID string) *sync.Mutex {

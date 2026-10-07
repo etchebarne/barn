@@ -85,6 +85,21 @@ func run() error {
 	rt.Push = func(ctx context.Context, title, body, chatID string) {
 		notifier.Send(ctx, push.Notification{Title: title, Body: push.Preview(body), ChatID: chatID, Tag: chatID})
 	}
+	if cfg.Sandboxes == "docker" {
+		// Local MCP servers run in a container of their own (always the default image, which has
+		// Node.js, Python and uv), apart from agents' sandboxes and the secrets agents could read.
+		mcpBox := sandbox.New(sandbox.Options{SharedDir: filepath.Join(cfg.DataDir, "shared")})
+		if mcpBox.Available() {
+			go func() {
+				if err := mcpBox.Prepare(ctx); err != nil {
+					slog.Warn("preparing the sandbox image", "err", err)
+				}
+			}()
+			connectors.SetLocalRunner(func(ctx context.Context, command string, env map[string]string) (connectors.LocalProcess, error) {
+				return mcpBox.Start(ctx, "mcp", command, env)
+			})
+		}
+	}
 	conns := connectors.NewManager(st, box)
 	conns.OnSignal = rt.DeliverSignal
 	rt.Connectors = conns
