@@ -27,6 +27,12 @@ type Tool struct {
 	// External tools act on the user's behalf (post, create, deploy) and need approval unless
 	// the agent is trusted.
 	External bool
+	// How the approval card shows a call. All optional: Title defaults to the humanized name,
+	// Verb (the approve button) to "Approve", and arguments are labelled by their names.
+	Title  string
+	Verb   string
+	Body   string            // the argument that is the main content, e.g. a message's text
+	Labels map[string]string // argument labels, e.g. {"thread_ts": "Thread"}
 }
 
 // SignalType is a kind of event a connector emits, with the fields signal tasks can match on.

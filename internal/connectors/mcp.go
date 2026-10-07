@@ -37,11 +37,32 @@ const mcpProtocol = "2025-06-18"
 
 type mcpTool struct {
 	Name        string          `json:"name"`
+	Title       string          `json:"title"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema"`
 	Annotations struct {
-		ReadOnlyHint bool `json:"readOnlyHint"`
+		Title        string `json:"title"`
+		ReadOnlyHint bool   `json:"readOnlyHint"`
 	} `json:"annotations"`
+}
+
+// schemaLabels reads argument titles from a JSON schema's properties.
+func schemaLabels(schema json.RawMessage) map[string]string {
+	var s struct {
+		Properties map[string]struct {
+			Title string `json:"title"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal(schema, &s) != nil {
+		return nil
+	}
+	labels := map[string]string{}
+	for k, p := range s.Properties {
+		if p.Title != "" {
+			labels[k] = p.Title
+		}
+	}
+	return labels
 }
 
 var mcpCache = struct {
@@ -104,7 +125,12 @@ func mcpListTools(ctx context.Context, c mcpConn) ([]Tool, error) {
 		if len(schema) == 0 {
 			schema = json.RawMessage(`{"type":"object","properties":{}}`)
 		}
-		tools = append(tools, Tool{Name: t.Name, Description: truncateStr(t.Description, 1000), Parameters: schema, External: !t.Annotations.ReadOnlyHint})
+		title := t.Title
+		if title == "" {
+			title = t.Annotations.Title
+		}
+		tools = append(tools, Tool{Name: t.Name, Description: truncateStr(t.Description, 1000), Parameters: schema,
+			External: !t.Annotations.ReadOnlyHint, Title: title, Labels: schemaLabels(schema)})
 	}
 	return tools, nil
 }

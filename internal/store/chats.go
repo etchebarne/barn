@@ -63,6 +63,26 @@ type Prompt struct {
 	Action *PendingAction `json:"action,omitempty"`
 	// Connection is the app a connect prompt proposes.
 	Connection *PendingConnection `json:"connection,omitempty"`
+	// Preview describes the action an approval prompt is about, for the card.
+	Preview *ActionPreview `json:"preview,omitempty"`
+}
+
+// ActionPreview is what an approval card shows: the app, what the action is, its arguments
+// and the label for the approve button.
+type ActionPreview struct {
+	AppType string         `json:"appType,omitempty"` // connector type; empty for barn's own actions
+	AppName string         `json:"appName,omitempty"`
+	Title   string         `json:"title"`
+	Verb    string         `json:"verb"`
+	Note    string         `json:"note,omitempty"`
+	Fields  []PreviewField `json:"fields"`
+	Body    *PreviewField  `json:"body,omitempty"` // the main content, shown large
+}
+
+type PreviewField struct {
+	Key   string          `json:"key"`
+	Label string          `json:"label"`
+	Value json.RawMessage `json:"value"`
 }
 
 // PendingConnection is a connection an agent proposed (kind "connect"). It holds no secrets: the

@@ -378,6 +378,30 @@ func (e WsMessageUpdatedType) Valid() bool {
 	}
 }
 
+// ActionPreview defines model for ActionPreview.
+type ActionPreview struct {
+	// AppName The connection's name
+	AppName *string `json:"appName"`
+
+	// AppType Connector type (see /connectors/types); null for barn's own actions
+	AppType *string `json:"appType"`
+
+	// Body The main content (e.g. a message's text), shown large
+	Body *PreviewField `json:"body"`
+
+	// Fields The action's arguments, in the order the agent gave them
+	Fields []PreviewField `json:"fields"`
+
+	// Note A line about consequences
+	Note *string `json:"note"`
+
+	// Title What the action is, e.g. "Slack message"
+	Title string `json:"title"`
+
+	// Verb Label for the approve button, e.g. "Send message"
+	Verb string `json:"verb"`
+}
+
 // Agent defines model for Agent.
 type Agent struct {
 	Activity  AgentActivity `json:"activity"`
@@ -640,6 +664,15 @@ type OnboardingState struct {
 	StarterAgentCreated bool `json:"starterAgentCreated"`
 }
 
+// PreviewField defines model for PreviewField.
+type PreviewField struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+
+	// Value Any JSON value (string, number, boolean, array or object)
+	Value interface{} `json:"value"`
+}
+
 // Prompt defines model for Prompt.
 type Prompt struct {
 	// AllowOther Offer "type your own" in addition to the options
@@ -653,8 +686,11 @@ type Prompt struct {
 	// agent wants to do something that needs the user's OK (options: Approve, Decline);
 	// connect = the agent proposes connecting an app (see connection; options: Connect,
 	// Decline; connect with POST /messages/{messageId}/connect)
-	Kind     PromptKind     `json:"kind"`
-	Options  []PromptOption `json:"options"`
+	Kind    PromptKind     `json:"kind"`
+	Options []PromptOption `json:"options"`
+
+	// Preview What an approval prompt would do, for the card (approval prompts only)
+	Preview  *ActionPreview `json:"preview,omitempty"`
 	Question string         `json:"question"`
 	Status   PromptStatus   `json:"status"`
 }

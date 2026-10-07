@@ -3,6 +3,7 @@ import {
   BlocksIcon,
   GitPullRequestIcon,
   HashIcon,
+  HouseIcon,
   type LucideIcon,
   PlugIcon,
   ServerIcon,
@@ -19,6 +20,8 @@ const ICONS: Record<string, LucideIcon> = {
   mcp: BlocksIcon,
   mcp_local: SquareTerminalIcon,
   webhook: WebhookIcon,
+  // barn's own actions (e.g. archiving an agent).
+  barn: HouseIcon,
 }
 
 /** The one icon per connector type, used everywhere (list, picker, detail, agent sheet). */

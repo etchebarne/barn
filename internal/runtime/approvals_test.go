@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -148,4 +149,38 @@ func TestUpdateAgentTool(t *testing.T) {
 	}
 	f.userSays(t, "rename someone else")
 	f.waitIdle(t)
+}
+
+func TestPreviewFields(t *testing.T) {
+	args := json.RawMessage(`{"channel":"#bot-ception","text":"hi\nthere","thread_ts":"","entities":[{"name":"Martin"}],"dryRun":false}`)
+	fields, body := previewFields(args, map[string]string{"channel": "To"}, "text")
+	var got []string
+	for _, f := range fields {
+		got = append(got, f.Label+"="+string(f.Value))
+	}
+	want := []string{`To="#bot-ception"`, `Entities=[{"name":"Martin"}]`, `Dry run=false`}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("fields = %v", got)
+	}
+	if body == nil || body.Label != "Text" || string(body.Value) != `"hi\nthere"` {
+		t.Fatalf("body = %+v", body)
+	}
+	for in, out := range map[string]string{"create_entities": "Create entities", "threadTs": "Thread ts", "x": "X", "search-docs.v2": "Search docs v2"} {
+		if h := humanize(in); h != out {
+			t.Errorf("humanize(%q) = %q, want %q", in, h, out)
+		}
+	}
+}
+
+func TestGuessBody(t *testing.T) {
+	for args, want := range map[string]string{
+		`{"channel":"#a","text":"hi"}`:       "text",
+		`{"title":"x","description":"long"}`: "description",
+		`{"text":{"rich":true}}`:             "",
+		`{"q":"deploys"}`:                    "",
+	} {
+		if got := guessBody(json.RawMessage(args)); got != want {
+			t.Errorf("guessBody(%s) = %q, want %q", args, got, want)
+		}
+	}
 }

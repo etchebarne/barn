@@ -1177,6 +1177,40 @@ components:
           allOf: [{ $ref: "#/components/schemas/PromptConnection" }]
           nullable: true
           description: The proposed connection (connect prompts only)
+        preview:
+          allOf: [{ $ref: "#/components/schemas/ActionPreview" }]
+          nullable: true
+          description: What an approval prompt would do, for the card (approval prompts only)
+
+    ActionPreview:
+      type: object
+      required: [appType, appName, title, verb, note, fields, body]
+      properties:
+        appType:
+          type: string
+          nullable: true
+          description: Connector type (see /connectors/types); null for barn's own actions
+        appName: { type: string, nullable: true, description: The connection's name }
+        title: { type: string, description: 'What the action is, e.g. "Slack message"' }
+        verb: { type: string, description: 'Label for the approve button, e.g. "Send message"' }
+        note: { type: string, nullable: true, description: A line about consequences }
+        fields:
+          type: array
+          description: The action's arguments, in the order the agent gave them
+          items: { $ref: "#/components/schemas/PreviewField" }
+        body:
+          allOf: [{ $ref: "#/components/schemas/PreviewField" }]
+          nullable: true
+          description: The main content (e.g. a message's text), shown large
+
+    PreviewField:
+      type: object
+      required: [key, label, value]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        value:
+          description: Any JSON value (string, number, boolean, array or object)
 
     PromptConnection:
       type: object

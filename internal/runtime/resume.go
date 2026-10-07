@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/etchebarne/barn/internal/model"
 )
@@ -65,14 +66,18 @@ func turnState(msgs []model.Message) (interrupted bool, missingResults []string)
 	case "tool":
 		// Collect the results that follow the assistant message that made the calls.
 		answered := map[string]bool{}
+		asked := false
 		i := len(msgs) - 1
 		for ; i >= 0 && msgs[i].Role == "tool"; i-- {
 			answered[msgs[i].ToolCallID] = true
+			// Waiting for an approval or a connect card also ends the turn (see loop.go).
+			if strings.Contains(msgs[i].Text(), `"status":"waiting_for_`) {
+				asked = true
+			}
 		}
 		if i < 0 || msgs[i].Role != "assistant" {
 			return true, nil
 		}
-		asked := false
 		for _, tc := range msgs[i].ToolCalls {
 			if !answered[tc.ID] {
 				missingResults = append(missingResults, tc.ID)

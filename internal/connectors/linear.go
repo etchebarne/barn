@@ -41,10 +41,13 @@ func (Linear) Tools(context.Context, Account) ([]Tool, error) {
 			Parameters: params(map[string]string{"id": "identifier like ENG-123"})},
 		{Name: "list_teams", Description: "List teams and their workflow states.", Parameters: params(map[string]string{})},
 		{Name: "create_issue", Description: "Create an issue.", External: true,
+			Title: "New issue", Verb: "Create issue", Body: "description",
 			Parameters: params(map[string]string{"team": "team key, e.g. ENG", "title": "title", "?description": "Markdown description"})},
 		{Name: "update_issue", Description: "Move an issue to another state and/or change its title.", External: true,
+			Verb: "Update issue", Labels: map[string]string{"id": "Issue", "state": "Move to", "title": "New title"},
 			Parameters: params(map[string]string{"id": "identifier like ENG-123", "?state": "state name, e.g. Done", "?title": "new title"})},
 		{Name: "comment", Description: "Comment on an issue.", External: true,
+			Title: "Comment", Verb: "Post comment", Body: "body", Labels: map[string]string{"id": "Issue"},
 			Parameters: params(map[string]string{"id": "identifier like ENG-123", "body": "Markdown comment"})},
 	}, nil
 }

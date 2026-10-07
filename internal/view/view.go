@@ -91,7 +91,29 @@ func prompt(p *store.Prompt) *gen.Prompt {
 		}
 		out.Connection = &pc
 	}
+	if pv := p.Preview; pv != nil {
+		ap := gen.ActionPreview{Title: pv.Title, Verb: pv.Verb, Fields: make([]gen.PreviewField, 0, len(pv.Fields))}
+		if pv.AppType != "" {
+			ap.AppType, ap.AppName = &pv.AppType, &pv.AppName
+		}
+		if pv.Note != "" {
+			ap.Note = &pv.Note
+		}
+		for _, f := range pv.Fields {
+			ap.Fields = append(ap.Fields, previewField(f))
+		}
+		if pv.Body != nil {
+			b := previewField(*pv.Body)
+			ap.Body = &b
+		}
+		out.Preview = &ap
+	}
 	return out
+}
+
+// previewField passes an argument's JSON value through as-is.
+func previewField(f store.PreviewField) gen.PreviewField {
+	return gen.PreviewField{Key: f.Key, Label: f.Label, Value: f.Value}
 }
 
 func event(e *store.MessageEvent) *gen.MessageEvent {

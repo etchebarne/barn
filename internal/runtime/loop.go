@@ -128,7 +128,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 
 		asked := false
 		for _, call := range reply.ToolCalls {
-			l.m.setActivity(agent.ID, view.Working(activityFor(call)))
+			l.m.setActivity(agent.ID, view.Working(l.activity(ctx, agent, call)))
 			var result string
 			var ok bool
 			if l.needsApproval(ctx, agent, call.Function.Name) {

@@ -41,6 +41,7 @@ func (Slack) SignalTypes() []SignalType {
 func (Slack) Tools(context.Context, Account) ([]Tool, error) {
 	return []Tool{
 		{Name: "post_message", Description: "Post a message to a channel (by name like #alerts or id), optionally in a thread.", External: true,
+			Title: "Slack message", Verb: "Send message", Body: "text", Labels: map[string]string{"channel": "To", "thread_ts": "Thread"},
 			Parameters: params(map[string]string{"channel": "#name or channel id", "text": "message (Slack mrkdwn)", "?thread_ts": "reply in this thread"})},
 		{Name: "read_channel", Description: "Read recent messages in a channel.",
 			Parameters: params(map[string]string{"channel": "#name or channel id", "?limit": "int:how many (default 20, max 100)"})},

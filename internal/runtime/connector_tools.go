@@ -39,6 +39,16 @@ func (l *loop) connectorTool(ctx context.Context, agent store.Agent, name string
 	return tools[i], true
 }
 
+// activity is the "what I'm doing" line; connector tools read as "using <account>".
+func (l *loop) activity(ctx context.Context, agent store.Agent, call model.ToolCall) string {
+	if t, ok := l.connectorTool(ctx, agent, call.Function.Name); ok {
+		if a, err := l.m.store.GetAccount(ctx, t.AccountID); err == nil {
+			return "using " + a.Name
+		}
+	}
+	return activityFor(call)
+}
+
 // asModelTools turns connector tools into model tool definitions, tagging each with its account.
 func asModelTools(ctx context.Context, m *Manager, tools []connectors.AgentTool) []model.Tool {
 	names := map[string]string{}

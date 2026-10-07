@@ -874,6 +874,30 @@ export interface components {
             answer: components["schemas"]["PromptAnswer"] | null;
             /** @description The proposed connection (connect prompts only) */
             connection?: components["schemas"]["PromptConnection"] | null;
+            /** @description What an approval prompt would do, for the card (approval prompts only) */
+            preview?: components["schemas"]["ActionPreview"] | null;
+        };
+        ActionPreview: {
+            /** @description Connector type (see /connectors/types); null for barn's own actions */
+            appType: string | null;
+            /** @description The connection's name */
+            appName: string | null;
+            /** @description What the action is, e.g. "Slack message" */
+            title: string;
+            /** @description Label for the approve button, e.g. "Send message" */
+            verb: string;
+            /** @description A line about consequences */
+            note: string | null;
+            /** @description The action's arguments, in the order the agent gave them */
+            fields: components["schemas"]["PreviewField"][];
+            /** @description The main content (e.g. a message's text), shown large */
+            body: components["schemas"]["PreviewField"] | null;
+        };
+        PreviewField: {
+            key: string;
+            label: string;
+            /** @description Any JSON value (string, number, boolean, array or object) */
+            value: unknown;
         };
         PromptConnection: {
             /** @description Connector type name (see /connectors/types) */

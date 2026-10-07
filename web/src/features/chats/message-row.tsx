@@ -160,7 +160,14 @@ export function MessageRow({
         {message.prompt ? (
           <Bubble
             variant="muted"
-            className={cn("w-full max-w-[min(85%,26rem)]", reacted && "mb-3.5")}
+            className={cn(
+              "w-full",
+              // Action previews and connect cards carry content, so they get more room.
+              message.prompt.preview || message.prompt.connection
+                ? "max-w-[min(100%,36rem)]"
+                : "max-w-[min(85%,26rem)]",
+              reacted && "mb-3.5",
+            )}
           >
             {/* p-2: the prompt card's row radii are derived from this padding. */}
             <BubbleContent className="w-full p-2">

@@ -25,6 +25,13 @@ func result(id string) model.Message {
 	return m
 }
 
+// waiting is a tool result for a call that handed the turn to the user.
+func waiting(id, status string) model.Message {
+	m := model.Text("tool", toolOK(map[string]string{"status": status}))
+	m.ToolCallID = id
+	return m
+}
+
 func TestTurnState(t *testing.T) {
 	user := model.Text("user", "hi")
 	cases := []struct {
@@ -40,6 +47,8 @@ func TestTurnState(t *testing.T) {
 		{"all results, mid-turn", []model.Message{user, calls(toolSendMessage), result("a")}, true, nil},
 		{"asked the user", []model.Message{user, calls(toolSendMessage, toolAskUser), result("a"), result("b")}, false, nil},
 		{"asked, a later call cut off", []model.Message{user, calls(toolAskUser, toolSendMessage), result("a")}, true, []string{"b"}},
+		{"waiting for approval", []model.Message{user, calls("github__create_issue"), waiting("a", "waiting_for_approval")}, false, nil},
+		{"waiting on a connect card", []model.Message{user, calls(toolConnectApp), waiting("a", "waiting_for_user")}, false, nil},
 	}
 	for _, c := range cases {
 		interrupted, missing := turnState(c.msgs)

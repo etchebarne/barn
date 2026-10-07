@@ -40,8 +40,10 @@ func (Render) Tools(context.Context, Account) ([]Tool, error) {
 		{Name: "list_deploys", Description: "Recent deploys of a service.",
 			Parameters: params(map[string]string{"service_id": "service id (srv-…)"})},
 		{Name: "trigger_deploy", Description: "Deploy the latest commit of a service.", External: true,
+			Title: "Deploy", Verb: "Deploy", Labels: map[string]string{"service_id": "Service"},
 			Parameters: params(map[string]string{"service_id": "service id (srv-…)"})},
 		{Name: "restart_service", Description: "Restart a service.", External: true,
+			Verb: "Restart", Labels: map[string]string{"service_id": "Service"},
 			Parameters: params(map[string]string{"service_id": "service id (srv-…)"})},
 	}, nil
 }

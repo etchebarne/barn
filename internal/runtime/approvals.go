@@ -1,11 +1,13 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/store"
@@ -37,7 +39,7 @@ func (l *loop) requestApproval(ctx context.Context, agent store.Agent, call mode
 	if !json.Valid(args) {
 		return toolError("invalid arguments"), false
 	}
-	question, err := l.describeAction(ctx, agent, call.Function.Name, args)
+	question, preview, err := l.describeAction(ctx, agent, call.Function.Name, args)
 	if err != nil {
 		return toolError("%v", err), false
 	}
@@ -50,6 +52,7 @@ func (l *loop) requestApproval(ctx context.Context, agent store.Agent, call mode
 		Question: question,
 		Options:  []store.PromptOption{{Label: "Approve"}, {Label: "Decline"}},
 		Action:   &store.PendingAction{AgentID: agent.ID, Tool: call.Function.Name, Args: args},
+		Preview:  preview,
 	})
 	if err != nil {
 		logger(agent.ID).Error("request approval", "err", err)
@@ -62,31 +65,127 @@ func (l *loop) requestApproval(ctx context.Context, agent store.Agent, call mode
 	}), true
 }
 
-// describeAction is the approval question shown to the user.
-func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool string, args json.RawMessage) (string, error) {
+// describeAction is the approval question (a line for notifications and the agent) and the
+// preview the card shows.
+func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool string, args json.RawMessage) (string, *store.ActionPreview, error) {
 	switch tool {
 	case toolArchiveAgent:
 		var a struct {
 			AgentID string `json:"agent_id"`
 		}
 		if err := json.Unmarshal(args, &a); err != nil {
-			return "", fmt.Errorf("invalid arguments: %w", err)
+			return "", nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 		target, err := l.m.store.GetAgent(ctx, a.AgentID)
 		if err != nil {
-			return "", fmt.Errorf("unknown agent_id %q", a.AgentID)
+			return "", nil, fmt.Errorf("unknown agent_id %q", a.AgentID)
 		}
-		return fmt.Sprintf("Archive %s? It stops working and its chat is hidden. Its history is kept.", target.Name), nil
+		name, _ := json.Marshal(target.Name)
+		return fmt.Sprintf("Archive %s? It stops working and its chat is hidden. Its history is kept.", target.Name),
+			&store.ActionPreview{Title: "Archive agent", Verb: "Archive",
+				Note:   "It stops working and its chat is hidden. Its history is kept.",
+				Fields: []store.PreviewField{{Key: "agent", Label: "Agent", Value: name}}}, nil
 	default:
 		if t, ok := l.connectorTool(ctx, agent, tool); ok {
-			account := "an app"
+			p := &store.ActionPreview{Title: t.Tool.Title, Verb: t.Tool.Verb}
 			if a, err := l.m.store.GetAccount(ctx, t.AccountID); err == nil {
-				account = a.Name
+				p.AppType, p.AppName = a.Type, a.Name
 			}
-			return fmt.Sprintf("Allow %s to use %s: %s?%s", agent.Name, account, t.Tool.Name, describeArgs(args)), nil
+			if p.Title == "" {
+				p.Title = humanize(t.Tool.Name)
+			}
+			if p.Verb == "" {
+				// Tool names are usually actions already: "Send message", "Create page".
+				p.Verb = humanize(t.Tool.Name)
+			}
+			body := t.Tool.Body
+			if body == "" {
+				body = guessBody(args)
+			}
+			p.Fields, p.Body = previewFields(args, t.Tool.Labels, body)
+			app := p.AppName
+			if app == "" {
+				app = "an app"
+			}
+			return fmt.Sprintf("Allow %s to use %s: %s?", agent.Name, app, p.Title), p, nil
 		}
-		return fmt.Sprintf("Allow %s to run %s with %s?", agent.Name, tool, truncate(string(args), 300)), nil
+		p := &store.ActionPreview{Title: humanize(tool), Verb: "Approve"}
+		p.Fields, p.Body = previewFields(args, nil, "")
+		return fmt.Sprintf("Allow %s to %s?", agent.Name, strings.ToLower(p.Title)), p, nil
 	}
+}
+
+// previewFields lists the arguments in the order the agent wrote them, pulling out the main
+// content. Empty values are left out.
+func previewFields(args json.RawMessage, labels map[string]string, body string) ([]store.PreviewField, *store.PreviewField) {
+	fields := []store.PreviewField{}
+	var main *store.PreviewField
+	dec := json.NewDecoder(bytes.NewReader(args))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return fields, nil
+	}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		key, _ := tok.(string)
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			break
+		}
+		if v := strings.TrimSpace(string(value)); v == `""` || v == "null" || v == "[]" || v == "{}" {
+			continue
+		}
+		label := labels[key]
+		if label == "" {
+			label = humanize(key)
+		}
+		f := store.PreviewField{Key: key, Label: label, Value: value}
+		if key == body && main == nil {
+			main = &f
+			continue
+		}
+		fields = append(fields, f)
+	}
+	return fields, main
+}
+
+// guessBody picks the argument that's most likely the main content when a tool doesn't say.
+func guessBody(args json.RawMessage) string {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(args, &m) != nil {
+		return ""
+	}
+	for _, key := range []string{"text", "body", "message", "content", "markdown", "description"} {
+		var s string
+		if json.Unmarshal(m[key], &s) == nil && s != "" {
+			return key
+		}
+	}
+	return ""
+}
+
+// humanize turns "create_entities" or "threadTs" into "Create entities" / "Thread ts".
+func humanize(name string) string {
+	var b strings.Builder
+	for i, r := range name {
+		switch {
+		case r == '_' || r == '-' || r == '.':
+			b.WriteRune(' ')
+		case unicode.IsUpper(r) && i > 0:
+			b.WriteRune(' ')
+			b.WriteRune(unicode.ToLower(r))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	s := strings.Join(strings.Fields(b.String()), " ")
+	if s == "" {
+		return name
+	}
+	r, n := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[n:]
 }
 
 // ResolveApproval runs or skips the gated action behind an answered approval prompt, then tells
@@ -130,30 +229,4 @@ func renderApproval(msg store.Message, outcome json.RawMessage) string {
 	}
 	return fmt.Sprintf("<%s prompt_id=%q question=%q>\n%s\n</%s>",
 		tag, msg.ID, msg.Prompt.Question, string(outcome), tag)
-}
-
-// describeArgs lists tool arguments as "key: value" lines for an approval question.
-func describeArgs(args json.RawMessage) string {
-	var m map[string]json.RawMessage
-	if json.Unmarshal(args, &m) != nil || len(m) == 0 {
-		if len(args) == 0 || string(args) == "{}" {
-			return ""
-		}
-		return "\n" + truncate(string(args), 400)
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	var b strings.Builder
-	for _, k := range keys {
-		v := string(m[k])
-		var s string
-		if json.Unmarshal(m[k], &s) == nil {
-			v = s
-		}
-		fmt.Fprintf(&b, "\n%s: %s", k, truncate(v, 200))
-	}
-	return truncate(b.String(), 800)
 }

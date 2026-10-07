@@ -95,8 +95,14 @@ func TestAgentUsesConnectedApps(t *testing.T) {
 	f.waitIdle(t)
 	msgs, _, _ := f.store.ListMessages(ctx, f.chatID, "", 50)
 	card := msgs[len(msgs)-1]
-	if card.Prompt == nil || card.Prompt.Kind != "approval" || !strings.Contains(card.Prompt.Question, "use GitHub: create_issue") {
+	if card.Prompt == nil || card.Prompt.Kind != "approval" || card.Prompt.Question != "Allow barn to use GitHub: New issue?" {
 		t.Fatalf("expected an approval card, got %+v", card)
+	}
+	// The card gets a structured preview: the app, labelled arguments in order, the button.
+	if p := card.Prompt.Preview; p == nil || p.AppType != "github" || p.AppName != "GitHub" || p.Verb != "Open issue" ||
+		len(p.Fields) != 2 || p.Fields[0].Label != "Repository" || string(p.Fields[0].Value) != `"acme/web"` ||
+		p.Fields[1].Label != "Title" || p.Body != nil {
+		t.Fatalf("preview = %+v", card.Prompt.Preview)
 	}
 	mu.Lock()
 	if len(created) != 0 {

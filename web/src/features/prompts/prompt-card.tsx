@@ -15,6 +15,7 @@ import { useConnectorTypes } from "@/features/connectors"
 import { agentsQueryOptions } from "@/lib/agents"
 import { ApiError, type Message } from "@/lib/api-client"
 
+import { ActionPreviewCard } from "./action-preview-card"
 import { ensureChatLoaded, useAnswerPrompt, useConnectPrompt, useDismissPrompt } from "./api"
 import { DECLINE_CONNECT } from "./connect"
 import { ConnectCard } from "./connect-card"
@@ -397,6 +398,26 @@ export function PromptCard({
   }
 
   const dismissed = prompt.status === "dismissed"
+
+  if (prompt.kind === "approval" && prompt.preview) {
+    return (
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <ActionPreviewCard
+          prompt={prompt}
+          preview={prompt.preview}
+          isLatest={isLatest}
+          disabled={busy}
+          onAnswer={onAnswer}
+          onDismiss={() => dismiss.mutate()}
+        />
+        {error && (
+          <p role="alert" className="px-1.5 text-xs text-destructive">
+            {error.message}
+          </p>
+        )}
+      </div>
+    )
+  }
 
   if (prompt.kind === "connect") {
     return (
