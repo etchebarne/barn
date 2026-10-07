@@ -100,3 +100,13 @@
     font-weight: 600;
   }
 }
+
+/* @mention chip, in user bubbles and agent markdown. Tinted from the text color so it works on
+   both the primary (user) and muted (agent) bubbles. */
+.mention {
+  border-radius: 0.3em;
+  padding: 0 0.2em;
+  font-weight: 500;
+  background: color-mix(in oklch, currentColor 14%, transparent);
+  box-decoration-break: clone;
+}

@@ -19,7 +19,15 @@ func Message(m store.Message) gen.Message {
 		Prompt:    prompt(m.Prompt),
 		Event:     event(m.Event),
 		Reactions: reactions(m.Reactions),
+		Mentions:  mentions(m.Mentions),
 	}
+}
+
+func mentions(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+	return ids
 }
 
 func reactions(rs []store.Reaction) []gen.Reaction {

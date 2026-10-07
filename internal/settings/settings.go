@@ -4,6 +4,8 @@ package settings
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/secrets"
@@ -35,4 +37,25 @@ func (s *Settings) SetAPIKey(ctx context.Context, key string) error {
 		return err
 	}
 	return s.store.SetSetting(ctx, store.SettingOpenCodeAPIKey, sealed)
+}
+
+// Location is the user's time zone (set by the web app), or the server's if unknown.
+func (s *Settings) Location(ctx context.Context) *time.Location {
+	name, err := s.store.GetSetting(ctx, store.SettingTimezone)
+	if err != nil || name == "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return time.Local
+	}
+	return loc
+}
+
+// SetTimezone saves the user's IANA time zone after checking it exists.
+func (s *Settings) SetTimezone(ctx context.Context, name string) error {
+	if _, err := time.LoadLocation(name); err != nil || name == "" || name == "Local" {
+		return fmt.Errorf("unknown time zone %q", name)
+	}
+	return s.store.SetSetting(ctx, store.SettingTimezone, name)
 }

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/etchebarne/barn/internal/api/gen"
@@ -46,11 +47,19 @@ type Manager struct {
 	CompactAtTokens int
 	// Sandboxes runs agents' commands; nil means no sandbox tools (set before Start).
 	Sandboxes Sandboxer
+	// Timezone is the user's time zone for schedules and prompts (set before Start).
+	Timezone Timezone
+	// Push sends a notification to the user's devices; nil disables notifications.
+	Push func(ctx context.Context, title, body, chatID string)
+
+	tasksChanged chan struct{}
 
 	mu       sync.Mutex
 	ctx      context.Context
 	loops    map[string]*loop
 	activity map[string]gen.AgentActivity
+	cycles   map[string]*groupCycle   // active turn cycles by group chat id
+	waiters  map[string]chan struct{} // event id -> closed when the turn handling it ends
 	wg       sync.WaitGroup
 }
 
@@ -61,6 +70,10 @@ func New(s *store.Store, b *bus.Bus, llm ChatModel) *Manager {
 		llm:      llm,
 		loops:    map[string]*loop{},
 		activity: map[string]gen.AgentActivity{},
+		cycles:   map[string]*groupCycle{},
+
+		tasksChanged: make(chan struct{}, 1),
+		waiters:      map[string]chan struct{}{},
 	}
 }
 
@@ -79,6 +92,11 @@ func (m *Manager) Start(ctx context.Context) error {
 		}
 		m.AddAgent(a.ID)
 	}
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.runScheduler(ctx)
+	}()
 	return nil
 }
 
@@ -206,11 +224,16 @@ func (m *Manager) setActivity(agentID string, a gen.AgentActivity) {
 	m.bus.Publish(gen.WsAgentActivity{Type: "agent.activity", AgentId: agentID, Activity: a})
 }
 
-// DeliverUserMessage queues a user's chat message for every agent in that chat.
+// DeliverUserMessage hands a user's message to the agents in its chat: directly in a DM, through
+// a turn cycle in a group.
 func (m *Manager) DeliverUserMessage(ctx context.Context, msg store.Message) error {
 	chat, err := m.store.GetChat(ctx, msg.ChatID)
 	if err != nil {
 		return err
+	}
+	if chat.Kind == "group" {
+		m.startGroupCycle(chat.ID, msg)
+		return nil
 	}
 	for _, member := range chat.Members {
 		if _, err := m.store.InsertEvent(ctx, member.AgentID, EventMessage,
@@ -292,18 +315,47 @@ func (m *Manager) DeliverAnswer(ctx context.Context, msg store.Message) error {
 	return nil
 }
 
-// postMessage stores a message and broadcasts it.
+// postMessage stores a message and broadcasts it. An agent's message in a group starts (or
+// extends) that group's turn cycle so the others get to respond.
 func (m *Manager) postMessage(ctx context.Context, chatID, authorKind string, agentID *string, body string) (store.Message, error) {
-	msg, err := m.store.InsertMessage(ctx, chatID, authorKind, agentID, body)
+	mentions := m.MentionsIn(ctx, chatID, body)
+	msg, err := m.store.InsertMessage(ctx, chatID, authorKind, agentID, body, mentions...)
 	if err != nil {
 		return msg, err
 	}
 	m.publishMessage(msg)
+	if authorKind == "agent" {
+		if chat, err := m.store.GetChat(ctx, chatID); err == nil && chat.Kind == "group" {
+			m.startGroupCycle(chatID, msg)
+		}
+	}
 	return msg, nil
 }
 
 func (m *Manager) publishMessage(msg store.Message) {
 	m.bus.Publish(view.MessageCreated(view.Message(msg)))
+	if msg.AuthorKind == "agent" && msg.AuthorAgentID != nil && m.Push != nil {
+		go m.notify(*msg.AuthorAgentID, msg)
+	}
+}
+
+// notify pushes an agent's message to the user's devices, if that agent has notifications on.
+func (m *Manager) notify(agentID string, msg store.Message) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	agent, err := m.store.GetAgent(ctx, agentID)
+	if err != nil || !agent.Notifications {
+		return
+	}
+	chat, err := m.store.GetChat(ctx, msg.ChatID)
+	if err != nil {
+		return
+	}
+	title := agent.Name
+	if chat.Kind == "group" {
+		title = agent.Name + " in " + chat.Name
+	}
+	m.Push(ctx, title, msg.Body, chat.ID)
 }
 
 func logger(agentID string) *slog.Logger { return slog.With("agent", agentID) }

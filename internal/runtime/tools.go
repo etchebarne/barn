@@ -25,6 +25,8 @@ const (
 	toolCreateAgent  = "create_agent"
 	toolUpdateAgent  = "update_agent"
 	toolArchiveAgent = "archive_agent"
+	toolCreateGroup  = "create_group"
+	toolUpdateGroup  = "update_group"
 )
 
 const maxPromptOptions = 8
@@ -152,6 +154,33 @@ var (
 			"additionalProperties": false
 		}`)
 
+	createGroupTool = function(toolCreateGroup,
+		"Create a group chat between the user and two or more agents, so they can coordinate in one "+
+			"place (agents take turns there). Use list_agents for ids; include yourself if you should take part.",
+		`{
+			"type": "object",
+			"properties": {
+				"name": {"type": "string", "description": "Short group name, e.g. \"Launch crew\"."},
+				"agent_ids": {"type": "array", "items": {"type": "string"}, "minItems": 2}
+			},
+			"required": ["name", "agent_ids"],
+			"additionalProperties": false
+		}`)
+
+	updateGroupTool = function(toolUpdateGroup,
+		"Rename a group chat, or add or remove agents.",
+		`{
+			"type": "object",
+			"properties": {
+				"chat_id": {"type": "string"},
+				"name": {"type": "string"},
+				"add_agent_ids": {"type": "array", "items": {"type": "string"}},
+				"remove_agent_ids": {"type": "array", "items": {"type": "string"}}
+			},
+			"required": ["chat_id"],
+			"additionalProperties": false
+		}`)
+
 	createAgentTool = function(toolCreateAgent,
 		"Create a new agent: a persistent teammate that owns one job. It gets its own DM with the "+
 			"user and introduces itself there right away. Ask the user which model to use first "+
@@ -173,11 +202,12 @@ var (
 // toolsFor returns the tools an agent may use.
 func toolsFor(agent store.Agent, sandboxes bool) []model.Tool {
 	tools := []model.Tool{sendMessageTool, reactTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool}
+	tools = append(tools, taskTools()...)
 	if sandboxes {
 		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool)
 	}
 	if agent.IsAdmin {
-		tools = append(tools, createAgentTool, archiveAgentTool)
+		tools = append(tools, createAgentTool, archiveAgentTool, createGroupTool, updateGroupTool)
 	}
 	return tools
 }
@@ -202,6 +232,8 @@ func toolLabel(name string) string {
 		return "setting up an agent"
 	case toolUpdateAgent:
 		return "updating settings"
+	case toolTaskCreate, toolTaskUpdate, toolTaskDelete:
+		return "updating my schedule"
 	case toolReadFile:
 		return "reading a file"
 	case toolWriteFile:
@@ -210,6 +242,10 @@ func toolLabel(name string) string {
 		return "looking through files"
 	case toolArchiveAgent:
 		return "archiving an agent"
+	case toolCreateGroup:
+		return "setting up a group"
+	case toolUpdateGroup:
+		return "updating a group"
 	default:
 		return "using " + name
 	}
@@ -264,10 +300,40 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 		return l.createAgent(ctx, agent, args)
 	case toolUpdateAgent:
 		return l.updateAgent(ctx, agent, args)
+	case toolTaskCreate, toolTaskUpdate, toolTaskDelete:
+		return l.runTaskTool(ctx, agent, call.Function.Name, args)
 	case toolRunCommand, toolReadFile, toolWriteFile, toolListFiles:
 		return l.runSandboxTool(ctx, agent, call.Function.Name, args)
 	case toolArchiveAgent:
 		return l.archiveAgent(ctx, agent, args)
+	case toolCreateGroup:
+		var a struct {
+			Name     string   `json:"name"`
+			AgentIDs []string `json:"agent_ids"`
+		}
+		if err := json.Unmarshal(args, &a); err != nil {
+			return toolError("invalid arguments: %v", err), false
+		}
+		chat, err := l.m.CreateGroup(ctx, a.Name, a.AgentIDs, &agent)
+		if err != nil {
+			return toolError("%v", err), false
+		}
+		return toolOK(map[string]any{"chat_id": chat.ID, "name": chat.Name, "members": len(chat.Members)}), true
+	case toolUpdateGroup:
+		var a struct {
+			ChatID string   `json:"chat_id"`
+			Name   *string  `json:"name"`
+			Add    []string `json:"add_agent_ids"`
+			Remove []string `json:"remove_agent_ids"`
+		}
+		if err := json.Unmarshal(args, &a); err != nil {
+			return toolError("invalid arguments: %v", err), false
+		}
+		chat, err := l.m.UpdateGroup(ctx, a.ChatID, a.Name, a.Add, a.Remove)
+		if err != nil {
+			return toolError("%v", err), false
+		}
+		return toolOK(map[string]any{"chat_id": chat.ID, "name": chat.Name, "members": len(chat.Members)}), true
 	default:
 		return toolError("unknown tool %q", call.Function.Name), false
 	}

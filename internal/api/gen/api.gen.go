@@ -216,6 +216,24 @@ func (e SandboxStatus) Valid() bool {
 	}
 }
 
+// Defines values for TaskKind.
+const (
+	Cron TaskKind = "cron"
+	Once TaskKind = "once"
+)
+
+// Valid indicates whether the value is a known member of the TaskKind enum.
+func (e TaskKind) Valid() bool {
+	switch e {
+	case Cron:
+		return true
+	case Once:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentRequestTrustMode.
 const (
 	UpdateAgentRequestTrustModeAsk     UpdateAgentRequestTrustMode = "ask"
@@ -480,6 +498,9 @@ type Message struct {
 	// Id ULID; lexicographic order is chronological order
 	Id string `json:"id"`
 
+	// Mentions Agents @mentioned in the message (group chats)
+	Mentions []string `json:"mentions"`
+
 	// Prompt Set on agent messages that ask the user something with clickable answers. `body`
 	// holds the question as plain text (for previews).
 	Prompt *Prompt `json:"prompt,omitempty"`
@@ -595,6 +616,25 @@ type ProviderSettings struct {
 // ProviderSettingsProvider defines model for ProviderSettings.Provider.
 type ProviderSettingsProvider string
 
+// PushConfig defines model for PushConfig.
+type PushConfig struct {
+	PublicKey string `json:"publicKey"`
+}
+
+// PushSubscription defines model for PushSubscription.
+type PushSubscription struct {
+	Endpoint string `json:"endpoint"`
+	Keys     struct {
+		Auth   string `json:"auth"`
+		P256dh string `json:"p256dh"`
+	} `json:"keys"`
+}
+
+// PushUnsubscribe defines model for PushUnsubscribe.
+type PushUnsubscribe struct {
+	Endpoint string `json:"endpoint"`
+}
+
 // Reaction defines model for Reaction.
 type Reaction struct {
 	// By Who reacted with this emoji, oldest first
@@ -624,6 +664,35 @@ type SendMessageRequest struct {
 	ClientId *string `json:"clientId,omitempty"`
 }
 
+// SetTimezoneRequest defines model for SetTimezoneRequest.
+type SetTimezoneRequest struct {
+	// Timezone IANA name, e.g. "America/Montevideo"
+	Timezone string `json:"timezone"`
+}
+
+// Task defines model for Task.
+type Task struct {
+	AgentId string `json:"agentId"`
+
+	// At When a one-off task runs (kind once)
+	At *time.Time `json:"at"`
+
+	// Cron 5-field cron in the user's time zone (kind cron)
+	Cron        *string    `json:"cron"`
+	Enabled     bool       `json:"enabled"`
+	Id          string     `json:"id"`
+	Kind        TaskKind   `json:"kind"`
+	LastFiredAt *time.Time `json:"lastFiredAt"`
+	Name        string     `json:"name"`
+	NextFireAt  *time.Time `json:"nextFireAt"`
+
+	// Purpose What the agent does when the task fires
+	Purpose string `json:"purpose"`
+}
+
+// TaskKind defines model for Task.Kind.
+type TaskKind string
+
 // ToggleReactionRequest defines model for ToggleReactionRequest.
 type ToggleReactionRequest struct {
 	Emoji string `json:"emoji"`
@@ -640,6 +709,9 @@ type UpdateAgentRequest struct {
 	Model *string `json:"model,omitempty"`
 	Name  *string `json:"name,omitempty"`
 
+	// Notifications Push this agent's messages to the user's devices
+	Notifications *bool `json:"notifications,omitempty"`
+
 	// TrustMode trusted skips approvals for gated actions
 	TrustMode *UpdateAgentRequestTrustMode `json:"trustMode,omitempty"`
 }
@@ -650,6 +722,11 @@ type UpdateAgentRequestTrustMode string
 // UpdateProviderSettingsRequest defines model for UpdateProviderSettingsRequest.
 type UpdateProviderSettingsRequest struct {
 	ApiKey string `json:"apiKey"`
+}
+
+// UpdateTaskRequest defines model for UpdateTaskRequest.
+type UpdateTaskRequest struct {
+	Enabled bool `json:"enabled"`
 }
 
 // User defines model for User.
@@ -771,8 +848,20 @@ type ToggleReactionJSONRequestBody = ToggleReactionRequest
 // CompleteOnboardingJSONRequestBody defines body for CompleteOnboarding for application/json ContentType.
 type CompleteOnboardingJSONRequestBody = CompleteOnboardingRequest
 
+// UnsubscribePushJSONRequestBody defines body for UnsubscribePush for application/json ContentType.
+type UnsubscribePushJSONRequestBody = PushUnsubscribe
+
+// SubscribePushJSONRequestBody defines body for SubscribePush for application/json ContentType.
+type SubscribePushJSONRequestBody = PushSubscription
+
 // UpdateProviderSettingsJSONRequestBody defines body for UpdateProviderSettings for application/json ContentType.
 type UpdateProviderSettingsJSONRequestBody = UpdateProviderSettingsRequest
+
+// SetTimezoneJSONRequestBody defines body for SetTimezone for application/json ContentType.
+type SetTimezoneJSONRequestBody = SetTimezoneRequest
+
+// UpdateTaskJSONRequestBody defines body for UpdateTask for application/json ContentType.
+type UpdateTaskJSONRequestBody = UpdateTaskRequest
 
 // AsWsMessageCreated returns the union data inside the WsEvent as a WsMessageCreated
 func (t WsEvent) AsWsMessageCreated() (WsMessageCreated, error) {
@@ -1118,6 +1207,9 @@ type ServerInterface interface {
 	// (POST /agents/{agentId}/sandbox/restart)
 	RestartSandbox(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (GET /agents/{agentId}/tasks)
+	ListTasks(w http.ResponseWriter, r *http.Request, agentId string)
+
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
 
@@ -1160,11 +1252,29 @@ type ServerInterface interface {
 	// (POST /onboarding/complete)
 	CompleteOnboarding(w http.ResponseWriter, r *http.Request)
 
+	// (GET /push/config)
+	GetPushConfig(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /push/subscriptions)
+	UnsubscribePush(w http.ResponseWriter, r *http.Request)
+
+	// (POST /push/subscriptions)
+	SubscribePush(w http.ResponseWriter, r *http.Request)
+
 	// (GET /settings/provider)
 	GetProviderSettings(w http.ResponseWriter, r *http.Request)
 
 	// (PUT /settings/provider)
 	UpdateProviderSettings(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /settings/timezone)
+	SetTimezone(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /tasks/{taskId})
+	DeleteTask(w http.ResponseWriter, r *http.Request, taskId string)
+
+	// (PATCH /tasks/{taskId})
+	UpdateTask(w http.ResponseWriter, r *http.Request, taskId string)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1372,6 +1482,32 @@ func (siw *ServerInterfaceWrapper) RestartSandbox(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestartSandbox(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTasks operation middleware
+func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTasks(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1678,6 +1814,48 @@ func (siw *ServerInterfaceWrapper) CompleteOnboarding(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// GetPushConfig operation middleware
+func (siw *ServerInterfaceWrapper) GetPushConfig(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPushConfig(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnsubscribePush operation middleware
+func (siw *ServerInterfaceWrapper) UnsubscribePush(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnsubscribePush(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubscribePush operation middleware
+func (siw *ServerInterfaceWrapper) SubscribePush(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubscribePush(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProviderSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetProviderSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -1697,6 +1875,72 @@ func (siw *ServerInterfaceWrapper) UpdateProviderSettings(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProviderSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTimezone operation middleware
+func (siw *ServerInterfaceWrapper) SetTimezone(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTimezone(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTask operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTask operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTask(w, r, taskId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1845,6 +2089,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/archive", wrapper.ArchiveAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox", wrapper.GetSandbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/sandbox/restart", wrapper.RestartSandbox)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.ListTasks)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/tasks/{taskId}", wrapper.DeleteTask)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/tasks/{taskId}", wrapper.UpdateTask)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/push/subscriptions", wrapper.UnsubscribePush)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/answer", wrapper.AnswerPrompt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/reactions", wrapper.ToggleReaction)

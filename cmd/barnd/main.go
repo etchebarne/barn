@@ -19,6 +19,7 @@ import (
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/config"
 	"github.com/etchebarne/barn/internal/model"
+	"github.com/etchebarne/barn/internal/push"
 	"github.com/etchebarne/barn/internal/runtime"
 	"github.com/etchebarne/barn/internal/sandbox"
 	"github.com/etchebarne/barn/internal/secrets"
@@ -67,6 +68,7 @@ func run() error {
 	llm := model.New(cfg.OpenCodeBaseURL, "barn/"+strings.TrimPrefix(version, "v"), set.APIKey)
 	rt := runtime.New(st, b, llm)
 	rt.CompactAtTokens = cfg.CompactAtTokens
+	rt.Timezone = set.Location
 	if cfg.Sandboxes == "docker" {
 		sbx := sandbox.New(sandbox.Options{Image: cfg.SandboxImage, SharedDir: filepath.Join(cfg.DataDir, "shared")})
 		if sbx.Available() {
@@ -75,7 +77,14 @@ func run() error {
 			slog.Warn("Docker isn't available; agents won't have sandboxes")
 		}
 	}
-	srv := api.New(st, b, rt, llm, set, api.Options{
+	notifier, err := push.New(ctx, st, box)
+	if err != nil {
+		return fmt.Errorf("push notifications: %w", err)
+	}
+	rt.Push = func(ctx context.Context, title, body, chatID string) {
+		notifier.Send(ctx, push.Notification{Title: title, Body: push.Preview(body), ChatID: chatID, Tag: chatID})
+	}
+	srv := api.New(st, b, rt, llm, set, notifier, api.Options{
 		SecureCookies:  cfg.SecureCookies,
 		AllowedOrigins: cfg.AllowedOrigins,
 		Web:            webFS(cfg.WebDir),

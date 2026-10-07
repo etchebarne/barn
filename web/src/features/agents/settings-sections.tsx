@@ -371,6 +371,42 @@ export function TrustSection({ agent }: { agent: Agent }) {
   )
 }
 
+/** Push notifications for this agent's messages. */
+export function NotificationsSection({ agent }: { agent: Agent }) {
+  const update = useUpdateAgent(agent.id)
+  return (
+    <Field data-invalid={!!update.error || undefined}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <FieldLabel htmlFor="agent-notifications">Notifications</FieldLabel>
+          <FieldDescription>
+            Push {agent.name}'s messages to devices with notifications on (see Settings).
+          </FieldDescription>
+        </div>
+        <Switch
+          id="agent-notifications"
+          checked={agent.notifications}
+          disabled={update.isPending}
+          onCheckedChange={(checked: boolean) =>
+            update.mutate(
+              { notifications: checked },
+              {
+                onSuccess: (updated) =>
+                  toast.success(
+                    updated.notifications
+                      ? `You'll be notified when ${updated.name} messages you`
+                      : `Notifications from ${updated.name} are off`,
+                  ),
+              },
+            )
+          }
+        />
+      </div>
+      {update.error && <FieldError>{update.error.message}</FieldError>}
+    </Field>
+  )
+}
+
 /** Danger zone: archive the agent, after confirming. */
 export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: () => void }) {
   const archive = useArchiveAgent(agent.id)

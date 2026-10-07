@@ -88,11 +88,12 @@ func (s *Store) SetAgentAdmin(ctx context.Context, id string, admin bool) error 
 
 // AgentUpdate changes an agent's settings; nil fields are left alone.
 type AgentUpdate struct {
-	Name         *string
-	Instructions *string
-	Model        *string
-	Language     *string
-	TrustMode    *string
+	Name          *string
+	Instructions  *string
+	Model         *string
+	Language      *string
+	TrustMode     *string
+	Notifications *bool
 }
 
 func (s *Store) UpdateAgent(ctx context.Context, id string, u AgentUpdate) error {
@@ -117,6 +118,11 @@ func (s *Store) UpdateAgent(ctx context.Context, id string, u AgentUpdate) error
 			v   *string
 		}{{"name", u.Name}, {"instructions", u.Instructions}, {"model", u.Model}, {"language", u.Language}, {"trust_mode", u.TrustMode}} {
 			if err := set(f.col, f.v); err != nil {
+				return err
+			}
+		}
+		if u.Notifications != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE agents SET notifications = ? WHERE id = ?`, *u.Notifications, id); err != nil {
 				return err
 			}
 		}

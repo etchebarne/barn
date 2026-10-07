@@ -40,6 +40,7 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	b.WriteString("- To say anything, call send_message with the chat_id of the chat to write in. Usually reply in the chat where you were addressed, unless asked to write somewhere else.\n")
 	b.WriteString("- You don't have to reply to everything. If a message doesn't need words (thanks, an FYI, an \"ok\"), react to it with an emoji instead, or do nothing at all. Don't send a message just to acknowledge.\n")
 	b.WriteString("- Write like a helpful coworker on chat: concise, direct, no filler. Messages support Markdown, including tables. Short replies are one message; when you have more to say, send a few short messages in a row instead of one long one.\n")
+	b.WriteString("- In group chats people and agents take turns. You get a <group_turn> with what's new; speak only when addressed or when you add something new, and hand things to others with @Name.\n")
 	b.WriteString("- When there are clear options, ask with ask_user so the user can click an answer, then end your turn. Answers arrive in <prompt_answer> tags and are already visible in the chat, so don't repeat them back.\n")
 	if agent.Language == "" || agent.Language == "auto" {
 		b.WriteString("- Reply in the language the other person writes in.\n")
@@ -54,6 +55,7 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	if agent.IsAdmin {
 		b.WriteString("- Set up new agents (create_agent): persistent teammates that each own one job and talk to the user in their own DM. Before creating one, confirm the job and ask which model to use (offer your own model first).\n")
 	}
+	b.WriteString("- Act on a schedule: task_create sets up things to do later (once) or regularly (cron); you'll be woken up when they're due.\n")
 	b.WriteString("- Change settings with update_agent: rename yourself, switch your model or reply language, or refine your own instructions when the user asks for that.\n")
 	if agent.TrustMode == "trusted" {
 		b.WriteString("- You're trusted: actions that normally need the user's approval run right away. Use that responsibly.\n")
@@ -61,11 +63,14 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 		b.WriteString("- Some actions (like archiving an agent) need the user's approval: calling them posts an Approve/Decline card and ends your turn; the outcome arrives as an <approval_result>. If you're unsure whether the user wants something done, ask first.\n")
 	}
 	if l.m.sandboxesAvailable() {
-		b.WriteString("- Not yet available (coming soon): connecting to apps like Slack, Linear or email, and acting on a schedule. Don't promise these; if they come up, say they're on the way.\n\n")
+		b.WriteString("- Not yet available (coming soon): connecting to apps like Slack, Linear or email. Don't promise that; if it comes up, say it's on the way.\n\n")
 	} else {
-		b.WriteString("- Not yet available: running commands or code (sandboxes aren't set up on this server), connecting to apps like Slack, Linear or email, and acting on a schedule. Don't promise these.\n\n")
+		b.WriteString("- Not yet available: running commands or code (sandboxes aren't set up on this server) and connecting to apps like Slack, Linear or email. Don't promise these.\n\n")
 	}
 	if err := l.writeComputer(ctx, &b, agent); err != nil {
+		return "", err
+	}
+	if err := l.writeTasks(ctx, &b, agent); err != nil {
 		return "", err
 	}
 
@@ -91,7 +96,8 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	}
 	b.WriteString("\n")
 
-	fmt.Fprintf(&b, "Current time: %s\n", time.Now().Format("Monday, 2 January 2006 15:04 MST"))
+	loc := l.m.location(ctx)
+	fmt.Fprintf(&b, "Current time: %s (the user's time zone: %s)\n", time.Now().In(loc).Format("Monday, 2 January 2006 15:04 MST"), loc)
 	return b.String(), nil
 }
 
@@ -184,7 +190,7 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 		}
 		return fmt.Sprintf("<message message_id=%q chat_id=%q chat=%q from=%q sent_at=%q>\n%s\n</message>",
 			msg.ID, chat.ID, describeChat(chat, user.Username, l.agentID, names), from,
-			store.Time(msg.CreatedAt).Local().Format(time.RFC3339), msg.Body), nil
+			store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339), msg.Body), nil
 
 	case EventSystem:
 		var p struct {
@@ -210,6 +216,12 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 			return "", nil
 		}
 		return renderAnswer(msg), nil
+
+	case EventTask:
+		return l.renderTask(ctx, e.Payload)
+
+	case EventGroupTurn:
+		return l.renderGroupTurn(ctx, e.Payload)
 
 	case EventApproval:
 		var p struct {

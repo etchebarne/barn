@@ -15,6 +15,7 @@ import (
 	"github.com/etchebarne/barn/internal/auth"
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/model"
+	"github.com/etchebarne/barn/internal/push"
 	"github.com/etchebarne/barn/internal/runtime"
 	"github.com/etchebarne/barn/internal/settings"
 	"github.com/etchebarne/barn/internal/store"
@@ -39,6 +40,7 @@ type Server struct {
 	runtime  *runtime.Manager
 	llm      *model.Client
 	settings *settings.Settings
+	push     *push.Notifier
 	opts     Options
 
 	loginLimiter *auth.Limiter
@@ -46,9 +48,9 @@ type Server struct {
 
 var _ gen.ServerInterface = (*Server)(nil)
 
-func New(s *store.Store, b *bus.Bus, rt *runtime.Manager, llm *model.Client, set *settings.Settings, opts Options) *Server {
+func New(s *store.Store, b *bus.Bus, rt *runtime.Manager, llm *model.Client, set *settings.Settings, notifier *push.Notifier, opts Options) *Server {
 	return &Server{
-		store: s, bus: b, runtime: rt, llm: llm, settings: set, opts: opts,
+		store: s, bus: b, runtime: rt, llm: llm, settings: set, push: notifier, opts: opts,
 		loginLimiter: auth.NewLimiter(12*time.Second, 5),
 	}
 }

@@ -308,6 +308,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The agent's scheduled tasks, oldest first. */
+        get: operations["listTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteTask"];
+        options?: never;
+        head?: never;
+        /** @description Pause or resume a task. */
+        patch: operations["updateTask"];
+        trace?: never;
+    };
+    "/push/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The VAPID public key browsers subscribe with. */
+        get: operations["getPushConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Register this browser for notifications. */
+        post: operations["subscribePush"];
+        delete: operations["unsubscribePush"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/timezone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Save the user's IANA time zone (the web app sends the browser's). Agents' schedules and
+         *     "current time" use it.
+         */
+        put: operations["setTimezone"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/retry": {
         parameters: {
             query?: never;
@@ -480,6 +572,47 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        Task: {
+            id: string;
+            agentId: string;
+            name: string;
+            /** @description What the agent does when the task fires */
+            purpose: string;
+            /** @enum {string} */
+            kind: "cron" | "once";
+            /** @description 5-field cron in the user's time zone (kind cron) */
+            cron: string | null;
+            /**
+             * Format: date-time
+             * @description When a one-off task runs (kind once)
+             */
+            at: string | null;
+            enabled: boolean;
+            /** Format: date-time */
+            nextFireAt: string | null;
+            /** Format: date-time */
+            lastFiredAt: string | null;
+        };
+        UpdateTaskRequest: {
+            enabled: boolean;
+        };
+        PushConfig: {
+            publicKey: string;
+        };
+        PushSubscription: {
+            endpoint: string;
+            keys: {
+                p256dh: string;
+                auth: string;
+            };
+        };
+        PushUnsubscribe: {
+            endpoint: string;
+        };
+        SetTimezoneRequest: {
+            /** @description IANA name, e.g. "America/Montevideo" */
+            timezone: string;
+        };
         Sandbox: {
             /**
              * @description unavailable: Docker isn't set up on the server; none: not created yet (created on
@@ -502,6 +635,8 @@ export interface components {
              * @enum {string}
              */
             trustMode?: "ask" | "trusted";
+            /** @description Push this agent's messages to the user's devices */
+            notifications?: boolean;
         };
         AgentActivity: {
             /** @enum {string} */
@@ -542,6 +677,8 @@ export interface components {
             createdAt: string;
             /** @description Set on system messages reporting that an agent's turn failed */
             failure?: components["schemas"]["MessageFailure"] | null;
+            /** @description Agents @mentioned in the message (group chats) */
+            mentions: string[];
             /** @description Emoji reactions, in the order each emoji was first used */
             reactions: components["schemas"]["Reaction"][];
             /**
@@ -1190,6 +1327,172 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             503: components["responses"]["Error"];
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tasks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPushConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Push config */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushConfig"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    subscribePush: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscription"];
+            };
+        };
+        responses: {
+            /** @description Subscribed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
+    unsubscribePush: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushUnsubscribe"];
+            };
+        };
+        responses: {
+            /** @description Unsubscribed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    setTimezone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTimezoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
         };
     };
     retryAgent: {

@@ -9,6 +9,7 @@ export const queryKeys = {
   models: ["models"] as const,
   agents: ["agents"] as const,
   memories: (agentId: string) => ["agents", agentId, "memories"] as const,
+  tasks: (agentId: string) => ["agents", agentId, "tasks"] as const,
   chats: ["chats"] as const,
   messages: (chatId: string) => ["chats", chatId, "messages"] as const,
 }

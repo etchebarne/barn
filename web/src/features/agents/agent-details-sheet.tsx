@@ -22,8 +22,10 @@ import {
   InstructionsSection,
   LanguageSection,
   NameSection,
+  NotificationsSection,
   TrustSection,
 } from "./settings-sections"
+import { TasksSection } from "./tasks-section"
 
 /** Model setting: changes apply as soon as a model is picked. */
 function ModelField({ agent, inputRef }: { agent: Agent; inputRef?: Ref<HTMLInputElement> }) {
@@ -115,9 +117,11 @@ export function AgentDetailsSheet() {
                 <ModelField agent={shown} inputRef={modelInputRef} />
                 <InstructionsSection agent={shown} />
                 <LanguageSection agent={shown} />
+                <NotificationsSection agent={shown} />
                 <TrustSection agent={shown} />
               </FieldGroup>
               <MemoriesSection agent={shown} />
+              <TasksSection agent={shown} />
               <DangerZone agent={shown} onArchived={close} />
             </div>
           </div>

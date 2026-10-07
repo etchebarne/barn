@@ -10,12 +10,14 @@ import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/compone
 import { AgentAvatar } from "@/features/agents"
 import { PromptCard } from "@/features/prompts"
 import type { Agent, Schemas } from "@/lib/api-client"
+import { mentionTargets } from "@/lib/mentions"
 
 import { messageFailure } from "./failure"
 import { FailureNotice } from "./failure-notice"
 import type { Row } from "./grouping"
 import { formatDay, formatTime } from "./grouping"
 import { Markdown } from "./markdown"
+import { MentionText } from "./mention-text"
 import { MessageReactions, ReactButton } from "./message-reactions"
 import type { PendingMessage } from "./pending-store"
 
@@ -120,6 +122,7 @@ export function MessageRow({
   }
 
   const reacted = message.reactions.length > 0
+  const mentions = mentionTargets(message.mentions, agents)
   const time = (
     <time dateTime={message.createdAt} className="hidden tabular-nums sm:inline">
       {formatTime(message.createdAt)}
@@ -131,7 +134,9 @@ export function MessageRow({
       <Message align="end">
         <MessageContent>
           <Bubble variant="default" align="end" className={cn(reacted && "mb-3.5")}>
-            <BubbleContent className="whitespace-pre-wrap">{message.body}</BubbleContent>
+            <BubbleContent className="whitespace-pre-wrap">
+              <MentionText text={message.body} mentions={mentions} />
+            </BubbleContent>
             <MessageReactions message={message} agents={agents} align="start" />
             <MessageActions side="end">
               <ReactButton message={message} />
@@ -166,7 +171,7 @@ export function MessageRow({
         ) : (
           <Bubble variant="muted" className={cn(reacted && "mb-3.5")}>
             <BubbleContent>
-              <Markdown>{message.body}</Markdown>
+              <Markdown mentions={mentions}>{message.body}</Markdown>
             </BubbleContent>
             <MessageReactions message={message} agents={agents} align="end" />
             <MessageActions side="start">

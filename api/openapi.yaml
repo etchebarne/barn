@@ -352,6 +352,114 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
 
+  /agents/{agentId}/tasks:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listTasks
+      tags: [agents]
+      description: The agent's scheduled tasks, oldest first.
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Task" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /tasks/{taskId}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateTask
+      tags: [agents]
+      description: Pause or resume a task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTaskRequest" }
+      responses:
+        "200":
+          description: The updated task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteTask
+      tags: [agents]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /push/config:
+    get:
+      operationId: getPushConfig
+      tags: [settings]
+      description: The VAPID public key browsers subscribe with.
+      responses:
+        "200":
+          description: Push config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PushConfig" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /push/subscriptions:
+    post:
+      operationId: subscribePush
+      tags: [settings]
+      description: Register this browser for notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushSubscription" }
+      responses:
+        "204": { description: Subscribed }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: unsubscribePush
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushUnsubscribe" }
+      responses:
+        "204": { description: Unsubscribed }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /settings/timezone:
+    put:
+      operationId: setTimezone
+      tags: [settings]
+      description: |
+        Save the user's IANA time zone (the web app sends the browser's). Agents' schedules and
+        "current time" use it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetTimezoneRequest" }
+      responses:
+        "204": { description: Saved }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /agents/{agentId}/retry:
     parameters:
       - name: agentId
@@ -602,6 +710,72 @@ components:
         text: { type: string }
         createdAt: { type: string, format: date-time }
 
+    Task:
+      type: object
+      required: [id, agentId, name, purpose, kind, cron, at, enabled, nextFireAt, lastFiredAt]
+      properties:
+        id: { type: string }
+        agentId: { type: string }
+        name: { type: string }
+        purpose:
+          type: string
+          description: What the agent does when the task fires
+        kind: { type: string, enum: [cron, once] }
+        cron:
+          type: string
+          nullable: true
+          description: 5-field cron in the user's time zone (kind cron)
+        at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a one-off task runs (kind once)
+        enabled: { type: boolean }
+        nextFireAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastFiredAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UpdateTaskRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+
+    PushConfig:
+      type: object
+      required: [publicKey]
+      properties:
+        publicKey: { type: string }
+
+    PushSubscription:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, maxLength: 2000 }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string, maxLength: 200 }
+            auth: { type: string, maxLength: 200 }
+
+    PushUnsubscribe:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string }
+
+    SetTimezoneRequest:
+      type: object
+      required: [timezone]
+      properties:
+        timezone: { type: string, description: 'IANA name, e.g. "America/Montevideo"' }
+
     Sandbox:
       type: object
       required: [status, sharedWith]
@@ -633,6 +807,9 @@ components:
           type: string
           enum: [ask, trusted]
           description: trusted skips approvals for gated actions
+        notifications:
+          type: boolean
+          description: Push this agent's messages to the user's devices
 
     AgentActivity:
       type: object
@@ -681,7 +858,7 @@ components:
 
     Message:
       type: object
-      required: [id, chatId, author, body, createdAt, reactions]
+      required: [id, chatId, author, body, createdAt, reactions, mentions]
       properties:
         id:
           type: string
@@ -696,6 +873,10 @@ components:
           allOf: [{ $ref: "#/components/schemas/MessageFailure" }]
           nullable: true
           description: Set on system messages reporting that an agent's turn failed
+        mentions:
+          type: array
+          description: Agents @mentioned in the message (group chats)
+          items: { type: string }
         reactions:
           type: array
           description: Emoji reactions, in the order each emoji was first used

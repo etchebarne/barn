@@ -42,7 +42,7 @@ func newTestServerWithProvider(t *testing.T, providerURL string) (*httptest.Serv
 	if err := rt.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(New(st, b, rt, llm, set, Options{}).Handler())
+	ts := httptest.NewServer(New(st, b, rt, llm, set, nil, Options{}).Handler())
 	t.Cleanup(func() {
 		ts.Close()
 		cancel()

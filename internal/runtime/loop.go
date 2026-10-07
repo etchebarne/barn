@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/etchebarne/barn/internal/model"
@@ -26,6 +27,7 @@ type loop struct {
 	agentID string
 	wake    chan struct{}
 	stop    context.CancelFunc
+	handled []string // events consumed by the current turn
 }
 
 func (l *loop) poke() {
@@ -74,9 +76,18 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 
 	l.m.setActivity(agent.ID, view.Working("thinking"))
 	defer l.m.setActivity(agent.ID, view.Idle())
+	// Whoever is waiting on these events (a group's turn coordinator) learns the turn is over.
+	l.handled = l.handled[:0]
+	defer func() { l.m.eventsHandled(l.handled) }()
 
-	if err := l.consume(ctx, events); err != nil {
+	added, err := l.consume(ctx, events)
+	if err != nil {
 		log.Error("consume events", "err", err)
+		return
+	}
+	// Events that rendered to nothing (an empty group turn) don't warrant a model call; a retry
+	// renders to nothing on purpose and does.
+	if added == 0 && !slices.ContainsFunc(events, func(e store.Event) bool { return e.Kind == EventRetry }) {
 		return
 	}
 
@@ -155,7 +166,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			return
 		}
 		if len(pending) > 0 {
-			if err := l.consume(ctx, pending); err != nil {
+			if _, err := l.consume(ctx, pending); err != nil {
 				log.Error("consume events", "err", err)
 				return
 			}
@@ -165,25 +176,28 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 	l.reportError(ctx, agent, errTooManySteps)
 }
 
-func (l *loop) consume(ctx context.Context, events []store.Event) error {
+// consume renders events into the context and marks them consumed. It returns how many context
+// entries were added.
+func (l *loop) consume(ctx context.Context, events []store.Event) (int, error) {
 	ids := make([]string, 0, len(events))
 	entries := make([]json.RawMessage, 0, len(events))
 	for _, e := range events {
 		text, err := l.renderEvent(ctx, e)
 		if err != nil {
-			return fmt.Errorf("render event %s: %w", e.ID, err)
+			return 0, fmt.Errorf("render event %s: %w", e.ID, err)
 		}
 		ids = append(ids, e.ID)
+		l.handled = append(l.handled, e.ID)
 		if text == "" {
 			continue
 		}
 		b, err := json.Marshal(model.Text("user", text))
 		if err != nil {
-			return err
+			return 0, err
 		}
 		entries = append(entries, b)
 	}
-	return l.m.store.ConsumeEvents(ctx, l.agentID, ids, entries)
+	return len(entries), l.m.store.ConsumeEvents(ctx, l.agentID, ids, entries)
 }
 
 func (l *loop) appendEntries(ctx context.Context, msgs ...model.Message) error {

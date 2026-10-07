@@ -68,7 +68,7 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request, chatID gen.
 	if !s.chatExists(w, r, chatID) {
 		return
 	}
-	msg, err := s.store.InsertMessage(ctx, chatID, "user", nil, req.Body)
+	msg, err := s.store.InsertMessage(ctx, chatID, "user", nil, req.Body, s.runtime.MentionsIn(ctx, chatID, req.Body)...)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -160,7 +160,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID str
 		internalError(w, err)
 		return
 	}
-	u := store.AgentUpdate{Name: req.Name, Instructions: req.Instructions, Model: req.Model, Language: req.Language}
+	u := store.AgentUpdate{Name: req.Name, Instructions: req.Instructions, Model: req.Model, Language: req.Language, Notifications: req.Notifications}
 	if req.TrustMode != nil {
 		mode := string(*req.TrustMode)
 		u.TrustMode = &mode
@@ -472,4 +472,125 @@ func (s *Server) writeSandbox(w http.ResponseWriter, r *http.Request, agentID st
 		shared = []string{}
 	}
 	writeJSON(w, http.StatusOK, gen.Sandbox{Status: gen.SandboxStatus(status), SharedWith: shared})
+}
+
+func taskView(t store.Task) gen.Task {
+	out := gen.Task{Id: t.ID, AgentId: t.AgentID, Name: t.Name, Purpose: t.Purpose, Kind: gen.TaskKind(t.Kind), Enabled: t.Enabled}
+	if t.Kind == "cron" {
+		c := t.Cron
+		out.Cron = &c
+	} else {
+		at := store.Time(t.At)
+		out.At = &at
+	}
+	if t.NextFireAt != nil && t.Enabled {
+		next := store.Time(*t.NextFireAt)
+		out.NextFireAt = &next
+	}
+	if t.LastFiredAt != nil {
+		last := store.Time(*t.LastFiredAt)
+		out.LastFiredAt = &last
+	}
+	return out
+}
+
+func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx := r.Context()
+	if _, err := s.store.GetAgent(ctx, agentID); errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	} else if err != nil {
+		internalError(w, err)
+		return
+	}
+	tasks, err := s.store.Tasks(ctx, agentID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	out := make([]gen.Task, 0, len(tasks))
+	for _, t := range tasks {
+		out = append(out, taskView(t))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) UpdateTask(w http.ResponseWriter, r *http.Request, taskID string) {
+	var req gen.UpdateTaskRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	t, err := s.runtime.SetTaskEnabled(r.Context(), taskID, req.Enabled)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, taskView(t))
+}
+
+func (s *Server) DeleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
+	err := s.store.DeleteTask(r.Context(), taskID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) SetTimezone(w http.ResponseWriter, r *http.Request) {
+	var req gen.SetTimezoneRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := s.settings.SetTimezone(r.Context(), req.Timezone); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) GetPushConfig(w http.ResponseWriter, r *http.Request) {
+	if s.push == nil {
+		writeError(w, http.StatusServiceUnavailable, "notifications aren't available")
+		return
+	}
+	writeJSON(w, http.StatusOK, gen.PushConfig{PublicKey: s.push.PublicKey()})
+}
+
+func (s *Server) SubscribePush(w http.ResponseWriter, r *http.Request) {
+	var req gen.PushSubscription
+	if !decode(w, r, &req) {
+		return
+	}
+	if !strings.HasPrefix(req.Endpoint, "https://") || req.Keys.P256dh == "" || req.Keys.Auth == "" {
+		writeError(w, http.StatusBadRequest, "invalid push subscription")
+		return
+	}
+	if err := s.store.SavePushSubscription(r.Context(), store.PushSubscription{
+		Endpoint: req.Endpoint, P256dh: req.Keys.P256dh, Auth: req.Keys.Auth,
+	}); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) UnsubscribePush(w http.ResponseWriter, r *http.Request) {
+	var req gen.PushUnsubscribe
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := s.store.DeletePushSubscription(r.Context(), req.Endpoint); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

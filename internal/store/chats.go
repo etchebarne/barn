@@ -41,6 +41,8 @@ type Message struct {
 	Event *MessageEvent
 	// Reactions are filled by ListMessages and GetMessage.
 	Reactions []Reaction
+	// Mentions are the agent ids @mentioned in the message.
+	Mentions []string
 }
 
 // Reaction is one emoji on a message and who used it. Reactors are "user" or "agent:<id>".
@@ -250,14 +252,19 @@ func sortChatsByActivity(chats []Chat) {
 	slices.SortFunc(chats, func(a, b Chat) int { return strings.Compare(activity(b), activity(a)) })
 }
 
-const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at, failure, prompt, event`
+const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at, failure, prompt, event, mentions`
 
 func scanMessage(row interface{ Scan(...any) error }) (Message, error) {
 	var m Message
-	var failure, prompt, event sql.NullString
+	var failure, prompt, event, mentions sql.NullString
 	if err := row.Scan(&m.ID, &m.ChatID, &m.AuthorKind, &m.AuthorAgentID, &m.Body, &m.CreatedAt,
-		&failure, &prompt, &event); err != nil {
+		&failure, &prompt, &event, &mentions); err != nil {
 		return m, err
+	}
+	if mentions.Valid {
+		if err := json.Unmarshal([]byte(mentions.String), &m.Mentions); err != nil {
+			return m, err
+		}
 	}
 	if err := unmarshalNullable(failure, &m.Failure); err != nil {
 		return m, err
@@ -288,8 +295,8 @@ func marshalNullable[T any](v *T) (*string, error) {
 	return &out, nil
 }
 
-func (s *Store) InsertMessage(ctx context.Context, chatID, authorKind string, authorAgentID *string, body string) (Message, error) {
-	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body})
+func (s *Store) InsertMessage(ctx context.Context, chatID, authorKind string, authorAgentID *string, body string, mentions ...string) (Message, error) {
+	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body, Mentions: mentions})
 }
 
 // InsertPrompt posts an agent message that asks the user something.
@@ -358,8 +365,17 @@ func (s *Store) insertMessage(ctx context.Context, m Message) (Message, error) {
 	if err != nil {
 		return m, err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure, prompt, event)
+	var mentions *string
+	if len(m.Mentions) > 0 {
+		b, err := json.Marshal(m.Mentions)
+		if err != nil {
+			return m, err
+		}
+		v := string(b)
+		mentions = &v
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure, prompt, event, mentions)
 	return m, err
 }
 
@@ -495,4 +511,96 @@ func (s *Store) MarkRead(ctx context.Context, chatID, lastMessageID string) erro
 		ON CONFLICT (chat_id, reader) DO UPDATE SET last_message_id = excluded.last_message_id
 		WHERE excluded.last_message_id > reads.last_message_id`, chatID, readerUser, lastMessageID)
 	return err
+}
+
+// MessagesAfter returns a chat's messages newer than afterID (all if empty), oldest first.
+func (s *Store) MessagesAfter(ctx context.Context, chatID, afterID string, limit int) ([]Message, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+messageColumns+` FROM messages
+		WHERE chat_id = ? AND id > ? ORDER BY id LIMIT ?`, chatID, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Message
+	for rows.Next() {
+		m, err := scanMessage(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// ReadMarker returns how far a reader ("user" or "agent:<id>") has read a chat ("" if never).
+func (s *Store) ReadMarker(ctx context.Context, chatID, reader string) (string, error) {
+	var id string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT last_message_id FROM reads WHERE chat_id = ? AND reader = ?`, chatID, reader).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
+}
+
+// MarkReadBy moves a reader's marker forward (never backwards).
+func (s *Store) MarkReadBy(ctx context.Context, chatID, reader, lastMessageID string) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO reads (chat_id, reader, last_message_id) VALUES (?, ?, ?)
+		ON CONFLICT (chat_id, reader) DO UPDATE SET last_message_id = excluded.last_message_id
+		WHERE excluded.last_message_id > reads.last_message_id`, chatID, reader, lastMessageID)
+	return err
+}
+
+// CreateGroup creates a group chat with the agents in order.
+func (s *Store) CreateGroup(ctx context.Context, name string, agentIDs []string) (Chat, error) {
+	c := Chat{ID: ids.New(), Kind: "group", Name: name, CreatedAt: now()}
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO chats (id, kind, name, created_at) VALUES (?, 'group', ?, ?)`, c.ID, name, c.CreatedAt); err != nil {
+			return err
+		}
+		for i, id := range agentIDs {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO chat_members (chat_id, agent_id, position) VALUES (?, ?, ?)`, c.ID, id, i); err != nil {
+				return err
+			}
+			c.Members = append(c.Members, ChatMember{AgentID: id, Position: i})
+		}
+		return nil
+	})
+	return c, err
+}
+
+// UpdateGroup renames a group and adds or removes members.
+func (s *Store) UpdateGroup(ctx context.Context, chatID string, name *string, add, remove []string) error {
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		var kind string
+		err := tx.QueryRowContext(ctx, `SELECT kind FROM chats WHERE id = ?`, chatID).Scan(&kind)
+		if errors.Is(err, sql.ErrNoRows) || kind != "group" {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if name != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE chats SET name = ? WHERE id = ?`, *name, chatID); err != nil {
+				return err
+			}
+		}
+		for _, id := range remove {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM chat_members WHERE chat_id = ? AND agent_id = ?`, chatID, id); err != nil {
+				return err
+			}
+		}
+		for _, id := range add {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO chat_members (chat_id, agent_id, position)
+				VALUES (?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM chat_members WHERE chat_id = ?))
+				ON CONFLICT DO NOTHING`, chatID, id, chatID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

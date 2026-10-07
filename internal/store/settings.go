@@ -9,6 +9,9 @@ import (
 // Setting keys.
 const (
 	SettingOpenCodeAPIKey = "provider.opencode_go.api_key" // encrypted
+	SettingTimezone       = "user.timezone"                // IANA name, e.g. "America/Montevideo"
+	SettingVAPIDPublic    = "push.vapid.public"
+	SettingVAPIDPrivate   = "push.vapid.private" // encrypted
 )
 
 func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {

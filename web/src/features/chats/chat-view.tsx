@@ -74,16 +74,19 @@ function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
 
   return (
     <PageHeader>
-      <GroupAvatar memberIds={chat.members.map((m) => m.agentId)} />
-      <HeaderTitle
-        title={chat.name}
-        status={`${members.length} ${members.length === 1 ? "agent" : "agents"}`}
-      />
+      <GroupAvatar memberIds={members.map((m) => m.id)} />
+      <HeaderTitle title={chat.name} status={joinNames(members.map((m) => m.name)) || null} />
     </PageHeader>
   )
 }
 
-function ChatComposer({ chat }: { chat: Chat }) {
+/** "Alpha", "Alpha and Beta", "Alpha, Beta and barn". */
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ""
+  return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
+}
+
+function ChatComposer({ chat, members }: { chat: Chat; members: Agent[] }) {
   const draft = useDraftStore((s) => s.drafts[chat.id] ?? "")
   const setDraft = useDraftStore((s) => s.setDraft)
   const { send } = useSendMessage(chat.id)
@@ -93,6 +96,9 @@ function ChatComposer({ chat }: { chat: Chat }) {
       onChange={(text) => setDraft(chat.id, text)}
       onSend={send}
       placeholder={`Message ${chat.name}`}
+      mentionCandidates={
+        chat.kind === "group" ? members.map((m) => ({ id: m.id, name: m.name })) : undefined
+      }
     />
   )
 }
@@ -139,7 +145,7 @@ export function ChatView({ chatId }: { chatId: string }) {
       </MessageScrollerProvider>
       <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <ActivityLine agents={members} />
-        <ChatComposer key={chat.id} chat={chat} />
+        <ChatComposer key={chat.id} chat={chat} members={members} />
       </div>
     </div>
   )

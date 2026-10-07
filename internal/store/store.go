@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -105,3 +106,10 @@ func now() int64 { return time.Now().UnixMilli() }
 
 // Time converts a stored Unix-millisecond timestamp to time.Time.
 func Time(ms int64) time.Time { return time.UnixMilli(ms).UTC() }
+
+func marshalString(v any) (string, error) {
+	b, err := json.Marshal(v)
+	return string(b), err
+}
+
+func unmarshalString(s string, v any) error { return json.Unmarshal([]byte(s), v) }

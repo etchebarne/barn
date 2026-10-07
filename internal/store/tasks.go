@@ -1,0 +1,151 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+
+	"github.com/etchebarne/barn/internal/ids"
+)
+
+// Task is something an agent does on a schedule.
+type Task struct {
+	ID          string
+	AgentID     string
+	Name        string
+	Purpose     string
+	Kind        string // "cron" | "once"
+	Cron        string // for kind "cron"
+	At          int64  // for kind "once" (unix ms)
+	Enabled     bool
+	NextFireAt  *int64
+	LastFiredAt *int64
+	CreatedAt   int64
+}
+
+const taskColumns = `id, agent_id, name, purpose, kind, spec, enabled, next_fire_at, last_fired_at, created_at`
+
+func scanTask(row interface{ Scan(...any) error }) (Task, error) {
+	var t Task
+	var spec string
+	err := row.Scan(&t.ID, &t.AgentID, &t.Name, &t.Purpose, &t.Kind, &spec, &t.Enabled,
+		&t.NextFireAt, &t.LastFiredAt, &t.CreatedAt)
+	if err != nil {
+		return t, err
+	}
+	var s struct {
+		Cron string `json:"cron"`
+		At   int64  `json:"at"`
+	}
+	if err := unmarshalString(spec, &s); err != nil {
+		return t, err
+	}
+	t.Cron, t.At = s.Cron, s.At
+	return t, nil
+}
+
+func taskSpec(t Task) (string, error) {
+	if t.Kind == "cron" {
+		return marshalString(map[string]string{"cron": t.Cron})
+	}
+	return marshalString(map[string]int64{"at": t.At})
+}
+
+func (s *Store) CreateTask(ctx context.Context, t Task) (Task, error) {
+	t.ID, t.CreatedAt = ids.New(), now()
+	spec, err := taskSpec(t)
+	if err != nil {
+		return t, err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO tasks (`+taskColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.AgentID, t.Name, t.Purpose, t.Kind, spec, t.Enabled, t.NextFireAt, t.LastFiredAt, t.CreatedAt)
+	return t, err
+}
+
+// SaveTask writes back a task's editable fields and schedule state.
+func (s *Store) SaveTask(ctx context.Context, t Task) error {
+	spec, err := taskSpec(t)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE tasks SET name = ?, purpose = ?, kind = ?, spec = ?, enabled = ?,
+		next_fire_at = ?, last_fired_at = ? WHERE id = ?`,
+		t.Name, t.Purpose, t.Kind, spec, t.Enabled, t.NextFireAt, t.LastFiredAt, t.ID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) GetTask(ctx context.Context, id string) (Task, error) {
+	t, err := scanTask(s.db.QueryRowContext(ctx, `SELECT `+taskColumns+` FROM tasks WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return t, ErrNotFound
+	}
+	return t, err
+}
+
+func (s *Store) DeleteTask(ctx context.Context, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM tasks WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Tasks returns an agent's tasks, oldest first.
+func (s *Store) Tasks(ctx context.Context, agentID string) ([]Task, error) {
+	return s.queryTasks(ctx, `SELECT `+taskColumns+` FROM tasks WHERE agent_id = ? ORDER BY id`, agentID)
+}
+
+// DueTasks returns enabled tasks of active agents whose next run is at or before t.
+func (s *Store) DueTasks(ctx context.Context, t int64) ([]Task, error) {
+	return s.queryTasks(ctx, `SELECT `+taskColumns+` FROM tasks
+		WHERE enabled = 1 AND next_fire_at IS NOT NULL AND next_fire_at <= ?
+		AND agent_id IN (SELECT id FROM agents WHERE archived_at IS NULL)
+		ORDER BY next_fire_at`, t)
+}
+
+// NextTaskFireAt returns the earliest upcoming run of any enabled task (0 if none).
+func (s *Store) NextTaskFireAt(ctx context.Context) (int64, error) {
+	var next sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `SELECT MIN(next_fire_at) FROM tasks WHERE enabled = 1
+		AND agent_id IN (SELECT id FROM agents WHERE archived_at IS NULL)`).Scan(&next)
+	return next.Int64, err
+}
+
+func (s *Store) queryTasks(ctx context.Context, q string, args ...any) ([]Task, error) {
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Task
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// ClaimTaskFire records that a due task fired (its new schedule state in t), but only if its
+// next run is still prevNext, so two schedulers can never fire the same run twice. It reports
+// whether this caller won the claim.
+func (s *Store) ClaimTaskFire(ctx context.Context, t Task, prevNext int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE tasks SET enabled = ?, next_fire_at = ?, last_fired_at = ?
+		WHERE id = ? AND next_fire_at = ?`, t.Enabled, t.NextFireAt, t.LastFiredAt, t.ID, prevNext)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}

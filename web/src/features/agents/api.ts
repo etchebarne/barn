@@ -4,6 +4,8 @@ import { api, ApiError, unwrap, type Agent, type Schemas } from "@/lib/api-clien
 import { removeArchivedAgent, updateAgentInCache } from "@/lib/chat-cache"
 import { queryKeys } from "@/lib/query-keys"
 
+import type { Task } from "./schedule"
+
 export const agentsQueryOptions = queryOptions({
   queryKey: queryKeys.agents,
   queryFn: () => unwrap(api.GET("/agents")),
@@ -93,5 +95,50 @@ export function useArchiveAgent(agentId: string) {
       await unwrap(api.POST("/agents/{agentId}/archive", { params: { path: { agentId } } }))
       return removeArchivedAgent(queryClient, agentId)
     },
+  })
+}
+
+export function useTasks(agentId: string) {
+  return useQuery({
+    queryKey: queryKeys.tasks(agentId),
+    queryFn: () => unwrap(api.GET("/agents/{agentId}/tasks", { params: { path: { agentId } } })),
+    // Agents change their tasks from chat; always refresh when the sheet opens.
+    staleTime: 0,
+    refetchOnMount: "always",
+  })
+}
+
+/** Pause or resume a task (optimistic). */
+export function useSetTaskEnabled(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.tasks(agentId)
+  return useMutation({
+    mutationFn: ({ taskId, enabled }: { taskId: string; enabled: boolean }) =>
+      unwrap(api.PATCH("/tasks/{taskId}", { params: { path: { taskId } }, body: { enabled } })),
+    onMutate: ({ taskId, enabled }) => {
+      const previous = queryClient.getQueryData<Task[]>(key)
+      queryClient.setQueryData<Task[]>(key, (tasks) =>
+        tasks?.map((t) => (t.id === taskId ? { ...t, enabled } : t)),
+      )
+      return { previous }
+    },
+    onSuccess: (task) =>
+      queryClient.setQueryData<Task[]>(key, (tasks) =>
+        tasks?.map((t) => (t.id === task.id ? task : t)),
+      ),
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous)
+    },
+  })
+}
+
+export function useDeleteTask(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.tasks(agentId)
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      unwrap(api.DELETE("/tasks/{taskId}", { params: { path: { taskId } } })),
+    onSuccess: (_data, taskId) =>
+      queryClient.setQueryData<Task[]>(key, (tasks) => tasks?.filter((t) => t.id !== taskId)),
   })
 }
