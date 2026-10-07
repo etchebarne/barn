@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
+import { AgentConnections } from "@/features/connectors"
 import type { Agent } from "@/lib/api-client"
 
 import { AgentAvatar } from "./agent-avatar"
@@ -122,6 +123,7 @@ export function AgentDetailsSheet() {
               </FieldGroup>
               <MemoriesSection agent={shown} />
               <TasksSection agent={shown} />
+              <AgentConnections agentId={shown.id} agentName={shown.name} onNavigate={close} />
               <DangerZone agent={shown} onArchived={close} />
             </div>
           </div>

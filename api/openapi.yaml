@@ -443,6 +443,88 @@ paths:
         "204": { description: Unsubscribed }
         "401": { $ref: "#/components/responses/Error" }
 
+  /connectors/types:
+    get:
+      operationId: listConnectorTypes
+      tags: [connectors]
+      description: The kinds of apps that can be connected, with the fields each needs.
+      responses:
+        "200":
+          description: Connector types
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ConnectorType" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /connectors:
+    get:
+      operationId: listConnectors
+      tags: [connectors]
+      responses:
+        "200":
+          description: Connected accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Connector" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createConnector
+      tags: [connectors]
+      description: Connect an account. Credentials are checked with the service before saving.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateConnectorRequest" }
+      responses:
+        "201":
+          description: Connected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connector" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+  /connectors/{connectorId}:
+    parameters:
+      - name: connectorId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateConnector
+      tags: [connectors]
+      description: |
+        Rename, replace credentials (empty values keep the saved ones), change config, or set
+        which agents may use the account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateConnectorRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connector" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteConnector
+      tags: [connectors]
+      responses:
+        "204": { description: Disconnected }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /settings/timezone:
     put:
       operationId: setTimezone
@@ -712,7 +794,7 @@ components:
 
     Task:
       type: object
-      required: [id, agentId, name, purpose, kind, cron, at, enabled, nextFireAt, lastFiredAt]
+      required: [id, agentId, name, purpose, kind, cron, at, signal, enabled, nextFireAt, lastFiredAt]
       properties:
         id: { type: string }
         agentId: { type: string }
@@ -720,7 +802,7 @@ components:
         purpose:
           type: string
           description: What the agent does when the task fires
-        kind: { type: string, enum: [cron, once] }
+        kind: { type: string, enum: [cron, once, signal] }
         cron:
           type: string
           nullable: true
@@ -731,6 +813,10 @@ components:
           nullable: true
           description: When a one-off task runs (kind once)
         enabled: { type: boolean }
+        signal:
+          type: string
+          nullable: true
+          description: 'kind signal: the event that runs it, e.g. "slack.app_mention in Slack — work where channel contains alerts"'
         nextFireAt:
           type: string
           format: date-time
@@ -739,6 +825,100 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    ConnectorField:
+      type: object
+      required: [key, label, secret, optional]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        help: { type: string }
+        secret: { type: boolean }
+        optional: { type: boolean }
+
+    ConnectorSignalType:
+      type: object
+      required: [type, description, fields]
+      properties:
+        type: { type: string }
+        description: { type: string }
+        fields:
+          type: array
+          items: { type: string }
+
+    ConnectorType:
+      type: object
+      required: [type, name, description, credentialFields, configFields, signals, webhooks]
+      properties:
+        type: { type: string, description: 'Machine name, e.g. "github"' }
+        name: { type: string, description: 'Display name, e.g. "GitHub"' }
+        description: { type: string }
+        credentialFields:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectorField" }
+        configFields:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectorField" }
+        signals:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectorSignalType" }
+        webhooks:
+          type: boolean
+          description: Receives events at a webhook URL (shown after connecting)
+
+    Connector:
+      type: object
+      required: [id, type, name, config, credentialsSet, agentIds, webhookUrl, createdAt]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        name: { type: string }
+        config:
+          type: object
+          additionalProperties: { type: string }
+        credentialsSet:
+          type: array
+          description: Credential keys that have a saved value (values are never returned)
+          items: { type: string }
+        agentIds:
+          type: array
+          description: Agents allowed to use this account
+          items: { type: string }
+        webhookUrl:
+          type: string
+          nullable: true
+          description: Where the service should send events (types with webhooks)
+        createdAt: { type: string, format: date-time }
+
+    CreateConnectorRequest:
+      type: object
+      required: [type, name, credentials]
+      properties:
+        type: { type: string }
+        name: { type: string, minLength: 1, maxLength: 64 }
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+        config:
+          type: object
+          additionalProperties: { type: string }
+        agentIds:
+          type: array
+          items: { type: string }
+
+    UpdateConnectorRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64 }
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+        config:
+          type: object
+          additionalProperties: { type: string }
+        agentIds:
+          type: array
+          items: { type: string }
 
     UpdateTaskRequest:
       type: object

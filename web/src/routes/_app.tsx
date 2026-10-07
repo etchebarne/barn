@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { AppShell } from "@/app/app-shell"
 import { requireOnboarded } from "@/app/guards"
-import { agentsQueryOptions } from "@/features/agents"
 import { chatsQueryOptions } from "@/features/chats"
+import { agentsQueryOptions } from "@/lib/agents"
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: ({ context }) => requireOnboarded(context.queryClient),

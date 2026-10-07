@@ -11,5 +11,7 @@ export const queryKeys = {
   memories: (agentId: string) => ["agents", agentId, "memories"] as const,
   tasks: (agentId: string) => ["agents", agentId, "tasks"] as const,
   chats: ["chats"] as const,
+  connectorTypes: ["connectors", "types"] as const,
+  connectors: ["connectors", "list"] as const,
   messages: (chatId: string) => ["chats", chatId, "messages"] as const,
 }

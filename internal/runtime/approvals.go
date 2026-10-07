@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/store"
@@ -17,8 +19,15 @@ var gatedTools = map[string]bool{
 	toolArchiveAgent: true,
 }
 
-func needsApproval(agent store.Agent, tool string) bool {
-	return gatedTools[tool] && agent.TrustMode != "trusted"
+func (l *loop) needsApproval(ctx context.Context, agent store.Agent, tool string) bool {
+	if agent.TrustMode == "trusted" {
+		return false
+	}
+	if gatedTools[tool] {
+		return true
+	}
+	t, ok := l.connectorTool(ctx, agent, tool)
+	return ok && t.Tool.External
 }
 
 // requestApproval posts an Approve / Decline prompt in the agent's DM instead of running a
@@ -69,6 +78,13 @@ func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool strin
 		}
 		return fmt.Sprintf("Archive %s? It stops working and its chat is hidden. Its history is kept.", target.Name), nil
 	default:
+		if t, ok := l.connectorTool(ctx, agent, tool); ok {
+			account := "an app"
+			if a, err := l.m.store.GetAccount(ctx, t.AccountID); err == nil {
+				account = a.Name
+			}
+			return fmt.Sprintf("Allow %s to use %s: %s?%s", agent.Name, account, t.Tool.Name, describeArgs(args)), nil
+		}
 		return fmt.Sprintf("Allow %s to run %s with %s?", agent.Name, tool, truncate(string(args), 300)), nil
 	}
 }
@@ -106,4 +122,30 @@ func (m *Manager) ResolveApproval(ctx context.Context, msg store.Message) error 
 func renderApproval(msg store.Message, outcome json.RawMessage) string {
 	return fmt.Sprintf("<approval_result prompt_id=%q question=%q>\n%s\n</approval_result>",
 		msg.ID, msg.Prompt.Question, string(outcome))
+}
+
+// describeArgs lists tool arguments as "key: value" lines for an approval question.
+func describeArgs(args json.RawMessage) string {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(args, &m) != nil || len(m) == 0 {
+		if len(args) == 0 || string(args) == "{}" {
+			return ""
+		}
+		return "\n" + truncate(string(args), 400)
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		v := string(m[k])
+		var s string
+		if json.Unmarshal(m[k], &s) == nil {
+			v = s
+		}
+		fmt.Fprintf(&b, "\n%s: %s", k, truncate(v, 200))
+	}
+	return truncate(b.String(), 800)
 }

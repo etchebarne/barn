@@ -14,6 +14,7 @@ import (
 	"github.com/etchebarne/barn/internal/api/gen"
 	"github.com/etchebarne/barn/internal/auth"
 	"github.com/etchebarne/barn/internal/bus"
+	"github.com/etchebarne/barn/internal/connectors"
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/push"
 	"github.com/etchebarne/barn/internal/runtime"
@@ -30,6 +31,8 @@ const (
 type Options struct {
 	SecureCookies  bool
 	AllowedOrigins []string
+	// PublicURL is where external services reach barnd (for webhook URLs); empty: the request's host.
+	PublicURL string
 	// Web is the built web app to serve at /. Nil serves the API only.
 	Web fs.FS
 }
@@ -42,6 +45,9 @@ type Server struct {
 	settings *settings.Settings
 	push     *push.Notifier
 	opts     Options
+
+	// Connectors manages connected apps (set before Handler).
+	Connectors *connectors.Manager
 
 	loginLimiter *auth.Limiter
 }
@@ -66,6 +72,14 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	mux.HandleFunc("GET /api/ws", s.serveWS)
+	// Webhooks from connected services: public, verified per connector (signatures, tokens).
+	mux.HandleFunc("POST /hooks/{accountID}", func(w http.ResponseWriter, r *http.Request) {
+		if s.Connectors == nil {
+			http.NotFound(w, r)
+			return
+		}
+		s.Connectors.ServeWebhook(w, r)
+	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})

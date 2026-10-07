@@ -12,6 +12,7 @@ function task(overrides: Partial<Task> = {}): Task {
     cron: "1 10 * * 1-5",
     at: null,
     enabled: true,
+    signal: null,
     nextFireAt: null,
     lastFiredAt: null,
     ...overrides,
@@ -36,10 +37,11 @@ describe("describeSchedule", () => {
   })
 
   it("describes signal tasks by their event, with no schedule", () => {
-    expect(describeSchedule(task({ kind: "signal", cron: null, signal: "a PR is opened" }))).toBe(
-      "When a PR is opened happens",
+    const signal = 'slack.app_mention in Slack (work) where channel contains "C0123"'
+    expect(describeSchedule(task({ kind: "signal", cron: null, signal }))).toBe(`When ${signal}`)
+    expect(describeSchedule(task({ kind: "signal", cron: null, signal: null }))).toBe(
+      "When a connected app sends an event",
     )
-    expect(describeSchedule(task({ kind: "signal", cron: null }))).toBe("When an event happens")
   })
 })
 

@@ -325,7 +325,7 @@ export function TrustSection({ agent }: { agent: Agent }) {
         <div className="flex flex-col gap-0.5">
           <FieldLabel htmlFor="agent-trusted">Trusted mode</FieldLabel>
           <FieldDescription>
-            Skip approvals for gated actions, like archiving agents.
+            Skip approvals for actions like archiving agents or making changes in connected apps.
           </FieldDescription>
         </div>
         {/* Stays off until the user confirms; Base UI's switch isn't a labelable element, so it

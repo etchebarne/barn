@@ -13,6 +13,7 @@ import (
 
 	"github.com/etchebarne/barn/internal/api/gen"
 	"github.com/etchebarne/barn/internal/bus"
+	"github.com/etchebarne/barn/internal/connectors"
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/store"
 	"github.com/etchebarne/barn/internal/view"
@@ -49,6 +50,8 @@ type Manager struct {
 	Sandboxes Sandboxer
 	// Timezone is the user's time zone for schedules and prompts (set before Start).
 	Timezone Timezone
+	// Connectors gives agents tools and signals from external services; nil disables them.
+	Connectors *connectors.Manager
 	// Push sends a notification to the user's devices; nil disables notifications.
 	Push func(ctx context.Context, title, body, chatID string)
 

@@ -10,17 +10,21 @@ import (
 
 // Task is something an agent does on a schedule.
 type Task struct {
-	ID          string
-	AgentID     string
-	Name        string
-	Purpose     string
-	Kind        string // "cron" | "once"
-	Cron        string // for kind "cron"
-	At          int64  // for kind "once" (unix ms)
-	Enabled     bool
-	NextFireAt  *int64
-	LastFiredAt *int64
-	CreatedAt   int64
+	ID      string
+	AgentID string
+	Name    string
+	Purpose string
+	Kind    string // "cron" | "once" | "signal"
+	Cron    string // for kind "cron"
+	At      int64  // for kind "once" (unix ms)
+	// For kind "signal": which account's events, of which type, matching which fields.
+	SignalAccountID string
+	SignalType      string
+	SignalMatch     map[string]string
+	Enabled         bool
+	NextFireAt      *int64
+	LastFiredAt     *int64
+	CreatedAt       int64
 }
 
 const taskColumns = `id, agent_id, name, purpose, kind, spec, enabled, next_fire_at, last_fired_at, created_at`
@@ -34,19 +38,26 @@ func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 		return t, err
 	}
 	var s struct {
-		Cron string `json:"cron"`
-		At   int64  `json:"at"`
+		Cron      string            `json:"cron"`
+		At        int64             `json:"at"`
+		AccountID string            `json:"accountId"`
+		Type      string            `json:"type"`
+		Match     map[string]string `json:"match"`
 	}
 	if err := unmarshalString(spec, &s); err != nil {
 		return t, err
 	}
 	t.Cron, t.At = s.Cron, s.At
+	t.SignalAccountID, t.SignalType, t.SignalMatch = s.AccountID, s.Type, s.Match
 	return t, nil
 }
 
 func taskSpec(t Task) (string, error) {
-	if t.Kind == "cron" {
+	switch t.Kind {
+	case "cron":
 		return marshalString(map[string]string{"cron": t.Cron})
+	case "signal":
+		return marshalString(map[string]any{"accountId": t.SignalAccountID, "type": t.SignalType, "match": t.SignalMatch})
 	}
 	return marshalString(map[string]int64{"at": t.At})
 }

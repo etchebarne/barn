@@ -1,15 +1,13 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
+import { agentsQueryOptions } from "@/lib/agents"
 import { api, ApiError, unwrap, type Agent, type Schemas } from "@/lib/api-client"
 import { removeArchivedAgent, updateAgentInCache } from "@/lib/chat-cache"
 import { queryKeys } from "@/lib/query-keys"
 
 import type { Task } from "./schedule"
 
-export const agentsQueryOptions = queryOptions({
-  queryKey: queryKeys.agents,
-  queryFn: () => unwrap(api.GET("/agents")),
-})
+export { agentsQueryOptions }
 
 export function useAgents() {
   return useQuery(agentsQueryOptions)

@@ -131,7 +131,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			l.m.setActivity(agent.ID, view.Working(activityFor(call)))
 			var result string
 			var ok bool
-			if needsApproval(agent, call.Function.Name) {
+			if l.needsApproval(ctx, agent, call.Function.Name) {
 				// Waiting for approval ends the turn like asking a question does.
 				result, ok = l.requestApproval(ctx, agent, call)
 				asked = asked || ok
@@ -240,7 +240,9 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 		msgs = append(msgs, m)
 	}
 	// Each agent is one continuous conversation, so its id is a stable session id.
-	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: toolsFor(agent, l.m.sandboxesAvailable())}, nil
+	tools := toolsFor(agent, l.m.sandboxesAvailable())
+	tools = append(tools, asModelTools(ctx, l.m, l.connectorTools(ctx, agent))...)
+	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools}, nil
 }
 
 // reportError tells the user, in the agent's DM, that the agent couldn't finish its turn. The

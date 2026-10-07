@@ -111,27 +111,24 @@ is compacted. Compaction may use a cheaper model.
 | Tool | Purpose |
 |---|---|
 | `send_message(chat_id, text)` | Speak in a chat the agent belongs to. |
-| `ask_user(chat_id, kind, question, options?)` | Post a prompt (approval / choice / free text). Non-blocking; the answer arrives as an event. |
-| `exec(command, cwd?, timeout?)` | Run a shell command in the agent's sandbox. Long-running commands stream output and can be backgrounded. |
-| `read_file`, `write_file`, `list_dir` | Convenience file ops in the sandbox. |
-| `memory_save(text)`, `memory_forget(id)` | Manage its own memories. |
-| `task_create`, `task_update`, `task_delete` | Manage its own tasks. |
-| `connector_*` | Tools exposed by granted connector accounts (see §7). |
-| `list_models` | Models available from OpenCode Go. |
-| `agent_create`, `agent_update`, `group_create`, … | **Admin tools**, only for agents with the `admin` capability (the starter agent has it). |
+| `react(message_id, emoji)` | React instead of replying when a message doesn't need words. |
+| `ask_user(chat_id, kind, question, options?)` | Clickable question (single / multi / text). Ends the turn; the answer arrives as an event. |
+| `memory_save`, `memory_forget` | Durable memories, always shown in the agent's instructions. |
+| `update_agent`, `list_agents`, `list_models` | Change own settings (admins: any agent's); find teammates and models. |
+| `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events). |
+| `run_command`, `read_file`, `write_file`, `list_files` | The agent's sandbox (when Docker is available). |
+| `<account>__<tool>` | Tools of connector accounts the agent was granted. |
+| `create_agent`, `archive_agent`, `create_group`, `update_group` | Admin agents only (the starter agent is admin). |
 
 ### 4.5 Approvals and trust
 - Each agent has a **trust mode**: `ask` (default) or `trusted`.
-- In `ask` mode, the agent uses its judgment, guided by its instructions, to decide when an action
-  needs approval, and calls `ask_user` with `kind=approval` describing the action.
-- Some actions always need approval in `ask` mode, regardless of the model's judgment:
-  connector actions marked `external` (sending messages as the user, deploying, merging) and
-  admin tools.
-- Approving runs the action in the harness and delivers its result to the agent as an event.
-  Declining delivers the decline (with the user's optional note).
-- `trusted` mode skips all approvals.
-
-Pending prompts render in the chat as buttons / options / a text field and persist until answered.
+- In `ask` mode, **gated** tool calls don't run: the runtime posts an Approve / Decline card in the
+  agent's DM and ends its turn. Approving runs the stored call in the harness and delivers the
+  result to the agent as an `<approval_result>`; declining tells it so. Gated: `archive_agent` and
+  every connector tool marked external (posting, creating, deploying). `create_agent` isn't gated:
+  the intro already asks "Want me to set up an agent for that?".
+- Agents can still ask for confirmation themselves with `ask_user` whenever they're unsure.
+- `trusted` mode skips the gate (turning it on is confirmed in the UI).
 
 ## 5. Group chats
 
@@ -166,68 +163,55 @@ Messages in a group are visible to every participant; DMs are visible only to th
 
 ## 6. Tasks and triggers
 
-| Type | Definition | Fires when |
+| Kind | Definition | Fires when |
 |---|---|---|
-| `cron` | 5-field cron expression + timezone | Schedule matches. |
-| `once` | timestamp | Time reached (then the task is completed). |
-| `signal` | connector account + signal type + filter | A matching signal arrives from the connector. |
+| `cron` | 5-field cron, evaluated in the user's time zone | The schedule matches. |
+| `once` | A date-time | It's reached (then the task is done). |
+| `signal` | Connector account + signal type + `match` (field → text it must contain, case-insensitive) | A matching event arrives. |
 
-Firing enqueues a `task_fired` event into the owning agent's inbox containing the task name,
-purpose, and (for signals) the signal payload. The agent decides what to do, typically ending
-with a `send_message` to the user's DM. If the agent's `notifications` setting is on, its
-messages trigger a push notification.
-
-Signal filters are structured (e.g. `{channel: "#alerts", mentions_user: true}`) so matching is
-cheap and deterministic. The agent writes filters when it creates a task from chat.
+- The web app reports the browser's time zone (`PUT /settings/timezone`); agents' "current time"
+  and schedules use it.
+- A single scheduler wakes at the next due time (at most every minute). Firing is an atomic
+  claim on the task's `next_fire_at`, so a run can never fire twice; runs missed while the server
+  was down collapse into one.
+- Firing enqueues a `task_fired` event (with the signal's fields for signal tasks). Agents with
+  `notifications` on get their messages pushed to the user's devices (Web Push, VAPID keys stored
+  encrypted; the service worker skips the chat that's open).
 
 ## 7. Connectors
 
-### 7.1 Model
-- A **connector type** is code (a Go implementation of a `Connector` interface) or a generic
-  **MCP server** wrapper.
-- A **connector account** is one configured instance with its own credentials (OAuth token or API
-  key), encrypted at rest.
-- **Grants** link accounts to agents. Several accounts of the same type can coexist
-  ("Slack — work", "Slack — personal"), and an account can be shared by several agents.
-
-```go
-type Connector interface {
-    Type() string
-    Tools() []ToolSpec                        // actions; each marked read-only or external
-    Signals() []SignalSpec                    // which signals exist and their filter fields
-    Call(ctx context.Context, acct Account, tool string, args json.RawMessage) (json.RawMessage, error)
-    StartSignals(ctx context.Context, acct Account, emit func(Signal)) error // webhook/socket/poll
-}
-```
-
-### 7.2 Signal ingress
-Different services deliver events differently:
-- **Persistent socket** (Slack Socket Mode): works behind Tailscale, no public URL needed.
-- **Webhooks** (Linear, GitHub, Render): need a public HTTPS endpoint. With a Tailscale-only setup,
-  expose **only** `/hooks/*` via Tailscale Funnel (or a reverse proxy) while the UI stays private.
-  Webhook signatures are always verified.
-- **Polling**: fallback for services without push.
-
-Signals are normalized, stored, matched against `signal` tasks of agents that hold a grant for
-that account, and enqueued as events.
-
-### 7.3 Initial connectors
-Slack, Linear, GitHub, Render, plus generic MCP (stdio or HTTP) for everything else.
+- **Types** (`internal/connectors`): Webhook (any JSON POST, secret token in the URL), GitHub
+  (REST + `X-Hub-Signature-256` webhooks), Linear (GraphQL + `Linear-Signature` webhooks), Slack
+  (Web API + Socket Mode, so no public URL is needed), Render (REST + Standard Webhooks
+  signatures with a replay window), and MCP servers over Streamable HTTP (JSON or SSE responses;
+  tools the server marks read-only aren't gated).
+- **Accounts** are added in Settings → Connectors, never through chat (secrets would end up in
+  the history). Credentials are verified with the service before saving and stored encrypted;
+  the API never returns them. Several accounts per type are fine ("Slack — work", "Slack — side").
+- **Grants** decide which agents may use an account. Tools appear to an agent as
+  `<account slug>__<tool>`; the system prompt lists its accounts and their signal types.
+- **Signals** arrive at `POST /hooks/{accountID}` (public, verified per type) or over a
+  listener (Slack Socket Mode). They're stored, normalized to flat string fields, and matched
+  against enabled `signal` tasks of agents granted that account.
+- **Reaching webhooks**: set `BARN_PUBLIC_URL` to a URL the service can reach (Tailscale Funnel
+  for just `/hooks/*`, or a reverse proxy); the Settings UI shows the full webhook URL to paste.
+- Connector content is untrusted input; external actions stay gated unless the agent is trusted.
 
 ## 8. Sandboxes
 
-- Docker. Default base image: Debian with common tools (git, curl, build-essential, python, node).
-  Agents run as root inside their container and may install anything.
-- Each sandbox has a named volume for `/home/agent` (persistent) and mounts the host's
-  `shared/` directory at `/shared` in every sandbox.
-- **Assignment**: an agent references a sandbox. By default each agent gets its own; the user (via
-  chat) can assign two agents to the same sandbox to work in the same space.
-- `exec` uses the Docker API (`ContainerExecCreate` / attach), with per-call timeouts and output
-  capped in context (full output saved to a file in the sandbox).
-- Containers are started on demand and stopped after an idle period; volumes persist.
-- Resource limits (CPU, memory, pids) per sandbox, configurable.
-- Connector credentials are **not** put into sandboxes by default; connector tools run in
-  `barnd`. An agent can be given specific secrets as env vars explicitly (e.g. for a CLI).
+- Docker, through the CLI. Each agent gets a long-lived container (`barn-sbx-<id>`) on first
+  use, from the `barn-sandbox` image (Debian + git, curl, Python, Node, build tools, jq, ripgrep;
+  built automatically from an embedded Dockerfile, or `BARN_SANDBOX_IMAGE`). Agents are root
+  inside and can install anything.
+- `/home/agent` is a named volume (persists across restarts); the host's `data/shared` is mounted
+  at `/shared` in every sandbox. Limits: 2 GB memory, 2 CPUs, 512 processes.
+- `run_command` runs `bash -lc` under `timeout --signal=KILL` inside the container (default 2
+  min, max 15), so runaway commands die; long output is clipped in the middle.
+- Agents can share a sandbox (`sandbox_with` on create/update). Settings show its status and can
+  restart it. Without Docker (`BARN_SANDBOX=off` or not installed), the tools aren't offered and
+  agents are told.
+- The installer installs Docker and adds the `barn` user to the `docker` group (root-equivalent on
+  the host; `--no-docker` skips it).
 
 ## 9. Models
 
@@ -417,18 +401,19 @@ deploy/               docker-compose, example config
 
 ## 14. Milestones
 
-1. **Skeleton**: monorepo tooling (pnpm, oxlint, oxfmt, codegen); `barnd` with SQLite, auth,
-   WebSocket; web app with login, theme switcher, and shadcn chat UI; OpenCode Go client; one
-   starter agent in a DM (model calls, `send_message`, activity line).
-2. **Agent runtime**: inbox, single-loop turns, mid-turn event injection, memories, compaction.
-3. **Sandboxes**: Docker manager, `exec` and file tools, `/shared`, shared sandbox assignment.
-4. **Admin from chat**: starter agent creates/edits agents (asks for model), prompts UI
-   (approval / choice / text), trust mode.
-5. **Tasks**: scheduler (`cron`, `once`), task tools, push notifications (PWA).
-6. **Groups**: group chats, turn coordinator with safeguards.
-7. **Connectors**: framework, grants, Slack (Socket Mode) first, then Linear/GitHub/Render webhooks,
-   generic MCP; `signal` tasks.
-8. **Packaging**: Electron shell, docker-compose deploy, Tailscale/public modes, docs.
+1. **Skeleton** ✅: monorepo, `barnd`, auth, WebSocket, chat UI, OpenCode Go client, starter agent.
+2. **Agent runtime** ✅: inbox, single-loop turns, mid-turn injection, resume after restarts,
+   memories, compaction.
+3. **Sandboxes** ✅: Docker sandboxes, command and file tools, `/shared`, shared sandboxes.
+4. **Managing agents from chat** ✅: onboarding intro, create/update/archive agents, clickable
+   questions, approvals, trusted mode, reactions.
+5. **Tasks** ✅: cron / one-off / signal tasks, time zones, Web Push notifications.
+6. **Groups** ✅: group chats, turn coordinator, @mentions.
+7. **Connectors** ✅: Webhook, GitHub, Linear, Slack, Render, MCP; grants; signal tasks.
+8. **Packaging**: the installer, releases and Tailscale binding exist; Electron and PWA install
+   polish remain.
+
+Not yet built: TOTP / passkey login.
 
 ## 15. Open questions
 

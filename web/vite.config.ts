@@ -30,6 +30,8 @@ export default defineConfig({
       // Same-origin API and WebSocket in dev. The Host header is kept (no changeOrigin) so the
       // backend's Origin check sees a same-origin request.
       "/api": { target: BACKEND, ws: true },
+      // Webhook URLs are built from the request's host, so they point here in dev.
+      "/hooks": { target: BACKEND },
     },
   },
   test: {

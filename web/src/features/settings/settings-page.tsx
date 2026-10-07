@@ -1,11 +1,21 @@
 import { PageHeader } from "@/components/page-header"
+import { ConnectorsSection } from "@/features/connectors"
 
 import { AccountSection } from "./account-section"
 import { AppearanceSection } from "./appearance-section"
 import { NotificationsSection } from "./notifications-section"
 import { ProviderSection } from "./provider-section"
 
-export function SettingsPage({ onLoggedOut }: { onLoggedOut: () => Promise<void> }) {
+export function SettingsPage({
+  onLoggedOut,
+  connector,
+  onConnectorChange,
+}: {
+  onLoggedOut: () => Promise<void>
+  /** The connection shown in the connectors sheet ("new" for the add flow). */
+  connector: string | undefined
+  onConnectorChange: (connector: string | undefined) => void
+}) {
   return (
     <div className="flex h-svh min-w-0 flex-1 flex-col">
       <PageHeader>
@@ -16,6 +26,7 @@ export function SettingsPage({ onLoggedOut }: { onLoggedOut: () => Promise<void>
           <AppearanceSection />
           <NotificationsSection />
           <ProviderSection />
+          <ConnectorsSection selection={connector} onSelect={onConnectorChange} />
           <AccountSection onLoggedOut={onLoggedOut} />
         </div>
       </div>

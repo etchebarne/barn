@@ -194,6 +194,10 @@ BARN_DATA_DIR=$DATA_DIR
 
 # Set to true if you serve barn over HTTPS (e.g. behind a reverse proxy).
 BARN_SECURE_COOKIES=false
+
+# Where connected apps (GitHub, Linear, Render, webhooks) can reach barn to deliver events, e.g. a
+# Tailscale Funnel URL for /hooks/* only. Slack and MCP don't need it.
+# BARN_PUBLIC_URL=https://your-funnel-name.ts.net
 EOF
   as_root chmod 0640 "$CONF"
   as_root chown root:"$SERVICE_USER" "$CONF"

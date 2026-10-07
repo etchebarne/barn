@@ -22,6 +22,10 @@ type Config struct {
 	// CompactAtTokens is when agents' context gets compacted (0 = default).
 	CompactAtTokens int
 
+	// PublicURL is where external services reach barnd (webhook URLs), e.g. a Tailscale Funnel
+	// or reverse-proxy URL. Empty: the host the browser used.
+	PublicURL string
+
 	// Sandboxes: "docker" (default) or "off". SandboxImage overrides the default image.
 	Sandboxes    string
 	SandboxImage string
@@ -34,6 +38,7 @@ func Load() (Config, error) {
 		WebDir:          env("BARN_WEB_DIR", ""),
 		OpenCodeBaseURL: env("BARN_OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1"),
 		Sandboxes:       env("BARN_SANDBOX", "docker"),
+		PublicURL:       os.Getenv("BARN_PUBLIC_URL"),
 		SandboxImage:    os.Getenv("BARN_SANDBOX_IMAGE"),
 	}
 	if c.Sandboxes != "docker" && c.Sandboxes != "off" {

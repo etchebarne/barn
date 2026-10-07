@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -474,14 +476,35 @@ func (s *Server) writeSandbox(w http.ResponseWriter, r *http.Request, agentID st
 	writeJSON(w, http.StatusOK, gen.Sandbox{Status: gen.SandboxStatus(status), SharedWith: shared})
 }
 
-func taskView(t store.Task) gen.Task {
+// taskView describes a task; accounts names connector accounts for signal tasks.
+func taskView(t store.Task, accounts map[string]string) gen.Task {
 	out := gen.Task{Id: t.ID, AgentId: t.AgentID, Name: t.Name, Purpose: t.Purpose, Kind: gen.TaskKind(t.Kind), Enabled: t.Enabled}
-	if t.Kind == "cron" {
+	switch t.Kind {
+	case "cron":
 		c := t.Cron
 		out.Cron = &c
-	} else {
+	case "once":
 		at := store.Time(t.At)
 		out.At = &at
+	case "signal":
+		// "pull_request.opened" reads as "pull request opened".
+		desc := strings.NewReplacer(".", " ", "_", " ").Replace(t.SignalType)
+		if name := accounts[t.SignalAccountID]; name != "" {
+			desc += " in " + name
+		}
+		keys := make([]string, 0, len(t.SignalMatch))
+		for k := range t.SignalMatch {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		for i, k := range keys {
+			sep := " where "
+			if i > 0 {
+				sep = " and "
+			}
+			desc += sep + k + " contains \"" + t.SignalMatch[k] + "\""
+		}
+		out.Signal = &desc
 	}
 	if t.NextFireAt != nil && t.Enabled {
 		next := store.Time(*t.NextFireAt)
@@ -508,9 +531,14 @@ func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, agentID strin
 		internalError(w, err)
 		return
 	}
+	names, err := s.accountNames(ctx)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	out := make([]gen.Task, 0, len(tasks))
 	for _, t := range tasks {
-		out = append(out, taskView(t))
+		out = append(out, taskView(t, names))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -529,7 +557,12 @@ func (s *Server) UpdateTask(w http.ResponseWriter, r *http.Request, taskID strin
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, taskView(t))
+	names, err := s.accountNames(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, taskView(t, names))
 }
 
 func (s *Server) DeleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
@@ -593,4 +626,16 @@ func (s *Server) UnsubscribePush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) accountNames(ctx context.Context) (map[string]string, error) {
+	accounts, err := s.store.Accounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		names[a.ID] = a.Name
+	}
+	return names, nil
 }

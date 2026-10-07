@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/etchebarne/barn/internal/bus"
+	"github.com/etchebarne/barn/internal/connectors"
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/runtime"
 	"github.com/etchebarne/barn/internal/secrets"
@@ -42,7 +44,10 @@ func newTestServerWithProvider(t *testing.T, providerURL string) (*httptest.Serv
 	if err := rt.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(New(st, b, rt, llm, set, nil, Options{}).Handler())
+	srv := New(st, b, rt, llm, set, nil, Options{PublicURL: "https://barn.example.com"})
+	conns := connectors.NewManager(st, box)
+	rt.Connectors, srv.Connectors = conns, conns
+	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(func() {
 		ts.Close()
 		cancel()
@@ -365,4 +370,65 @@ func TestUserReactionsAndArchiving(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || body["name"] != "Barn" || body["trustMode"] != "trusted" || body["instructions"] != "Be brief." {
 		t.Fatalf("update: %d %v", resp.StatusCode, body)
 	}
+}
+
+func TestConnectorsAPI(t *testing.T) {
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer good" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"message":"Bad credentials"}`))
+			return
+		}
+		w.Write([]byte(`{"login":"martin"}`))
+	}))
+	defer gh.Close()
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	agent, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+
+	_, types := c.doList("GET", "/api/connectors/types")
+	if len(types) < 6 {
+		t.Fatalf("expected the connector types, got %d", len(types))
+	}
+
+	bad := `{"type":"github","name":"GitHub","credentials":{"token":"bad"},"config":{"base_url":"` + gh.URL + `"}}`
+	if resp, body := c.do("POST", "/api/connectors", bad, true); resp.StatusCode != http.StatusBadRequest || !strings.Contains(body["message"].(string), "Bad credentials") {
+		t.Fatalf("bad credentials should be rejected readably: %d %v", resp.StatusCode, body)
+	}
+	good := `{"type":"github","name":"GitHub","credentials":{"token":"good","webhook_secret":"s"},"config":{"base_url":"` + gh.URL + `"},"agentIds":["` + agent.ID + `"]}`
+	resp, body := c.do("POST", "/api/connectors", good, true)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create: %d %v", resp.StatusCode, body)
+	}
+	id := body["id"].(string)
+	if body["webhookUrl"] != "https://barn.example.com/hooks/"+id || !strings.Contains(fmt.Sprint(body["credentialsSet"]), "token") ||
+		strings.Contains(fmt.Sprint(body), "good") {
+		t.Fatalf("view leaks or misses fields: %v", body)
+	}
+	if ids, _ := body["agentIds"].([]any); len(ids) != 1 {
+		t.Fatalf("grants = %v", body["agentIds"])
+	}
+	resp, body = c.do("PATCH", "/api/connectors/"+id, `{"name":"GitHub (work)","agentIds":[]}`, true)
+	if resp.StatusCode != http.StatusOK || body["name"] != "GitHub (work)" || len(body["agentIds"].([]any)) != 0 {
+		t.Fatalf("update: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := c.do("DELETE", "/api/connectors/"+id, "", true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %d", resp.StatusCode)
+	}
+	if _, list := c.doList("GET", "/api/connectors"); len(list) != 0 {
+		t.Fatalf("expected no connectors, got %v", list)
+	}
+
+	// Webhook accounts get a URL with their secret token; the hook route is public.
+	resp, body = c.do("POST", "/api/connectors", `{"type":"webhook","name":"Pings","credentials":{}}`, true)
+	if resp.StatusCode != http.StatusCreated || !strings.Contains(body["webhookUrl"].(string), "?token=") {
+		t.Fatalf("webhook connector: %d %v", resp.StatusCode, body)
+	}
+	hookURL := strings.Replace(body["webhookUrl"].(string), "https://barn.example.com", c.base, 1)
+	anon := &http.Client{}
+	r, err := anon.Post(hookURL, "application/json", strings.NewReader(`{"ok":true}`))
+	if err != nil || r.StatusCode != http.StatusOK {
+		t.Fatalf("public webhook delivery: %v %v", err, r.StatusCode)
+	}
+	r.Body.Close()
 }

@@ -364,7 +364,7 @@ export function PromptCard({
       <div className="flex items-start gap-2">
         <p
           className={cn(
-            "min-w-0 flex-1 px-1.5 pt-1 font-medium wrap-break-word",
+            "min-w-0 flex-1 px-1.5 pt-1 font-medium wrap-break-word whitespace-pre-line",
             dismissed && "font-normal text-muted-foreground",
           )}
         >

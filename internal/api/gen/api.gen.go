@@ -218,8 +218,9 @@ func (e SandboxStatus) Valid() bool {
 
 // Defines values for TaskKind.
 const (
-	Cron TaskKind = "cron"
-	Once TaskKind = "once"
+	Cron   TaskKind = "cron"
+	Once   TaskKind = "once"
+	Signal TaskKind = "signal"
 )
 
 // Valid indicates whether the value is a known member of the TaskKind enum.
@@ -228,6 +229,8 @@ func (e TaskKind) Valid() bool {
 	case Cron:
 		return true
 	case Once:
+		return true
+	case Signal:
 		return true
 	default:
 		return false
@@ -451,6 +454,65 @@ type CompleteOnboardingResponse struct {
 
 	// ChatId The starter agent's DM
 	ChatId string `json:"chatId"`
+}
+
+// Connector defines model for Connector.
+type Connector struct {
+	// AgentIds Agents allowed to use this account
+	AgentIds  []string          `json:"agentIds"`
+	Config    map[string]string `json:"config"`
+	CreatedAt time.Time         `json:"createdAt"`
+
+	// CredentialsSet Credential keys that have a saved value (values are never returned)
+	CredentialsSet []string `json:"credentialsSet"`
+	Id             string   `json:"id"`
+	Name           string   `json:"name"`
+	Type           string   `json:"type"`
+
+	// WebhookUrl Where the service should send events (types with webhooks)
+	WebhookUrl *string `json:"webhookUrl"`
+}
+
+// ConnectorField defines model for ConnectorField.
+type ConnectorField struct {
+	Help     *string `json:"help,omitempty"`
+	Key      string  `json:"key"`
+	Label    string  `json:"label"`
+	Optional bool    `json:"optional"`
+	Secret   bool    `json:"secret"`
+}
+
+// ConnectorSignalType defines model for ConnectorSignalType.
+type ConnectorSignalType struct {
+	Description string   `json:"description"`
+	Fields      []string `json:"fields"`
+	Type        string   `json:"type"`
+}
+
+// ConnectorType defines model for ConnectorType.
+type ConnectorType struct {
+	ConfigFields     []ConnectorField `json:"configFields"`
+	CredentialFields []ConnectorField `json:"credentialFields"`
+	Description      string           `json:"description"`
+
+	// Name Display name, e.g. "GitHub"
+	Name    string                `json:"name"`
+	Signals []ConnectorSignalType `json:"signals"`
+
+	// Type Machine name, e.g. "github"
+	Type string `json:"type"`
+
+	// Webhooks Receives events at a webhook URL (shown after connecting)
+	Webhooks bool `json:"webhooks"`
+}
+
+// CreateConnectorRequest defines model for CreateConnectorRequest.
+type CreateConnectorRequest struct {
+	AgentIds    *[]string          `json:"agentIds,omitempty"`
+	Config      *map[string]string `json:"config,omitempty"`
+	Credentials map[string]string  `json:"credentials"`
+	Name        string             `json:"name"`
+	Type        string             `json:"type"`
 }
 
 // Credentials defines model for Credentials.
@@ -688,6 +750,9 @@ type Task struct {
 
 	// Purpose What the agent does when the task fires
 	Purpose string `json:"purpose"`
+
+	// Signal kind signal: the event that runs it, e.g. "slack.app_mention in Slack — work where channel contains alerts"
+	Signal *string `json:"signal"`
 }
 
 // TaskKind defines model for Task.Kind.
@@ -718,6 +783,14 @@ type UpdateAgentRequest struct {
 
 // UpdateAgentRequestTrustMode trusted skips approvals for gated actions
 type UpdateAgentRequestTrustMode string
+
+// UpdateConnectorRequest defines model for UpdateConnectorRequest.
+type UpdateConnectorRequest struct {
+	AgentIds    *[]string          `json:"agentIds,omitempty"`
+	Config      *map[string]string `json:"config,omitempty"`
+	Credentials *map[string]string `json:"credentials,omitempty"`
+	Name        *string            `json:"name,omitempty"`
+}
 
 // UpdateProviderSettingsRequest defines model for UpdateProviderSettingsRequest.
 type UpdateProviderSettingsRequest struct {
@@ -838,6 +911,12 @@ type SendMessageJSONRequestBody = SendMessageRequest
 
 // MarkChatReadJSONRequestBody defines body for MarkChatRead for application/json ContentType.
 type MarkChatReadJSONRequestBody = MarkReadRequest
+
+// CreateConnectorJSONRequestBody defines body for CreateConnector for application/json ContentType.
+type CreateConnectorJSONRequestBody = CreateConnectorRequest
+
+// UpdateConnectorJSONRequestBody defines body for UpdateConnector for application/json ContentType.
+type UpdateConnectorJSONRequestBody = UpdateConnectorRequest
 
 // AnswerPromptJSONRequestBody defines body for AnswerPrompt for application/json ContentType.
 type AnswerPromptJSONRequestBody = PromptAnswer
@@ -1233,6 +1312,21 @@ type ServerInterface interface {
 
 	// (POST /chats/{chatId}/read)
 	MarkChatRead(w http.ResponseWriter, r *http.Request, chatId ChatId)
+
+	// (GET /connectors)
+	ListConnectors(w http.ResponseWriter, r *http.Request)
+
+	// (POST /connectors)
+	CreateConnector(w http.ResponseWriter, r *http.Request)
+
+	// (GET /connectors/types)
+	ListConnectorTypes(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /connectors/{connectorId})
+	DeleteConnector(w http.ResponseWriter, r *http.Request, connectorId string)
+
+	// (PATCH /connectors/{connectorId})
+	UpdateConnector(w http.ResponseWriter, r *http.Request, connectorId string)
 
 	// (POST /messages/{messageId}/answer)
 	AnswerPrompt(w http.ResponseWriter, r *http.Request, messageId string)
@@ -1694,6 +1788,100 @@ func (siw *ServerInterfaceWrapper) MarkChatRead(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListConnectors operation middleware
+func (siw *ServerInterfaceWrapper) ListConnectors(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConnectors(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateConnector operation middleware
+func (siw *ServerInterfaceWrapper) CreateConnector(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateConnector(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConnectorTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListConnectorTypes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConnectorTypes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteConnector operation middleware
+func (siw *ServerInterfaceWrapper) DeleteConnector(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectorId" -------------
+	var connectorId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectorId", r.PathValue("connectorId"), &connectorId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectorId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteConnector(w, r, connectorId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateConnector operation middleware
+func (siw *ServerInterfaceWrapper) UpdateConnector(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectorId" -------------
+	var connectorId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectorId", r.PathValue("connectorId"), &connectorId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectorId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateConnector(w, r, connectorId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AnswerPrompt operation middleware
 func (siw *ServerInterfaceWrapper) AnswerPrompt(w http.ResponseWriter, r *http.Request) {
 
@@ -2095,6 +2283,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/push/subscriptions", wrapper.UnsubscribePush)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connectors/types", wrapper.ListConnectorTypes)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connectors", wrapper.ListConnectors)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/connectors", wrapper.CreateConnector)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/connectors/{connectorId}", wrapper.DeleteConnector)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/connectors/{connectorId}", wrapper.UpdateConnector)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/answer", wrapper.AnswerPrompt)

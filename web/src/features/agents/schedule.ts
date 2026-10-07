@@ -2,12 +2,7 @@ import cronstrue from "cronstrue"
 
 import type { Schemas } from "@/lib/api-client"
 
-/** A task as listed by the API. `signal` tasks arrive with connectors; handle them already. */
-export type Task = Omit<Schemas["Task"], "kind"> & {
-  kind: Schemas["Task"]["kind"] | "signal"
-  /** For signal tasks: what triggers it, in words (e.g. "a PR is opened"). */
-  signal?: string | null
-}
+export type Task = Schemas["Task"]
 
 type Options = { locale?: string; timeZone?: string }
 
@@ -25,7 +20,7 @@ export function formatDateTime(iso: string, { locale, timeZone }: Options = {}):
 
 /**
  * The schedule in plain English: "At 10:01 AM, Monday through Friday", "Once on Thu, Oct 9,
- * 3:30 PM", or "When a PR is opened happens"-style text for signal tasks.
+ * 3:30 PM", or "When slack.app_mention in Slack (work)" for signal tasks.
  */
 export function describeSchedule(task: Task, options: Options = {}): string {
   switch (task.kind) {
@@ -39,7 +34,9 @@ export function describeSchedule(task: Task, options: Options = {}): string {
     case "once":
       return task.at ? `Once on ${formatDateTime(task.at, options)}` : "Once"
     case "signal":
-      return `When ${task.signal?.trim() || "an event"} happens`
+      return task.signal?.trim()
+        ? `When ${task.signal.trim()}`
+        : "When a connected app sends an event"
     default:
       return "Scheduled"
   }

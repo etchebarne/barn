@@ -62,15 +62,17 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	} else {
 		b.WriteString("- Some actions (like archiving an agent) need the user's approval: calling them posts an Approve/Decline card and ends your turn; the outcome arrives as an <approval_result>. If you're unsure whether the user wants something done, ask first.\n")
 	}
-	if l.m.sandboxesAvailable() {
-		b.WriteString("- Not yet available (coming soon): connecting to apps like Slack, Linear or email. Don't promise that; if it comes up, say it's on the way.\n\n")
-	} else {
-		b.WriteString("- Not yet available: running commands or code (sandboxes aren't set up on this server) and connecting to apps like Slack, Linear or email. Don't promise these.\n\n")
+	if !l.m.sandboxesAvailable() {
+		b.WriteString("- Not available on this server: running commands or code (sandboxes aren't set up). Don't promise that.\n")
 	}
+	b.WriteString("- Use the apps the user connected for you (see Your connected apps); for others, they can connect them in Settings → Connectors.\n\n")
 	if err := l.writeComputer(ctx, &b, agent); err != nil {
 		return "", err
 	}
 	if err := l.writeTasks(ctx, &b, agent); err != nil {
+		return "", err
+	}
+	if err := l.writeConnectedApps(ctx, &b, agent); err != nil {
 		return "", err
 	}
 

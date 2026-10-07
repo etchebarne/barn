@@ -18,6 +18,7 @@ import (
 	"github.com/etchebarne/barn/internal/api"
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/config"
+	"github.com/etchebarne/barn/internal/connectors"
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/push"
 	"github.com/etchebarne/barn/internal/runtime"
@@ -84,13 +85,21 @@ func run() error {
 	rt.Push = func(ctx context.Context, title, body, chatID string) {
 		notifier.Send(ctx, push.Notification{Title: title, Body: push.Preview(body), ChatID: chatID, Tag: chatID})
 	}
+	conns := connectors.NewManager(st, box)
+	conns.OnSignal = rt.DeliverSignal
+	rt.Connectors = conns
 	srv := api.New(st, b, rt, llm, set, notifier, api.Options{
+		PublicURL:      cfg.PublicURL,
 		SecureCookies:  cfg.SecureCookies,
 		AllowedOrigins: cfg.AllowedOrigins,
 		Web:            webFS(cfg.WebDir),
 	})
 
+	srv.Connectors = conns
 	if err := rt.Start(ctx); err != nil {
+		return err
+	}
+	if err := conns.Start(ctx); err != nil {
 		return err
 	}
 	go cleanupSessions(ctx, st)

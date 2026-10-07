@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -30,17 +31,28 @@ var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month 
 var (
 	taskCreateTool = function(toolTaskCreate,
 		"Schedule something for yourself to do later or regularly. When it's due you get a "+
-			"<task_fired> and act on it (e.g. message the user). Give exactly one of cron (repeating, "+
+			"<task_fired> and act on it (e.g. message the user). Give exactly one of: cron (repeating, "+
 			"5 fields: minute hour day-of-month month day-of-week, in the user's time zone; e.g. "+
-			"\"1 10 * * 1-5\" is weekdays at 10:01) or at (once, local date-time \"2026-10-09 15:30\" "+
-			"or RFC 3339).",
+			"\"1 10 * * 1-5\" is weekdays at 10:01), at (once, local date-time \"2026-10-09 15:30\" "+
+			"or RFC 3339), or on_signal (whenever a connected app sends a matching event).",
 		`{
 			"type": "object",
 			"properties": {
 				"name": {"type": "string", "description": "Short title, e.g. \"Weekday check-in\"."},
 				"purpose": {"type": "string", "description": "What to do when it fires, in enough detail to act on it later."},
 				"cron": {"type": "string"},
-				"at": {"type": "string"}
+				"at": {"type": "string"},
+				"on_signal": {
+					"type": "object",
+					"description": "Run when a connected app sends this kind of event.",
+					"properties": {
+						"account": {"type": "string", "description": "Account name or account_id (see Your connected apps)."},
+						"type": {"type": "string", "description": "Signal type, e.g. slack.app_mention or linear.issue."},
+						"match": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Field → text it must contain, e.g. {\"channel\": \"C0123\"} or {\"state\": \"Done\"}. Empty matches every event of the type."}
+					},
+					"required": ["account", "type"],
+					"additionalProperties": false
+				}
 			},
 			"required": ["name", "purpose"],
 			"additionalProperties": false
@@ -56,6 +68,7 @@ var (
 				"purpose": {"type": "string"},
 				"cron": {"type": "string"},
 				"at": {"type": "string"},
+				"on_signal": {"type": "object", "description": "Same shape as in task_create."},
 				"enabled": {"type": "boolean"}
 			},
 			"required": ["task_id"],
@@ -116,14 +129,19 @@ func nextFire(t store.Task, after time.Time, loc *time.Location) (*int64, error)
 		}
 		at := t.At
 		return &at, nil
+	case "signal":
+		return nil, nil // runs when events arrive, not on a clock
 	}
 	return nil, fmt.Errorf("unknown task kind %q", t.Kind)
 }
 
 // describeSchedule is a compact human description for prompts.
 func describeSchedule(t store.Task, loc *time.Location) string {
-	if t.Kind == "cron" {
+	switch t.Kind {
+	case "cron":
 		return "repeats: cron " + t.Cron
+	case "signal":
+		return "on signal " + t.SignalType + describeMatch(t.SignalMatch)
 	}
 	return "once at " + time.UnixMilli(t.At).In(loc).Format("Mon 2 Jan 2006 15:04")
 }
@@ -202,12 +220,13 @@ func (m *Manager) fireDueTasks(ctx context.Context) {
 func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, raw []byte) (string, bool) {
 	loc := l.m.location(ctx)
 	var a struct {
-		TaskID  string  `json:"task_id"`
-		Name    *string `json:"name"`
-		Purpose *string `json:"purpose"`
-		Cron    *string `json:"cron"`
-		At      *string `json:"at"`
-		Enabled *bool   `json:"enabled"`
+		TaskID   string          `json:"task_id"`
+		Name     *string         `json:"name"`
+		Purpose  *string         `json:"purpose"`
+		Cron     *string         `json:"cron"`
+		At       *string         `json:"at"`
+		OnSignal json.RawMessage `json:"on_signal"`
+		Enabled  *bool           `json:"enabled"`
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return toolError("invalid arguments: %v", err), false
@@ -251,10 +270,23 @@ func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, 
 	if t.Purpose == "" {
 		return toolError("purpose is required"), false
 	}
-	if a.Cron != nil && a.At != nil {
-		return toolError("give either cron or at, not both"), false
+	schedules := 0
+	for _, set := range []bool{a.Cron != nil, a.At != nil, len(a.OnSignal) > 0 && string(a.OnSignal) != "null"} {
+		if set {
+			schedules++
+		}
+	}
+	if schedules > 1 {
+		return toolError("give only one of cron, at or on_signal"), false
 	}
 	switch {
+	case len(a.OnSignal) > 0 && string(a.OnSignal) != "null":
+		accountID, typ, match, err := l.resolveSignal(ctx, agent, a.OnSignal)
+		if err != nil {
+			return toolError("%v", err), false
+		}
+		t.Kind, t.Cron, t.At = "signal", "", 0
+		t.SignalAccountID, t.SignalType, t.SignalMatch = accountID, typ, match
 	case a.Cron != nil:
 		t.Kind, t.Cron, t.At = "cron", strings.TrimSpace(*a.Cron), 0
 	case a.At != nil:
@@ -270,7 +302,7 @@ func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, 
 			t.Enabled = true
 		}
 	case name == toolTaskCreate:
-		return toolError("give a schedule: cron (repeating) or at (once)"), false
+		return toolError("give a schedule: cron (repeating), at (once) or on_signal (events)"), false
 	}
 	if a.Enabled != nil {
 		t.Enabled = *a.Enabled
@@ -328,6 +360,7 @@ func (l *loop) renderTask(ctx context.Context, payload json.RawMessage) (string,
 	var p struct {
 		TaskID       string `json:"taskId"`
 		ScheduledFor int64  `json:"scheduledFor"`
+		SignalID     string `json:"signalId"`
 	}
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return "", err
@@ -337,9 +370,20 @@ func (l *loop) renderTask(ctx context.Context, payload json.RawMessage) (string,
 		return "", nil // deleted since it fired
 	}
 	loc := l.m.location(ctx)
-	return fmt.Sprintf("<task_fired task_id=%q name=%q scheduled_for=%q>\n%s\n\nDo this now. If there's something "+
+	event := ""
+	if p.SignalID != "" {
+		if sig, err := l.m.store.GetSignal(ctx, p.SignalID); err == nil {
+			var payload struct {
+				Fields map[string]string `json:"fields"`
+			}
+			_ = json.Unmarshal(sig.Payload, &payload)
+			fields, _ := json.MarshalIndent(payload.Fields, "", "  ")
+			event = fmt.Sprintf("\n\nThe event (%s):\n%s", sig.Type, truncate(string(fields), 6000))
+		}
+	}
+	return fmt.Sprintf("<task_fired task_id=%q name=%q at=%q>\n%s%s\n\nDo this now. If there's something "+
 		"to tell the user, message them (usually in your DM); if not, end your turn quietly.\n</task_fired>",
-		t.ID, t.Name, time.UnixMilli(p.ScheduledFor).In(loc).Format(time.RFC3339), t.Purpose), nil
+		t.ID, t.Name, time.UnixMilli(p.ScheduledFor).In(loc).Format(time.RFC3339), t.Purpose, event), nil
 }
 
 // SetTaskEnabled pauses or resumes a task (resuming recomputes its next run).
@@ -359,4 +403,20 @@ func (m *Manager) SetTaskEnabled(ctx context.Context, taskID string, enabled boo
 	}
 	m.pokeScheduler()
 	return t, nil
+}
+
+func describeMatch(match map[string]string) string {
+	if len(match) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(match))
+	for k := range match {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = fmt.Sprintf("%s contains %q", k, match[k])
+	}
+	return " where " + strings.Join(parts, " and ")
 }

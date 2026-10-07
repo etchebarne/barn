@@ -19,6 +19,7 @@ function task(overrides: Partial<Task> = {}): Task {
     cron: "1 10 * * 1-5",
     at: null,
     enabled: true,
+    signal: null,
     nextFireAt: "2026-10-07T15:00:00Z",
     lastFiredAt: null,
     ...overrides,

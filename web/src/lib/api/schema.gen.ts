@@ -380,6 +380,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/connectors/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The kinds of apps that can be connected, with the fields each needs. */
+        get: operations["listConnectorTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConnectors"];
+        put?: never;
+        /** @description Connect an account. Credentials are checked with the service before saving. */
+        post: operations["createConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/{connectorId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteConnector"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Rename, replace credentials (empty values keep the saved ones), change config, or set
+         *     which agents may use the account.
+         */
+        patch: operations["updateConnector"];
+        trace?: never;
+    };
     "/settings/timezone": {
         parameters: {
             query?: never;
@@ -579,7 +635,7 @@ export interface components {
             /** @description What the agent does when the task fires */
             purpose: string;
             /** @enum {string} */
-            kind: "cron" | "once";
+            kind: "cron" | "once" | "signal";
             /** @description 5-field cron in the user's time zone (kind cron) */
             cron: string | null;
             /**
@@ -588,10 +644,73 @@ export interface components {
              */
             at: string | null;
             enabled: boolean;
+            /** @description kind signal: the event that runs it, e.g. "slack.app_mention in Slack — work where channel contains alerts" */
+            signal: string | null;
             /** Format: date-time */
             nextFireAt: string | null;
             /** Format: date-time */
             lastFiredAt: string | null;
+        };
+        ConnectorField: {
+            key: string;
+            label: string;
+            help?: string;
+            secret: boolean;
+            optional: boolean;
+        };
+        ConnectorSignalType: {
+            type: string;
+            description: string;
+            fields: string[];
+        };
+        ConnectorType: {
+            /** @description Machine name, e.g. "github" */
+            type: string;
+            /** @description Display name, e.g. "GitHub" */
+            name: string;
+            description: string;
+            credentialFields: components["schemas"]["ConnectorField"][];
+            configFields: components["schemas"]["ConnectorField"][];
+            signals: components["schemas"]["ConnectorSignalType"][];
+            /** @description Receives events at a webhook URL (shown after connecting) */
+            webhooks: boolean;
+        };
+        Connector: {
+            id: string;
+            type: string;
+            name: string;
+            config: {
+                [key: string]: string;
+            };
+            /** @description Credential keys that have a saved value (values are never returned) */
+            credentialsSet: string[];
+            /** @description Agents allowed to use this account */
+            agentIds: string[];
+            /** @description Where the service should send events (types with webhooks) */
+            webhookUrl: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateConnectorRequest: {
+            type: string;
+            name: string;
+            credentials: {
+                [key: string]: string;
+            };
+            config?: {
+                [key: string]: string;
+            };
+            agentIds?: string[];
+        };
+        UpdateConnectorRequest: {
+            name?: string;
+            credentials?: {
+                [key: string]: string;
+            };
+            config?: {
+                [key: string]: string;
+            };
+            agentIds?: string[];
         };
         UpdateTaskRequest: {
             enabled: boolean;
@@ -1469,6 +1588,127 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Error"];
+        };
+    };
+    listConnectorTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connector types */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorType"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    listConnectors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connected accounts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    createConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConnectorRequest"];
+            };
+        };
+        responses: {
+            /** @description Connected */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    deleteConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConnectorRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
         };
     };
     setTimezone: {
