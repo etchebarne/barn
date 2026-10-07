@@ -22,16 +22,17 @@ var errTooManySteps = errors.New("too many steps in one turn")
 // no message to react to, and models then reacted to an old one to "end quietly".
 const nudgeText = "[system] Your last reply was plain text, which nobody can see. " +
 	"If you meant to tell someone something, call send_message. If there's nothing to say, " +
-	"that's fine: end your turn without text and without calling any tool."
+	"that's fine: call done."
 
 type loop struct {
 	m       *Manager
 	agentID string
 	wake    chan struct{}
 	stop    context.CancelFunc
-	handled []string        // events consumed by the current turn
-	fresh   map[string]bool // messages the agent was shown in the current turn
-	images  []string        // image attachments of the event being rendered
+	handled []string          // events consumed by the current turn
+	fresh   map[string]bool   // messages the agent was shown in the current turn
+	sent    map[string]string // chat + text + files → message id, for messages sent this turn
+	images  []string          // image attachments of the event being rendered
 }
 
 func (l *loop) poke() {
@@ -84,6 +85,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 	l.handled = l.handled[:0]
 	defer func() { l.m.eventsHandled(l.handled) }()
 	l.fresh = map[string]bool{}
+	l.sent = map[string]string{}
 
 	added, err := l.consume(ctx, events)
 	if err != nil {
@@ -160,8 +162,8 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 		}
 
 		// Asking the user a question ends the turn: the answer arrives later as an event. Models
-		// don't reliably stop on their own and tend to post filler after asking.
-		if asked {
+		// don't reliably stop on their own and tend to post filler after asking. So does done.
+		if asked || slices.ContainsFunc(reply.ToolCalls, func(c model.ToolCall) bool { return c.Function.Name == toolDone }) {
 			return
 		}
 

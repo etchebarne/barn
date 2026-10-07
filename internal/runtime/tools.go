@@ -18,6 +18,7 @@ import (
 const (
 	toolSendMessage  = "send_message"
 	toolReact        = "react"
+	toolDone         = "done"
 	toolAskUser      = "ask_user"
 	toolListModels   = "list_models"
 	toolListAgents   = "list_agents"
@@ -54,6 +55,11 @@ var (
 			"required": ["chat_id", "text"],
 			"additionalProperties": false
 		}`)
+
+	doneTool = function(toolDone,
+		"End your turn: call it once you've done everything this needs, or when there's nothing to "+
+			"say or do. Don't repeat a message you already sent.",
+		`{"type": "object", "properties": {}, "additionalProperties": false}`)
 
 	reactTool = function(toolReact,
 		"React to a message you've just received with an emoji, like people do in chat. Use it when "+
@@ -208,7 +214,7 @@ var (
 
 // toolsFor returns the tools an agent may use.
 func toolsFor(agent store.Agent, sandboxes bool) []model.Tool {
-	tools := []model.Tool{sendMessageTool, reactTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool, allowWithoutAskingTool}
+	tools := []model.Tool{sendMessageTool, reactTool, doneTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool, allowWithoutAskingTool}
 	tools = append(tools, taskTools()...)
 	if sandboxes {
 		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool)
@@ -225,6 +231,8 @@ func toolLabel(name string) string {
 		return "writing a message"
 	case toolReact:
 		return "reacting"
+	case toolDone:
+		return "wrapping up"
 	case toolAskUser:
 		return "asking a question"
 	case toolRemember:
@@ -275,6 +283,8 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 		return toolError("unknown tool %q", call.Function.Name), false
 	}
 	switch call.Function.Name {
+	case toolDone:
+		return toolOK(map[string]string{"note": "Turn ended."}), true
 	case toolAllowWithoutAsking:
 		return l.allowWithoutAsking(ctx, agent, args)
 	case toolSendMessage:
@@ -387,6 +397,12 @@ func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (
 	if err != nil {
 		return toolError("%v", err), false
 	}
+	// Some models repeat their last message while trying to wrap up; post it once.
+	key := chat.ID + "\x00" + strings.TrimSpace(args.Text) + "\x00" + strings.Join(args.Files, "\x00")
+	if id, ok := l.sent[key]; ok {
+		return toolOK(map[string]string{"message_id": id,
+			"note": "You already sent exactly this in this turn, so it wasn't sent again. If you're finished, call done."}), true
+	}
 	attached, err := l.attachFiles(ctx, agent, chat.ID, args.Files)
 	if err != nil {
 		return toolError("couldn't attach: %v", err), false
@@ -399,6 +415,9 @@ func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (
 	if err != nil {
 		logger(agent.ID).Error("send_message", "err", err)
 		return toolError("failed to send the message"), false
+	}
+	if l.sent != nil {
+		l.sent[key] = msg.ID
 	}
 	return toolOK(map[string]string{"message_id": msg.ID}), true
 }

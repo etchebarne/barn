@@ -602,6 +602,46 @@ func TestNoLateReactions(t *testing.T) {
 	}
 }
 
+func TestRepeatedMessageSentOnce(t *testing.T) {
+	var f fixture
+	var note string
+	say := func(model.Request) model.Message {
+		return toolCall(toolSendMessage, map[string]string{"chat_id": f.chatID, "text": "done, replied"})
+	}
+	f = setup(t,
+		say,
+		func(req model.Request) model.Message {
+			return toolCall(toolSendMessage, map[string]string{"chat_id": f.chatID, "text": " done, replied "})
+		},
+		func(req model.Request) model.Message {
+			note = req.Messages[len(req.Messages)-1].Text()
+			return toolCall(toolDone, map[string]string{})
+		},
+	)
+	f.userSays(t, "reply to him")
+	f.waitIdle(t)
+	if msgs := mustList(t, f); len(msgs) != 2 {
+		t.Fatalf("expected the user's message and one reply, got %+v", msgs)
+	}
+	if !strings.Contains(note, "already sent") {
+		t.Fatalf("the repeat should be acknowledged without posting: %s", note)
+	}
+	// done ends the turn: no model call after it.
+	if n := f.llm.calls(); n != 3 {
+		t.Fatalf("expected 3 model calls, got %d", n)
+	}
+
+	// The next turn may say the same thing again.
+	f.llm.mu.Lock()
+	f.llm.responses = append(f.llm.responses, say, func(model.Request) model.Message { return toolCall(toolDone, map[string]string{}) })
+	f.llm.mu.Unlock()
+	f.userSays(t, "and the other one")
+	f.waitIdle(t)
+	if msgs := mustList(t, f); len(msgs) != 4 {
+		t.Fatalf("a new turn should send it again: %+v", msgs)
+	}
+}
+
 func mustList(t *testing.T, f fixture) []store.Message {
 	t.Helper()
 	msgs, _, err := f.store.ListMessages(context.Background(), f.chatID, "", 50)
