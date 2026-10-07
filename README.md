@@ -6,13 +6,39 @@ and everything, including creating new agents, happens through chat.
 
 Status: early development (milestone 1 of 8). See [docs/design.md](docs/design.md).
 
-## Requirements
+## Install
 
-- Go 1.26+
-- Node 22+ and pnpm 10
-- An [OpenCode Go](https://opencode.ai/docs/go/) subscription (the API key is entered in the app)
+On a Linux server with systemd (amd64 or arm64):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/etchebarne/barn/main/scripts/install.sh | bash
+```
+
+The installer installs missing prerequisites, downloads the latest release (verifying its
+checksum), and runs barn as a hardened systemd service under its own `barn` user. Then open barn
+and follow the onboarding: create your account, paste your
+[OpenCode Go](https://opencode.ai/docs/go/) API key, and create your first agent.
+
+By default barn listens on your Tailscale IP if Tailscale is installed, otherwise only on
+`127.0.0.1:8080` (the installer prints the SSH tunnel command to reach it). To install Tailscale
+and put barn on your tailnet:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/etchebarne/barn/main/scripts/install.sh | bash -s -- --tailscale
+```
+
+Other options: `--version v0.1.0` and `--addr host:port`. Rerun the installer to upgrade; your
+config (`/etc/barn/barn.env`) and data (`/var/lib/barn`) are kept.
+
+Uninstall (keeps your data unless you add `--purge`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/etchebarne/barn/main/scripts/uninstall.sh | bash
+```
 
 ## Development
+
+Requires Go 1.26+, Node 22+ and pnpm 10.
 
 ```bash
 pnpm install
@@ -48,16 +74,8 @@ go vet ./... && go test -race ./...
 go generate ./internal/api/gen/ && pnpm gen:api
 ```
 
-## Running on a server
+## Releasing
 
-```bash
-pnpm build
-go build -o bin/barnd ./cmd/barnd
-BARN_WEB_DIR=./web/dist BARN_ADDR=100.x.y.z:8080 ./bin/barnd
-```
-
-Bind `BARN_ADDR` to your Tailscale IP to keep barn private to your tailnet. State lives in
-`BARN_DATA_DIR` (default `./data`): `barn.db` (SQLite) and `secret.key`, which encrypts stored
-credentials. Back up both, and keep them separate if you can.
-
-If you serve barn over HTTPS, set `BARN_SECURE_COOKIES=true`.
+Push a `v*` tag. The release workflow builds `barnd` with the web app embedded for
+linux/amd64 and linux/arm64 (`scripts/build-release.sh`) and publishes the archives and
+checksums that the installer downloads.

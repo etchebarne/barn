@@ -6,8 +6,14 @@ coverage.out
 # Node
 node_modules/
 dist/
+!/internal/webui/dist/
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
 *.tsbuildinfo
 .vite/
+
+# Release build output
+/release/
 
 # Local data and secrets
 /data/

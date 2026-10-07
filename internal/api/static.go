@@ -1,28 +1,27 @@
 package api
 
 import (
+	"io/fs"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 )
 
-// spaHandler serves the built web app from dir, falling back to index.html for client routes.
-func spaHandler(dir string) http.Handler {
-	files := http.FileServer(http.Dir(dir))
+// spaHandler serves the built web app from files, falling back to index.html for client routes.
+func spaHandler(files fs.FS) http.Handler {
+	fileServer := http.FileServerFS(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := path.Clean("/" + r.URL.Path)
-		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(p)))
-		if err != nil || info.IsDir() {
+		p := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+		info, err := fs.Stat(files, p)
+		if p == "" || err != nil || info.IsDir() {
 			w.Header().Set("Cache-Control", "no-cache")
-			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+			http.ServeFileFS(w, r, files, "index.html")
 			return
 		}
-		if strings.HasPrefix(p, "/assets/") {
+		if strings.HasPrefix(p, "assets/") {
 			// Vite emits content-hashed filenames under /assets.
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
-		files.ServeHTTP(w, r)
+		fileServer.ServeHTTP(w, r)
 	})
 }

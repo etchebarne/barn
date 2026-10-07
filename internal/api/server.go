@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -28,7 +29,8 @@ const (
 type Options struct {
 	SecureCookies  bool
 	AllowedOrigins []string
-	WebDir         string
+	// Web is the built web app to serve at /. Nil serves the API only.
+	Web fs.FS
 }
 
 type Server struct {
@@ -65,8 +67,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
-	if s.opts.WebDir != "" {
-		mux.Handle("/", spaHandler(s.opts.WebDir))
+	if s.opts.Web != nil {
+		mux.Handle("/", spaHandler(s.opts.Web))
 	}
 	return recoverer(securityHeaders(s.csrf(s.authenticate(mux))))
 }

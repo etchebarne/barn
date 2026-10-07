@@ -4,6 +4,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,9 +21,17 @@ import (
 	"github.com/etchebarne/barn/internal/secrets"
 	"github.com/etchebarne/barn/internal/settings"
 	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/barn/internal/webui"
 )
 
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		fmt.Println("barnd", version)
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("barnd exited", "err", err)
 		os.Exit(1)
@@ -56,7 +66,7 @@ func run() error {
 	srv := api.New(st, b, rt, llm, set, api.Options{
 		SecureCookies:  cfg.SecureCookies,
 		AllowedOrigins: cfg.AllowedOrigins,
-		WebDir:         cfg.WebDir,
+		Web:            webFS(cfg.WebDir),
 	})
 
 	if err := rt.Start(ctx); err != nil {
@@ -71,7 +81,7 @@ func run() error {
 	}
 	errc := make(chan error, 1)
 	go func() {
-		slog.Info("barnd listening", "addr", cfg.Addr, "web", cfg.WebDir != "")
+		slog.Info("barnd listening", "version", version, "addr", cfg.Addr)
 		errc <- httpSrv.ListenAndServe()
 	}()
 
@@ -87,6 +97,18 @@ func run() error {
 	defer cancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
 	rt.Wait()
+	return nil
+}
+
+// webFS picks the web app to serve: BARN_WEB_DIR if set, else the copy embedded at build time.
+func webFS(dir string) fs.FS {
+	if dir != "" {
+		return os.DirFS(dir)
+	}
+	if files, ok := webui.FS(); ok {
+		return files
+	}
+	slog.Warn("no web app embedded in this build; serving the API only (use the Vite dev server)")
 	return nil
 }
 
