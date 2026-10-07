@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "semi": false,
+  "sortTailwindcss": {
+    "stylesheet": "web/src/index.css",
+    "functions": ["cn", "cva"]
+  },
+  "sortPackageJson": false,
+  "sortImports": true,
+  "ignorePatterns": [
+    "api/**",
+    "docs/**",
+    "cmd/**",
+    "internal/**",
+    "go.mod",
+    "go.sum",
+    "pnpm-lock.yaml",
+    "**/*.gen.ts",
+    "web/dist/**"
+  ]
+}

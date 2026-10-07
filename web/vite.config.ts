@@ -1,0 +1,41 @@
+import { resolve } from "node:path"
+
+import tailwindcss from "@tailwindcss/vite"
+import { tanstackRouter } from "@tanstack/router-plugin/vite"
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vitest/config"
+
+// The Go backend (barnd) listens here during development. Override with BARN_BACKEND_URL.
+const BACKEND = process.env.BARN_BACKEND_URL ?? "http://127.0.0.1:8080"
+
+export default defineConfig({
+  plugins: [
+    // Must run before the React plugin.
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true,
+      routesDirectory: "./src/routes",
+      generatedRouteTree: "./src/routeTree.gen.ts",
+    }),
+    react(),
+    tailwindcss(),
+  ],
+  resolve: {
+    alias: {
+      "@": resolve(import.meta.dirname, "./src"),
+    },
+  },
+  server: {
+    proxy: {
+      // Same-origin API and WebSocket in dev. The Host header is kept (no changeOrigin) so the
+      // backend's Origin check sees a same-origin request.
+      "/api": { target: BACKEND, ws: true },
+    },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    css: false,
+    restoreMocks: true,
+  },
+})

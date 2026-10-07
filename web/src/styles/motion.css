@@ -1,0 +1,52 @@
+/*
+ * Motion tokens: the single place where easing curves and durations live.
+ *
+ * Curves are the stronger ease-out variants from easing.dev (never ease-in).
+ * Durations follow the guidelines table; frequent interactions (new messages,
+ * sidebar hover/selection, theme switch, keyboard actions) are not animated.
+ */
+@theme {
+  /* `ease-out-*` utilities, e.g. `ease-out-quint`. */
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+:root {
+  /* Use as `duration-(--duration-popover)`. */
+  --duration-press: 120ms; /* button press feedback: 100-160ms */
+  --duration-tooltip: 150ms; /* tooltips, small popovers: 125-200ms */
+  --duration-popover: 180ms; /* popovers, mention autocomplete */
+  --duration-dropdown: 200ms; /* dropdowns, selects, comboboxes: 150-250ms */
+  --duration-sheet: 260ms; /* dialogs, sheets, drawers: 200-300ms */
+  --duration-delight: 420ms; /* rare first-run moments only */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-press: 0ms;
+    --duration-tooltip: 0ms;
+    --duration-popover: 0ms;
+    --duration-dropdown: 0ms;
+    --duration-sheet: 0ms;
+    --duration-delight: 0ms;
+  }
+}
+
+/* First-run entrance (setup, onboarding steps): opacity + transform only. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-rise-in {
+  animation: rise-in var(--duration-delight) var(--ease-out-expo) both;
+}

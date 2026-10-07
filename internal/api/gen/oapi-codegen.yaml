@@ -1,0 +1,9 @@
+# Generates types and the net/http server interface from api/openapi.yaml.
+package: gen
+output: api.gen.go
+generate:
+  models: true
+  std-http-server: true
+  embedded-spec: false
+output-options:
+  skip-prune: true

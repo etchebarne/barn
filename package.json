@@ -1,0 +1,23 @@
+{
+  "name": "barn",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "dev": "pnpm --filter @barn/web dev",
+    "build": "pnpm -r --if-present build",
+    "gen:api": "go generate ./internal/api/gen/ && pnpm -r --if-present gen:api",
+    "lint": "oxlint --type-aware",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "dev:server": "go run ./cmd/barnd",
+    "test:go": "go test -race ./...",
+    "lint:go": "go vet ./..."
+  },
+  "devDependencies": {
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2003"
+  }
+}

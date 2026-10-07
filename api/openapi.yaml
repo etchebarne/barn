@@ -1,0 +1,497 @@
+openapi: 3.0.3
+info:
+  title: barn API
+  version: 0.1.0
+  description: |
+    HTTP API for barnd. Authenticated with a session cookie (`barn_session`).
+    Mutating requests must send `X-Barn-CSRF: 1` (checked together with the Origin header).
+
+    Realtime updates are delivered over a WebSocket at `GET /api/ws`; each frame is a JSON
+    `WsEvent` (see components). The WebSocket is not described as an operation because
+    OpenAPI can't express it; its payloads are.
+servers:
+  - url: /api
+
+paths:
+  /auth/status:
+    get:
+      operationId: getAuthStatus
+      tags: [auth]
+      security: []
+      responses:
+        "200":
+          description: Current auth state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthStatus" }
+
+  /auth/setup:
+    post:
+      operationId: setupAccount
+      tags: [auth]
+      security: []
+      description: Create the single user account. Only allowed while no account exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "200":
+          description: Account created and session started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "200":
+          description: Session started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      responses:
+        "204": { description: Logged out }
+
+  /onboarding:
+    get:
+      operationId: getOnboarding
+      tags: [onboarding]
+      description: What's left to set up after the account exists.
+      responses:
+        "200":
+          description: Onboarding state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnboardingState" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /onboarding/complete:
+    post:
+      operationId: completeOnboarding
+      tags: [onboarding]
+      description: |
+        Create the starter agent with the chosen model. Requires the provider to be configured.
+        Only allowed once (while no agents exist).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompleteOnboardingRequest" }
+      responses:
+        "200":
+          description: Starter agent created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompleteOnboardingResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /settings/provider:
+    get:
+      operationId: getProviderSettings
+      tags: [settings]
+      responses:
+        "200":
+          description: Model provider settings (the key itself is never returned)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderSettings" }
+        "401": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: updateProviderSettings
+      tags: [settings]
+      description: Validate the API key against the provider, then save it (encrypted at rest).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProviderSettingsRequest" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderSettings" }
+        "400":
+          description: The provider rejected the key, or the request is invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+  /chats:
+    get:
+      operationId: listChats
+      tags: [chats]
+      responses:
+        "200":
+          description: All chats, most recently active first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Chat" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /chats/{chatId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ChatId"
+    get:
+      operationId: listMessages
+      tags: [chats]
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: Return messages older than this message id
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Messages in chronological order (oldest first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessagePage" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: sendMessage
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendMessageRequest" }
+      responses:
+        "201":
+          description: Message created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /chats/{chatId}/read:
+    parameters:
+      - $ref: "#/components/parameters/ChatId"
+    post:
+      operationId: markChatRead
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkReadRequest" }
+      responses:
+        "204": { description: Marked as read }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      responses:
+        "200":
+          description: All agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /models:
+    get:
+      operationId: listModels
+      tags: [models]
+      responses:
+        "200":
+          description: Models available from the provider
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Model" }
+        "401": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: barn_session
+
+  parameters:
+    ChatId:
+      name: chatId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+    Credentials:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 64 }
+        password: { type: string, minLength: 12, maxLength: 256 }
+
+    User:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: string }
+        username: { type: string }
+
+    AuthStatus:
+      type: object
+      required: [setupRequired, user]
+      properties:
+        setupRequired:
+          type: boolean
+          description: True when no account exists yet
+        user:
+          allOf: [{ $ref: "#/components/schemas/User" }]
+          nullable: true
+          description: The signed-in user, or null
+
+    OnboardingState:
+      type: object
+      required: [providerConfigured, starterAgentCreated, completed]
+      properties:
+        providerConfigured:
+          type: boolean
+          description: An OpenCode Go API key has been saved
+        starterAgentCreated: { type: boolean }
+        completed:
+          type: boolean
+          description: Both steps are done; the app is ready to use
+
+    CompleteOnboardingRequest:
+      type: object
+      required: [model]
+      properties:
+        model:
+          type: string
+          description: Model id for the starter agent (from GET /models)
+        agentName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Starter agent name; defaults to "barn"
+
+    CompleteOnboardingResponse:
+      type: object
+      required: [agent, chatId]
+      properties:
+        agent: { $ref: "#/components/schemas/Agent" }
+        chatId:
+          type: string
+          description: The starter agent's DM
+
+    ProviderSettings:
+      type: object
+      required: [provider, configured, keyHint]
+      properties:
+        provider: { type: string, enum: [opencode-go] }
+        configured: { type: boolean }
+        keyHint:
+          type: string
+          nullable: true
+          description: Last 4 characters of the saved key, e.g. "…a1b2"
+
+    UpdateProviderSettingsRequest:
+      type: object
+      required: [apiKey]
+      properties:
+        apiKey: { type: string, minLength: 1, maxLength: 512 }
+
+    Agent:
+      type: object
+      required: [id, name, model, language, notifications, trustMode, isAdmin, activity, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        model: { type: string }
+        language: { type: string, description: 'Reply language, or "auto"' }
+        notifications: { type: boolean }
+        trustMode: { type: string, enum: [ask, trusted] }
+        isAdmin: { type: boolean }
+        activity: { $ref: "#/components/schemas/AgentActivity" }
+        createdAt: { type: string, format: date-time }
+
+    AgentActivity:
+      type: object
+      required: [state, label]
+      properties:
+        state: { type: string, enum: [idle, working] }
+        label:
+          type: string
+          nullable: true
+          description: What the agent is doing, e.g. "thinking" or "running npm test"
+
+    ChatMember:
+      type: object
+      required: [agentId, position]
+      properties:
+        agentId: { type: string }
+        position: { type: integer }
+
+    Chat:
+      type: object
+      required: [id, kind, name, members, unreadCount, lastMessage, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [dm, group] }
+        name:
+          type: string
+          description: Group name, or the agent's name for DMs
+        members:
+          type: array
+          description: Agent participants (the user is implicit in every chat)
+          items: { $ref: "#/components/schemas/ChatMember" }
+        unreadCount: { type: integer }
+        lastMessage:
+          allOf: [{ $ref: "#/components/schemas/Message" }]
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    MessageAuthor:
+      type: object
+      required: [kind, agentId]
+      properties:
+        kind: { type: string, enum: [user, agent, system] }
+        agentId:
+          type: string
+          nullable: true
+
+    Message:
+      type: object
+      required: [id, chatId, author, body, createdAt]
+      properties:
+        id:
+          type: string
+          description: ULID; lexicographic order is chronological order
+        chatId: { type: string }
+        author: { $ref: "#/components/schemas/MessageAuthor" }
+        body:
+          type: string
+          description: Markdown
+        createdAt: { type: string, format: date-time }
+        clientId:
+          type: string
+          description: |
+            Echo of SendMessageRequest.clientId. Only present on the sendMessage response and the
+            matching message.created event.
+
+    MessagePage:
+      type: object
+      required: [messages, hasMore]
+      properties:
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/Message" }
+        hasMore: { type: boolean }
+
+    SendMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 32000 }
+        clientId:
+          type: string
+          maxLength: 64
+          description: Client-generated id, echoed back so the sender can reconcile its optimistic message
+
+    MarkReadRequest:
+      type: object
+      required: [lastMessageId]
+      properties:
+        lastMessageId: { type: string }
+
+    Model:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+
+    # ---- WebSocket events (GET /api/ws) ----
+
+    WsEvent:
+      oneOf:
+        - $ref: "#/components/schemas/WsMessageCreated"
+        - $ref: "#/components/schemas/WsAgentActivity"
+        - $ref: "#/components/schemas/WsChatRead"
+      discriminator:
+        propertyName: type
+        mapping:
+          message.created: "#/components/schemas/WsMessageCreated"
+          agent.activity: "#/components/schemas/WsAgentActivity"
+          chat.read: "#/components/schemas/WsChatRead"
+
+    WsMessageCreated:
+      type: object
+      required: [type, message]
+      properties:
+        type: { type: string, enum: [message.created] }
+        message: { $ref: "#/components/schemas/Message" }
+
+    WsAgentActivity:
+      type: object
+      required: [type, agentId, activity]
+      properties:
+        type: { type: string, enum: [agent.activity] }
+        agentId: { type: string }
+        activity: { $ref: "#/components/schemas/AgentActivity" }
+
+    WsChatRead:
+      type: object
+      required: [type, chatId, lastMessageId]
+      description: The user read a chat (possibly from another device); clears its unread count
+      properties:
+        type: { type: string, enum: [chat.read] }
+        chatId: { type: string }
+        lastMessageId: { type: string }
+
+security:
+  - session: []

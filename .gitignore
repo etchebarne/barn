@@ -1,0 +1,22 @@
+# Go
+/bin/
+*.test
+coverage.out
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+
+# Local data and secrets
+/data/
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
