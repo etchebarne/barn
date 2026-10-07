@@ -433,6 +433,9 @@ func (l *loop) react(ctx context.Context, agent store.Agent, raw []byte) (string
 	if _, err := l.memberChat(ctx, agent, msg.ChatID); err != nil {
 		return toolError("%v", err), false
 	}
+	if msg.AuthorKind == "agent" && msg.AuthorAgentID != nil && *msg.AuthorAgentID == agent.ID {
+		return toolError("that's your own message; react to the message you're answering (its message_id is on its <message> tag)"), false
+	}
 	added, err := l.m.store.AddReaction(ctx, msg.ID, "agent:"+agent.ID, emoji)
 	if err != nil {
 		logger(agent.ID).Error("react", "err", err)

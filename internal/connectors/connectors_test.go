@@ -285,6 +285,12 @@ func TestSlack(t *testing.T) {
 			fmt.Fprintf(w, `{"ok":true,"url":%q}`, wsURL)
 		case "/conversations.list":
 			fmt.Fprint(w, `{"ok":true,"channels":[{"id":"C111","name":"alerts","is_member":true}]}`)
+		case "/users.info":
+			id := r.URL.Query().Get("user")
+			names := map[string]string{"U1": "Steve J", "UBOT": "barn"}
+			fmt.Fprintf(w, `{"ok":true,"user":{"id":%q,"name":"x","profile":{"display_name":%q}}}`, id, names[id])
+		case "/conversations.history":
+			fmt.Fprint(w, `{"ok":true,"messages":[{"user":"U1","text":"<@UBOT> see <#C111|alerts> and <https://x.dev|the doc> &amp; <!here>","ts":"3.0"},{"bot_id":"B9","username":"Cursor","text":"done","ts":"2.0"}]}`)
 		case "/chat.postMessage":
 			mu.Lock()
 			json.NewDecoder(r.Body).Decode(&posted)
@@ -331,13 +337,21 @@ func TestSlack(t *testing.T) {
 		t.Fatalf("#name should resolve to the channel id: %+v sent %+v", res, posted)
 	}
 
+	// Messages read back with names and readable text instead of Slack ids and markup.
+	read := call(t, sl, acct, "read_channel", `{"channel":"#alerts"}`).([]map[string]string)
+	if len(read) != 2 || read[0]["from"] != "Steve J" || read[0]["text"] != "@barn see #alerts and the doc (https://x.dev) & @here" ||
+		read[1]["from"] != "Cursor" {
+		t.Fatalf("read_channel = %+v", read)
+	}
+
 	var got []Signal
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := sl.Listen(ctx, acct, func(s Signal) { got = append(got, s) }); err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	if len(got) != 2 || got[0].Type != "slack.app_mention" || got[0].Fields["text"] != "<@UBOT> prod is down" ||
+	if len(got) != 2 || got[0].Type != "slack.app_mention" || got[0].Fields["text"] != "@barn prod is down" ||
+		got[0].Fields["user_name"] != "Steve J" ||
 		got[1].Type != "slack.message" || got[1].Fields["channel_type"] != "im" {
 		t.Fatalf("signals = %+v (bot messages must be ignored)", got)
 	}

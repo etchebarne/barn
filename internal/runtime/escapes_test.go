@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/etchebarne/barn/internal/model"
@@ -43,5 +44,24 @@ func TestSendMessageFixesEscapes(t *testing.T) {
 	last, _ := f.store.LastMessage(context.Background(), f.chatID)
 	if last.Body != "I'll take care of two things:\nOUT — relay\nIN — watch" {
 		t.Fatalf("body = %q", last.Body)
+	}
+}
+
+// Agents can't react to their own messages (models sometimes pick their own message_id).
+func TestNoReactingToOwnMessages(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	id := f.agent.ID
+	own, _ := f.store.InsertMessage(ctx, f.chatID, "agent", &id, "I'll ping you only when needed.")
+	theirs, _ := f.store.InsertMessage(ctx, f.chatID, "user", nil, "only ping me when needed")
+	l := &loop{m: f.rt, agentID: id}
+	if out, ok := l.react(ctx, f.agent, []byte(`{"message_id":"`+own.ID+`","emoji":"👀"}`)); ok || !strings.Contains(out, "your own message") {
+		t.Fatalf("reacting to its own message: %s", out)
+	}
+	if _, ok := l.react(ctx, f.agent, []byte(`{"message_id":"`+theirs.ID+`","emoji":"👀"}`)); !ok {
+		t.Fatal("reacting to the user's message should work")
+	}
+	if m, _ := f.store.GetMessage(ctx, own.ID); len(m.Reactions) != 0 {
+		t.Fatal("no reaction should be stored on its own message")
 	}
 }

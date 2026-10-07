@@ -32,7 +32,7 @@ func (Slack) CredentialFields() []Field {
 }
 func (Slack) ConfigFields() []Field { return nil }
 func (Slack) SignalTypes() []SignalType {
-	f := []string{"channel", "user", "text", "ts", "thread_ts"}
+	f := []string{"channel", "user", "user_name", "text", "ts", "thread_ts"}
 	return []SignalType{
 		{Type: "slack.app_mention", Description: "Someone mentioned the bot in a channel", Fields: f},
 		{Type: "slack.message", Description: "A message in a DM with the bot or a channel it's in", Fields: append(f, "channel_type")},
@@ -154,7 +154,12 @@ func (s Slack) Call(ctx context.Context, acct Account, tool string, args json.Ra
 		}
 		var msgs []map[string]string
 		for _, m := range out.Messages {
-			msgs = append(msgs, map[string]string{"user": str(m, "user"), "text": truncateStr(str(m, "text"), 2000), "ts": str(m, "ts"), "thread_ts": str(m, "thread_ts")})
+			from := str(m, "username") // bots
+			if u := str(m, "user"); u != "" {
+				from = s.userName(ctx, acct, u)
+			}
+			msgs = append(msgs, map[string]string{"from": from, "user": str(m, "user"),
+				"text": truncateStr(s.readable(ctx, acct, str(m, "text")), 2000), "ts": str(m, "ts"), "thread_ts": str(m, "thread_ts")})
 		}
 		return msgs, nil
 	case "list_channels":
@@ -255,20 +260,22 @@ func (s Slack) Listen(ctx context.Context, acct Account, emit func(Signal)) erro
 		case "disconnect":
 			return nil // Slack wants us to reconnect
 		case "events_api":
-			if sig, ok := slackSignal(env.Payload.Event); ok {
+			if sig, ok := s.slackSignal(ctx, acct, env.Payload.Event); ok {
 				emit(sig)
 			}
 		}
 	}
 }
 
-func slackSignal(ev map[string]any) (Signal, bool) {
+func (s Slack) slackSignal(ctx context.Context, acct Account, ev map[string]any) (Signal, bool) {
 	// Ignore bots (including ourselves) and edits/joins, to avoid loops and noise.
 	if str(ev, "bot_id") != "" || str(ev, "subtype") != "" {
 		return Signal{}, false
 	}
-	f := map[string]string{"channel": str(ev, "channel"), "user": str(ev, "user"), "text": truncateStr(str(ev, "text"), 4000),
-		"ts": str(ev, "ts"), "thread_ts": str(ev, "thread_ts")}
+	f := map[string]string{"channel": str(ev, "channel"), "user": str(ev, "user"),
+		"user_name": s.userName(ctx, acct, str(ev, "user")),
+		"text":      truncateStr(s.readable(ctx, acct, str(ev, "text")), 4000),
+		"ts":        str(ev, "ts"), "thread_ts": str(ev, "thread_ts")}
 	switch str(ev, "type") {
 	case "app_mention":
 		return Signal{Type: "slack.app_mention", Fields: f}, true
