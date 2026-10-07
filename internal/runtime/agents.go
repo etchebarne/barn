@@ -118,7 +118,9 @@ func (m *Manager) CreateAgent(ctx context.Context, n NewAgent) (store.Agent, str
 		welcome = fmt.Sprintf("You were just created by %s. Your job: %s\n\n"+
 			"Introduce yourself in your DM in two or three short messages: who you are and what you'll "+
 			"take care of. Then ask the one or two things you need to know to get started, using "+
-			"ask_user where there are clear options. Only promise what your tools let you do today.",
+			"ask_user where there are clear options. Only promise what your tools let you do today. Before "+
+			"saying an app or account is missing, check \"Your connected apps\" in your instructions: apps "+
+			"listed there are already connected and yours to use.",
 			creator, n.Job)
 	}
 	if err := m.Notify(ctx, agent.ID, welcome); err != nil {

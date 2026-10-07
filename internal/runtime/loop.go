@@ -128,6 +128,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 
 		asked := false
 		for _, call := range reply.ToolCalls {
+			call.Function.Arguments = l.fixProse(ctx, agent, call)
 			l.m.setActivity(agent.ID, view.Working(l.activity(ctx, agent, call)))
 			var result string
 			var ok bool

@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestChatSendsProviderHeaders(t *testing.T) {
@@ -66,5 +68,43 @@ func TestVerifyKey(t *testing.T) {
 	}
 	if err := c.VerifyKey(context.Background(), "bad"); !errors.Is(err, ErrInvalidKey) {
 		t.Fatalf("bad key: expected ErrInvalidKey, got %v", err)
+	}
+}
+
+// Temporary provider failures are retried a few times; real errors aren't.
+func TestChatRetriesTransientFailures(t *testing.T) {
+	var calls atomic.Int32
+	status := http.StatusServiceUnavailable
+	failures := int32(2)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) <= failures {
+			w.WriteHeader(status)
+			w.Write([]byte(`{"error":{"message":"The backend is temporarily overloaded. Please retry."}}`))
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "hi"}}},
+		})
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "barn/test", func(context.Context) (string, error) { return "k", nil })
+	c.RetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+
+	if _, err := c.Chat(context.Background(), Request{Model: "m"}); err != nil || calls.Load() != 3 {
+		t.Fatalf("two 503s then success: err %v after %d calls", err, calls.Load())
+	}
+
+	calls.Store(0)
+	failures = 10
+	_, err := c.Chat(context.Background(), Request{Model: "m"})
+	var api *APIError
+	if !errors.As(err, &api) || api.Status != 503 || calls.Load() != 4 {
+		t.Fatalf("gives up after 3 retries: err %v after %d calls", err, calls.Load())
+	}
+
+	calls.Store(0)
+	status = http.StatusBadRequest
+	if _, err := c.Chat(context.Background(), Request{Model: "m"}); err == nil || calls.Load() != 1 {
+		t.Fatalf("a 400 isn't retried: %d calls", calls.Load())
 	}
 }

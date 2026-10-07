@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/etchebarne/barn/internal/ids"
@@ -114,6 +116,27 @@ type Client struct {
 
 	protoMu sync.Mutex
 	proto   map[string]*protocol // model id -> protocol that worked
+
+	// RetryDelays are the waits before retrying a temporary failure (overloaded, rate limited,
+	// a dropped connection). Tests shorten them.
+	RetryDelays []time.Duration
+}
+
+var defaultRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 12 * time.Second}
+
+// transient reports whether a failed model call is worth retrying as is.
+func transient(err error) bool {
+	var api *APIError
+	if errors.As(err, &api) {
+		switch api.Status {
+		case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway,
+			http.StatusServiceUnavailable, http.StatusGatewayTimeout, 529:
+			return true
+		}
+		return false
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET)
 }
 
 // New creates a client. userAgent identifies barn to the provider, e.g. "barn/0.1.0".
@@ -133,7 +156,21 @@ func (c *Client) Chat(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
-	return c.chat(ctx, key, req)
+	delays := c.RetryDelays
+	if delays == nil {
+		delays = defaultRetryDelays
+	}
+	for attempt := 0; ; attempt++ {
+		resp, err := c.chat(ctx, key, req)
+		if err == nil || attempt >= len(delays) || !transient(err) || ctx.Err() != nil {
+			return resp, err
+		}
+		select {
+		case <-time.After(delays[attempt]):
+		case <-ctx.Done():
+			return resp, err
+		}
+	}
 }
 
 // chat sends req using the model's known or guessed protocol. If the provider says the model
