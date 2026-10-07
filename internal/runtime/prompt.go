@@ -190,6 +190,7 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 		}
 		files, images := l.renderAttachments(msg)
 		l.images = append(l.images, images...)
+		l.markFresh(msg.ID)
 		return fmt.Sprintf("<message message_id=%q chat_id=%q chat=%q from=%q sent_at=%q>\n%s%s%s\n</message>",
 			msg.ID, chat.ID, describeChat(chat, user.Username, l.agentID, names), author(msg, user.Username, names),
 			store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339),

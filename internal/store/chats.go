@@ -486,6 +486,14 @@ func (s *Store) insertMessage(ctx context.Context, m Message) (Message, error) {
 	return m, err
 }
 
+// PostedAfter reports whether an agent posted in a chat after a message.
+func (s *Store) PostedAfter(ctx context.Context, chatID, agentID, messageID string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM messages
+		WHERE chat_id = ? AND author_agent_id = ? AND id > ?)`, chatID, agentID, messageID).Scan(&n)
+	return n == 1, err
+}
+
 // LastMessage returns the most recent message in a chat.
 func (s *Store) LastMessage(ctx context.Context, chatID string) (Message, error) {
 	m, err := scanMessage(s.db.QueryRowContext(ctx,

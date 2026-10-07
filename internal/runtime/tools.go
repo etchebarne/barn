@@ -56,9 +56,9 @@ var (
 		}`)
 
 	reactTool = function(toolReact,
-		"React to a message with an emoji, like people do in chat. Use it when a message doesn't "+
-			"need a written reply (thanks, an FYI, a done-update) or to acknowledge something "+
-			"you're about to work on.",
+		"React to a message you've just received with an emoji, like people do in chat. Use it when "+
+			"it doesn't need a written reply (thanks, an FYI, a done-update) or to acknowledge something "+
+			"you're about to work on. Never to end a turn quietly: if there's nothing to say, just stop.",
 		`{
 			"type": "object",
 			"properties": {
@@ -428,6 +428,13 @@ func (l *loop) remember(ctx context.Context, agent store.Agent, raw []byte) (str
 	return toolOK(map[string]string{"memory_id": mem.ID}), true
 }
 
+// markFresh records that the agent was shown a message in this turn.
+func (l *loop) markFresh(id string) {
+	if l.fresh != nil {
+		l.fresh[id] = true
+	}
+}
+
 func (l *loop) react(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
 	var args struct {
 		MessageID string `json:"message_id"`
@@ -449,6 +456,18 @@ func (l *loop) react(ctx context.Context, agent store.Agent, raw []byte) (string
 	}
 	if msg.AuthorKind == "agent" && msg.AuthorAgentID != nil && *msg.AuthorAgentID == agent.ID {
 		return toolError("that's your own message; react to the message you're answering (its message_id is on its <message> tag)"), false
+	}
+	// Reacting is a reply to a message just received. Reacting to one already answered, later,
+	// reads as a random reaction out of nowhere.
+	if !l.fresh[msg.ID] {
+		answered, err := l.m.store.PostedAfter(ctx, msg.ChatID, agent.ID, msg.ID)
+		if err != nil {
+			return toolError("failed to react"), false
+		}
+		if answered {
+			return toolError("you already replied after that message, so a reaction now would look random; " +
+				"react only to messages you've just received. If there's nothing to say, end your turn without text."), false
+		}
 	}
 	added, err := l.m.store.AddReaction(ctx, msg.ID, "agent:"+agent.ID, emoji)
 	if err != nil {

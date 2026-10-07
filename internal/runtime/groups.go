@@ -319,6 +319,7 @@ func (l *loop) renderGroupTurn(ctx context.Context, payload json.RawMessage) (st
 		}
 		files, images := l.renderAttachments(msg)
 		l.images = append(l.images, images...)
+		l.markFresh(msg.ID)
 		fmt.Fprintf(&b, "<message message_id=%q from=%q sent_at=%q%s>\n%s%s%s\n</message>\n",
 			msg.ID, author(msg, user.Username, names), store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339),
 			mentioned, renderReply(msg, user.Username, names), msg.Body, files)

@@ -522,6 +522,65 @@ func TestReactInsteadOfReplying(t *testing.T) {
 	}
 }
 
+func TestNoLateReactions(t *testing.T) {
+	var f fixture
+	idIn := func(req model.Request) string {
+		last := req.Messages[len(req.Messages)-1].Text()
+		if m := regexp.MustCompile(`message_id="([^"]+)"`).FindStringSubmatch(last); m != nil {
+			return m[1]
+		}
+		return ""
+	}
+	var first, second, refusal string
+	f = setup(t,
+		func(req model.Request) model.Message {
+			first = idIn(req)
+			return toolCall(toolSendMessage, map[string]string{"chat_id": f.chatID, "text": "hello"})
+		},
+		func(model.Request) model.Message { return model.Text("assistant", "") },
+		// Next turn: reacting to the message it already answered is refused…
+		func(req model.Request) model.Message {
+			second = idIn(req)
+			return toolCall(toolReact, map[string]string{"message_id": first, "emoji": "✅"})
+		},
+		// …while the message that just arrived is fine.
+		func(req model.Request) model.Message {
+			refusal = req.Messages[len(req.Messages)-1].Text()
+			return toolCall(toolReact, map[string]string{"message_id": second, "emoji": "👍"})
+		},
+		func(model.Request) model.Message { return model.Text("assistant", "") },
+	)
+	f.userSays(t, "hi")
+	f.waitIdle(t)
+	f.userSays(t, "cool")
+	f.waitIdle(t)
+
+	if !strings.Contains(refusal, "already replied") {
+		t.Fatalf("expected the late reaction to be refused, got %s", refusal)
+	}
+	for _, m := range mustList(t, f) {
+		switch m.ID {
+		case first:
+			if len(m.Reactions) != 0 {
+				t.Fatalf("late reaction was added: %+v", m.Reactions)
+			}
+		case second:
+			if len(m.Reactions) != 1 {
+				t.Fatalf("reaction to the new message missing: %+v", m.Reactions)
+			}
+		}
+	}
+}
+
+func mustList(t *testing.T, f fixture) []store.Message {
+	t.Helper()
+	msgs, _, err := f.store.ListMessages(context.Background(), f.chatID, "", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return msgs
+}
+
 func TestSayingNothingIsFine(t *testing.T) {
 	var f fixture
 	f = setup(t, func(model.Request) model.Message { return model.Text("assistant", "") })

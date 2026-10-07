@@ -18,17 +18,20 @@ const maxSteps = 40
 
 var errTooManySteps = errors.New("too many steps in one turn")
 
+// nudgeText doesn't suggest reacting: on turns no message started (a task, a signal) there's
+// no message to react to, and models then reacted to an old one to "end quietly".
 const nudgeText = "[system] Your last reply was plain text, which nobody can see. " +
-	"If you meant to say something, call send_message (or react to the message). Otherwise end " +
-	"your turn without text."
+	"If you meant to tell someone something, call send_message. If there's nothing to say, " +
+	"that's fine: end your turn without text and without calling any tool."
 
 type loop struct {
 	m       *Manager
 	agentID string
 	wake    chan struct{}
 	stop    context.CancelFunc
-	handled []string // events consumed by the current turn
-	images  []string // image attachments of the event being rendered
+	handled []string        // events consumed by the current turn
+	fresh   map[string]bool // messages the agent was shown in the current turn
+	images  []string        // image attachments of the event being rendered
 }
 
 func (l *loop) poke() {
@@ -80,6 +83,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 	// Whoever is waiting on these events (a group's turn coordinator) learns the turn is over.
 	l.handled = l.handled[:0]
 	defer func() { l.m.eventsHandled(l.handled) }()
+	l.fresh = map[string]bool{}
 
 	added, err := l.consume(ctx, events)
 	if err != nil {
