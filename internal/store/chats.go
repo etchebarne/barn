@@ -39,6 +39,14 @@ type Message struct {
 	Prompt *Prompt
 	// Event is set on system messages that mark something that happened.
 	Event *MessageEvent
+	// Reactions are filled by ListMessages and GetMessage.
+	Reactions []Reaction
+}
+
+// Reaction is one emoji on a message and who used it. Reactors are "user" or "agent:<id>".
+type Reaction struct {
+	Emoji    string
+	Reactors []string
 }
 
 // Prompt is a question with clickable answers.
@@ -341,7 +349,59 @@ func (s *Store) GetMessage(ctx context.Context, id string) (Message, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, ErrNotFound
 	}
-	return m, err
+	if err != nil {
+		return m, err
+	}
+	msgs := []Message{m}
+	err = s.fillReactions(ctx, msgs)
+	return msgs[0], err
+}
+
+// AddReaction records a reaction. It reports false if that reactor already used that emoji.
+func (s *Store) AddReaction(ctx context.Context, messageID, reactor, emoji string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `
+		INSERT INTO reactions (message_id, reactor, emoji, created_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT DO NOTHING`, messageID, reactor, emoji, now())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// fillReactions loads reactions for msgs, grouped by emoji in first-use order.
+func (s *Store) fillReactions(ctx context.Context, msgs []Message) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	index := make(map[string]int, len(msgs))
+	args := make([]any, 0, len(msgs))
+	for i, m := range msgs {
+		index[m.ID] = i
+		args = append(args, m.ID)
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT message_id, reactor, emoji FROM reactions
+		WHERE message_id IN (?`+strings.Repeat(",?", len(args)-1)+`)
+		ORDER BY created_at, rowid`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var messageID, reactor, emoji string
+		if err := rows.Scan(&messageID, &reactor, &emoji); err != nil {
+			return err
+		}
+		m := &msgs[index[messageID]]
+		i := slices.IndexFunc(m.Reactions, func(r Reaction) bool { return r.Emoji == emoji })
+		if i < 0 {
+			m.Reactions = append(m.Reactions, Reaction{Emoji: emoji})
+			i = len(m.Reactions) - 1
+		}
+		m.Reactions[i].Reactors = append(m.Reactions[i].Reactors, reactor)
+	}
+	return rows.Err()
 }
 
 // ListMessages returns up to limit messages older than before (or the latest if before is
@@ -377,6 +437,9 @@ func (s *Store) ListMessages(ctx context.Context, chatID, before string, limit i
 	}
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
+	}
+	if err := s.fillReactions(ctx, out); err != nil {
+		return nil, false, err
 	}
 	return out, hasMore, nil
 }

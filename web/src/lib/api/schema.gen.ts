@@ -395,6 +395,8 @@ export interface components {
             createdAt: string;
             /** @description Set on system messages reporting that an agent's turn failed */
             failure?: components["schemas"]["MessageFailure"] | null;
+            /** @description Emoji reactions, in the order each emoji was first used */
+            reactions: components["schemas"]["Reaction"][];
             /**
              * @description Set on agent messages that ask the user something with clickable answers. `body`
              *     holds the question as plain text (for previews).
@@ -417,6 +419,11 @@ export interface components {
              */
             reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps";
             retryable: boolean;
+        };
+        Reaction: {
+            emoji: string;
+            /** @description Who reacted with this emoji, oldest first */
+            by: components["schemas"]["MessageAuthor"][];
         };
         Prompt: {
             /**
@@ -503,7 +510,7 @@ export interface components {
             type: "agent.updated";
             agent: components["schemas"]["Agent"];
         };
-        /** @description A message changed (e.g. its prompt was answered or dismissed) */
+        /** @description A message changed (its prompt was answered or dismissed, or it got a reaction) */
         WsMessageUpdated: {
             /**
              * @description discriminator enum property added by openapi-typescript

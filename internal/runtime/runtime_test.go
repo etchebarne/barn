@@ -489,3 +489,61 @@ func TestAskingEndsTheTurn(t *testing.T) {
 		t.Fatalf("expected the turn to end after asking (1 model call), got %d", n)
 	}
 }
+
+func TestReactInsteadOfReplying(t *testing.T) {
+	var f fixture
+	var userMsgID string
+	f = setup(t,
+		func(req model.Request) model.Message {
+			last := req.Messages[len(req.Messages)-1].Text()
+			id := regexp.MustCompile(`message_id="([^"]+)"`).FindStringSubmatch(last)
+			if id == nil {
+				t.Errorf("message tag has no message_id: %s", last)
+				return model.Text("assistant", "")
+			}
+			userMsgID = id[1]
+			return toolCall(toolReact, map[string]string{"message_id": id[1], "emoji": "👍"})
+		},
+		func(model.Request) model.Message { return model.Text("assistant", "") },
+	)
+	f.userSays(t, "thanks!")
+	f.waitIdle(t)
+
+	msgs, _, _ := f.store.ListMessages(context.Background(), f.chatID, "", 10)
+	if len(msgs) != 1 {
+		t.Fatalf("expected no reply, only the user's message; got %+v", msgs)
+	}
+	got := msgs[0].Reactions
+	if msgs[0].ID != userMsgID || len(got) != 1 || got[0].Emoji != "👍" || got[0].Reactors[0] != "agent:"+f.agent.ID {
+		t.Fatalf("expected a 👍 from the agent, got %+v", got)
+	}
+	if n := f.llm.calls(); n != 2 {
+		t.Fatalf("reacting counts as responding (no nudge): expected 2 model calls, got %d", n)
+	}
+}
+
+func TestSayingNothingIsFine(t *testing.T) {
+	var f fixture
+	f = setup(t, func(model.Request) model.Message { return model.Text("assistant", "") })
+	f.userSays(t, "ok")
+	f.waitIdle(t)
+	if msgs, _, _ := f.store.ListMessages(context.Background(), f.chatID, "", 10); len(msgs) != 1 {
+		t.Fatalf("expected silence, got %+v", msgs)
+	}
+	if n := f.llm.calls(); n != 1 {
+		t.Fatalf("expected a single model call, got %d", n)
+	}
+}
+
+func TestIsEmoji(t *testing.T) {
+	for _, ok := range []string{"👍", "❤️", "👍🏽", "👨‍👩‍👧", "✅", "🎉"} {
+		if !isEmoji(ok) {
+			t.Errorf("%q should be accepted", ok)
+		}
+	}
+	for _, bad := range []string{"", "ok", ":+1:", "👍 👍", "a👍", strings.Repeat("👍", 9)} {
+		if isEmoji(bad) {
+			t.Errorf("%q should be rejected", bad)
+		}
+	}
+}

@@ -2,6 +2,8 @@
 package view
 
 import (
+	"strings"
+
 	"github.com/etchebarne/barn/internal/api/gen"
 	"github.com/etchebarne/barn/internal/store"
 )
@@ -16,7 +18,24 @@ func Message(m store.Message) gen.Message {
 		Failure:   failure(m.Failure),
 		Prompt:    prompt(m.Prompt),
 		Event:     event(m.Event),
+		Reactions: reactions(m.Reactions),
 	}
+}
+
+func reactions(rs []store.Reaction) []gen.Reaction {
+	out := make([]gen.Reaction, 0, len(rs))
+	for _, r := range rs {
+		by := make([]gen.MessageAuthor, 0, len(r.Reactors))
+		for _, reactor := range r.Reactors {
+			if id, ok := strings.CutPrefix(reactor, "agent:"); ok {
+				by = append(by, gen.MessageAuthor{Kind: "agent", AgentId: &id})
+			} else {
+				by = append(by, gen.MessageAuthor{Kind: "user"})
+			}
+		}
+		out = append(out, gen.Reaction{Emoji: r.Emoji, By: by})
+	}
+	return out
 }
 
 func prompt(p *store.Prompt) *gen.Prompt {

@@ -18,7 +18,8 @@ const maxSteps = 40
 var errTooManySteps = errors.New("too many steps in one turn")
 
 const nudgeText = "[system] Your last reply was plain text, which nobody can see. " +
-	"If you meant to say something, call send_message. Otherwise end your turn without text."
+	"If you meant to say something, call send_message (or react to the message). Otherwise end " +
+	"your turn without text."
 
 type loop struct {
 	m       *Manager
@@ -116,7 +117,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 		for _, call := range reply.ToolCalls {
 			l.m.setActivity(agent.ID, view.Working(toolLabel(call.Function.Name)))
 			result, ok := l.runTool(ctx, agent, call)
-			if ok && (call.Function.Name == toolSendMessage || call.Function.Name == toolAskUser) {
+			if ok && (call.Function.Name == toolSendMessage || call.Function.Name == toolAskUser || call.Function.Name == toolReact) {
 				spoke = true
 			}
 			if ok && call.Function.Name == toolAskUser {

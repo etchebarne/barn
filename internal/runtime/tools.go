@@ -6,14 +6,17 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/barn/internal/view"
 )
 
 const (
 	toolSendMessage = "send_message"
+	toolReact       = "react"
 	toolAskUser     = "ask_user"
 	toolListModels  = "list_models"
 	toolCreateAgent = "create_agent"
@@ -39,6 +42,20 @@ var (
 				"text": {"type": "string", "description": "The message, in Markdown."}
 			},
 			"required": ["chat_id", "text"],
+			"additionalProperties": false
+		}`)
+
+	reactTool = function(toolReact,
+		"React to a message with an emoji, like people do in chat. Use it when a message doesn't "+
+			"need a written reply (thanks, an FYI, a done-update) or to acknowledge something "+
+			"you're about to work on.",
+		`{
+			"type": "object",
+			"properties": {
+				"message_id": {"type": "string", "description": "The message to react to (message_id from its <message> tag)."},
+				"emoji": {"type": "string", "description": "A single emoji, e.g. 👍 ❤️ 😂 🎉 👀 ✅ 🙏 🔥"}
+			},
+			"required": ["message_id", "emoji"],
 			"additionalProperties": false
 		}`)
 
@@ -97,7 +114,7 @@ var (
 
 // toolsFor returns the tools an agent may use.
 func toolsFor(agent store.Agent) []model.Tool {
-	tools := []model.Tool{sendMessageTool, askUserTool}
+	tools := []model.Tool{sendMessageTool, reactTool, askUserTool}
 	if agent.IsAdmin {
 		tools = append(tools, listModelsTool, createAgentTool)
 	}
@@ -108,6 +125,8 @@ func toolLabel(name string) string {
 	switch name {
 	case toolSendMessage:
 		return "writing a message"
+	case toolReact:
+		return "reacting"
 	case toolAskUser:
 		return "asking a question"
 	case toolListModels:
@@ -128,6 +147,8 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 	switch call.Function.Name {
 	case toolSendMessage:
 		return l.sendMessage(ctx, agent, args)
+	case toolReact:
+		return l.react(ctx, agent, args)
 	case toolAskUser:
 		return l.askUser(ctx, agent, args)
 	case toolListModels:
@@ -176,6 +197,52 @@ func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (
 		return toolError("failed to send the message"), false
 	}
 	return toolOK(map[string]string{"message_id": msg.ID}), true
+}
+
+func (l *loop) react(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
+	var args struct {
+		MessageID string `json:"message_id"`
+		Emoji     string `json:"emoji"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return toolError("invalid arguments: %v", err), false
+	}
+	emoji := strings.TrimSpace(args.Emoji)
+	if !isEmoji(emoji) {
+		return toolError("emoji must be a single emoji, like 👍"), false
+	}
+	msg, err := l.m.store.GetMessage(ctx, args.MessageID)
+	if err != nil {
+		return toolError("unknown message_id %q", args.MessageID), false
+	}
+	if _, err := l.memberChat(ctx, agent, msg.ChatID); err != nil {
+		return toolError("%v", err), false
+	}
+	added, err := l.m.store.AddReaction(ctx, msg.ID, "agent:"+agent.ID, emoji)
+	if err != nil {
+		logger(agent.ID).Error("react", "err", err)
+		return toolError("failed to react"), false
+	}
+	if added {
+		if updated, err := l.m.store.GetMessage(ctx, msg.ID); err == nil {
+			l.m.bus.Publish(view.MessageUpdated(view.Message(updated)))
+		}
+	}
+	return toolOK(map[string]string{"reacted": emoji}), true
+}
+
+// isEmoji is a loose check that s is one short emoji (possibly with modifiers or joiners):
+// no letters, digits, spaces or other ASCII.
+func isEmoji(s string) bool {
+	if s == "" || len(s) > 32 {
+		return false
+	}
+	for _, r := range s {
+		if r < 0x80 || unicode.IsSpace(r) || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func (l *loop) askUser(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {

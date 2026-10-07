@@ -518,7 +518,7 @@ components:
 
     Message:
       type: object
-      required: [id, chatId, author, body, createdAt]
+      required: [id, chatId, author, body, createdAt, reactions]
       properties:
         id:
           type: string
@@ -533,6 +533,10 @@ components:
           allOf: [{ $ref: "#/components/schemas/MessageFailure" }]
           nullable: true
           description: Set on system messages reporting that an agent's turn failed
+        reactions:
+          type: array
+          description: Emoji reactions, in the order each emoji was first used
+          items: { $ref: "#/components/schemas/Reaction" }
         prompt:
           allOf: [{ $ref: "#/components/schemas/Prompt" }]
           nullable: true
@@ -561,6 +565,16 @@ components:
             model_blocked: OpenCode refuses the agent's model (its provider trains on request
             data and the workspace's privacy settings forbid that). Offer to change the model.
         retryable: { type: boolean }
+
+    Reaction:
+      type: object
+      required: [emoji, by]
+      properties:
+        emoji: { type: string }
+        by:
+          type: array
+          description: Who reacted with this emoji, oldest first
+          items: { $ref: "#/components/schemas/MessageAuthor" }
 
     Prompt:
       type: object
@@ -703,7 +717,7 @@ components:
     WsMessageUpdated:
       type: object
       required: [type, message]
-      description: A message changed (e.g. its prompt was answered or dismissed)
+      description: A message changed (its prompt was answered or dismissed, or it got a reaction)
       properties:
         type: { type: string, enum: [message.updated] }
         message: { $ref: "#/components/schemas/Message" }

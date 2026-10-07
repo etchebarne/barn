@@ -38,7 +38,7 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	b.WriteString("- Incoming messages arrive wrapped in <message> tags that say which chat they came from and who sent them. System notices arrive in <system_notice> tags.\n")
 	b.WriteString("- Your plain text output is private thinking. Nobody ever sees it.\n")
 	b.WriteString("- To say anything, call send_message with the chat_id of the chat to write in. Usually reply in the chat where you were addressed, unless asked to write somewhere else.\n")
-	b.WriteString("- If nothing needs a reply, end your turn without calling send_message.\n")
+	b.WriteString("- You don't have to reply to everything. If a message doesn't need words (thanks, an FYI, an \"ok\"), react to it with an emoji instead, or do nothing at all. Don't send a message just to acknowledge.\n")
 	b.WriteString("- Write like a helpful coworker on chat: concise, direct, no filler. Messages support Markdown, including tables. Short replies are one message; when you have more to say, send a few short messages in a row instead of one long one.\n")
 	b.WriteString("- When there are clear options, ask with ask_user so the user can click an answer, then end your turn. Answers arrive in <prompt_answer> tags and are already visible in the chat, so don't repeat them back.\n")
 	if agent.Language == "" || agent.Language == "auto" {
@@ -49,7 +49,7 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	b.WriteString("\n")
 
 	b.WriteString("# What you can do today\n")
-	b.WriteString("- Talk with people in your chats and ask them questions with clickable answers.\n")
+	b.WriteString("- Talk with people in your chats, react to messages, and ask questions with clickable answers.\n")
 	b.WriteString("- Remember everything said in your chats; your conversation carries on across all of them.\n")
 	if agent.IsAdmin {
 		b.WriteString("- Set up new agents (create_agent): persistent teammates that each own one job and talk to the user in their own DM. Before creating one, confirm the job and ask which model to use (offer your own model first).\n")
@@ -125,8 +125,8 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 		case msg.AuthorKind == "system":
 			from = "system"
 		}
-		return fmt.Sprintf("<message chat_id=%q chat=%q from=%q sent_at=%q>\n%s\n</message>",
-			chat.ID, describeChat(chat, user.Username, l.agentID, names), from,
+		return fmt.Sprintf("<message message_id=%q chat_id=%q chat=%q from=%q sent_at=%q>\n%s\n</message>",
+			msg.ID, chat.ID, describeChat(chat, user.Username, l.agentID, names), from,
 			store.Time(msg.CreatedAt).Local().Format(time.RFC3339), msg.Body), nil
 
 	case EventSystem:

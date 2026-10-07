@@ -413,6 +413,9 @@ type Message struct {
 	// Prompt Set on agent messages that ask the user something with clickable answers. `body`
 	// holds the question as plain text (for previews).
 	Prompt *Prompt `json:"prompt,omitempty"`
+
+	// Reactions Emoji reactions, in the order each emoji was first used
+	Reactions []Reaction `json:"reactions"`
 }
 
 // MessageAuthor defines model for MessageAuthor.
@@ -520,6 +523,13 @@ type ProviderSettings struct {
 // ProviderSettingsProvider defines model for ProviderSettings.Provider.
 type ProviderSettingsProvider string
 
+// Reaction defines model for Reaction.
+type Reaction struct {
+	// By Who reacted with this emoji, oldest first
+	By    []MessageAuthor `json:"by"`
+	Emoji string          `json:"emoji"`
+}
+
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
 	Body string `json:"body"`
@@ -606,7 +616,7 @@ type WsMessageCreated struct {
 // WsMessageCreatedType defines model for WsMessageCreated.Type.
 type WsMessageCreatedType string
 
-// WsMessageUpdated A message changed (e.g. its prompt was answered or dismissed)
+// WsMessageUpdated A message changed (its prompt was answered or dismissed, or it got a reaction)
 type WsMessageUpdated struct {
 	Message Message              `json:"message"`
 	Type    WsMessageUpdatedType `json:"type"`

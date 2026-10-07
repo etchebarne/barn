@@ -16,6 +16,7 @@ import { FailureNotice } from "./failure-notice"
 import type { Row } from "./grouping"
 import { formatDay, formatTime } from "./grouping"
 import { Markdown } from "./markdown"
+import { MessageReactions } from "./message-reactions"
 import type { PendingMessage } from "./pending-store"
 
 /** Per-message actions, revealed on hover or keyboard focus (always shown on touch screens). */
@@ -47,7 +48,7 @@ function EventMarker({
   const label = agent ? `Created ${agent.name}` : fallback || "Created a new agent"
   const content = (
     <>
-      <AgentAvatar name={agent?.name ?? "?"} size="sm" />
+      <AgentAvatar id={agent?.id ?? event.agentId} name={agent?.name ?? "?"} size="sm" />
       <MarkerContent className="font-medium">{label}</MarkerContent>
     </>
   )
@@ -117,6 +118,7 @@ export function MessageRow({
     )
   }
 
+  const reacted = message.reactions.length > 0
   const time = (
     <time dateTime={message.createdAt} className="hidden tabular-nums sm:inline">
       {formatTime(message.createdAt)}
@@ -127,8 +129,9 @@ export function MessageRow({
     return (
       <Message align="end">
         <MessageContent>
-          <Bubble variant="default" align="end">
+          <Bubble variant="default" align="end" className={cn(reacted && "mb-3.5")}>
             <BubbleContent className="whitespace-pre-wrap">{message.body}</BubbleContent>
+            <MessageReactions reactions={message.reactions} agents={agents} align="start" />
             <MessageActions side="end">
               <CopyButton text={message.body} />
               {time}
@@ -143,22 +146,27 @@ export function MessageRow({
   return (
     <Message align="start">
       <MessageAvatar className="size-8 bg-transparent">
-        {endsRun ? <AgentAvatar name={name} /> : null}
+        {endsRun ? <AgentAvatar id={agent?.id} name={name} /> : null}
       </MessageAvatar>
       <MessageContent>
         {showAuthorName && startsRun && <MessageHeader>{name}</MessageHeader>}
         {message.prompt ? (
-          <Bubble variant="muted" className="w-full max-w-[min(85%,26rem)]">
+          <Bubble
+            variant="muted"
+            className={cn("w-full max-w-[min(85%,26rem)]", reacted && "mb-3.5")}
+          >
             {/* p-2: the prompt card's row radii are derived from this padding. */}
             <BubbleContent className="w-full p-2">
               <PromptCard message={message} prompt={message.prompt} isLatest={isLatest} />
             </BubbleContent>
+            <MessageReactions reactions={message.reactions} agents={agents} align="end" />
           </Bubble>
         ) : (
-          <Bubble variant="muted">
+          <Bubble variant="muted" className={cn(reacted && "mb-3.5")}>
             <BubbleContent>
               <Markdown>{message.body}</Markdown>
             </BubbleContent>
+            <MessageReactions reactions={message.reactions} agents={agents} align="end" />
             <MessageActions side="start">
               <CopyButton text={message.body} />
               {time}
