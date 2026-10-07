@@ -734,6 +734,9 @@ type Message struct {
 
 	// Reactions Emoji reactions, in the order each emoji was first used
 	Reactions []Reaction `json:"reactions"`
+
+	// ReplyTo The earlier message in this chat that this one replies to
+	ReplyTo *QuotedMessage `json:"replyTo,omitempty"`
 }
 
 // MessageAuthor defines model for MessageAuthor.
@@ -903,6 +906,19 @@ type PushUnsubscribe struct {
 	Endpoint string `json:"endpoint"`
 }
 
+// QuotedMessage A message being replied to, as shown above the reply
+type QuotedMessage struct {
+	Attachments *[]Attachment  `json:"attachments,omitempty"`
+	Author      *MessageAuthor `json:"author,omitempty"`
+
+	// Available False when the message no longer exists; the other fields are then absent
+	Available bool `json:"available"`
+
+	// Body The start of its text (at most 300 characters), Markdown
+	Body *string `json:"body,omitempty"`
+	Id   string  `json:"id"`
+}
+
 // Reaction defines model for Reaction.
 type Reaction struct {
 	// By Who reacted with this emoji, oldest first
@@ -934,6 +950,9 @@ type SendMessageRequest struct {
 
 	// ClientId Client-generated id, echoed back so the sender can reconcile its optimistic message
 	ClientId *string `json:"clientId,omitempty"`
+
+	// ReplyToId An earlier message in this chat to reply to
+	ReplyToId *string `json:"replyToId,omitempty"`
 }
 
 // SetTimezoneRequest defines model for SetTimezoneRequest.

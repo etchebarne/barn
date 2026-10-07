@@ -344,16 +344,16 @@ func (m *Manager) DeliverAnswer(ctx context.Context, msg store.Message) error {
 
 // postMessage stores a message and broadcasts it. An agent's message in a group starts (or
 // extends) that group's turn cycle so the others get to respond.
-func (m *Manager) postMessage(ctx context.Context, chatID, authorKind string, agentID *string, body string, attachmentIDs ...string) (store.Message, error) {
-	mentions := m.MentionsIn(ctx, chatID, body)
-	msg, err := m.store.InsertMessageWithAttachments(ctx, chatID, authorKind, agentID, body, attachmentIDs, mentions...)
+func (m *Manager) postMessage(ctx context.Context, n store.NewMessage) (store.Message, error) {
+	n.Mentions = m.MentionsIn(ctx, n.ChatID, n.Body)
+	msg, err := m.store.InsertFull(ctx, n)
 	if err != nil {
 		return msg, err
 	}
 	m.publishMessage(msg)
-	if authorKind == "agent" {
-		if chat, err := m.store.GetChat(ctx, chatID); err == nil && chat.Kind == "group" {
-			m.startGroupCycle(chatID, msg)
+	if n.AuthorKind == "agent" {
+		if chat, err := m.store.GetChat(ctx, n.ChatID); err == nil && chat.Kind == "group" {
+			m.startGroupCycle(n.ChatID, msg)
 		}
 	}
 	return msg, nil

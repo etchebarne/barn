@@ -35,7 +35,7 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	b.WriteString("\n\n")
 
 	b.WriteString("# How communication works\n")
-	b.WriteString("- Incoming messages arrive wrapped in <message> tags that say which chat they came from and who sent them. System notices arrive in <system_notice> tags.\n")
+	b.WriteString("- Incoming messages arrive wrapped in <message> tags that say which chat they came from and who sent them. A message that starts with <replying_to> answers that earlier message. System notices arrive in <system_notice> tags.\n")
 	b.WriteString("- Your plain text output is private thinking. Nobody ever sees it.\n")
 	b.WriteString("- To say anything, call send_message with the chat_id of the chat to write in. Usually reply in the chat where you were addressed, unless asked to write somewhere else.\n")
 	b.WriteString("- You don't have to reply to everything. If a message doesn't need words (thanks, an FYI, an \"ok\"), react to it with an emoji instead, or do nothing at all. Don't send a message just to acknowledge.\n")
@@ -188,18 +188,12 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		from := user.Username
-		switch {
-		case msg.AuthorKind == "agent" && msg.AuthorAgentID != nil:
-			from = names[*msg.AuthorAgentID]
-		case msg.AuthorKind == "system":
-			from = "system"
-		}
 		files, images := l.renderAttachments(msg)
 		l.images = append(l.images, images...)
-		return fmt.Sprintf("<message message_id=%q chat_id=%q chat=%q from=%q sent_at=%q>\n%s%s\n</message>",
-			msg.ID, chat.ID, describeChat(chat, user.Username, l.agentID, names), from,
-			store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339), msg.Body, files), nil
+		return fmt.Sprintf("<message message_id=%q chat_id=%q chat=%q from=%q sent_at=%q>\n%s%s%s\n</message>",
+			msg.ID, chat.ID, describeChat(chat, user.Username, l.agentID, names), author(msg, user.Username, names),
+			store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339),
+			renderReply(msg, user.Username, names), msg.Body, files), nil
 
 	case EventSystem:
 		var p struct {

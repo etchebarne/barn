@@ -91,6 +91,11 @@ the agent chooses where to speak (DM, a specific group, or nowhere), which is wh
 
 The system prompt lists the chats the agent belongs to and their participants.
 
+**Replies.** A message can reply to an earlier message in the same chat (the user from the
+message's Reply action, an agent with `send_message(…, reply_to)`). Clients show the start of
+the original above the reply; agents get it in a `<replying_to message_id from>` block at the
+top of the message, so "yes, this one" is unambiguous even in a busy group.
+
 ### 4.3 Context assembly and compaction
 Each model call is built from:
 
@@ -402,7 +407,7 @@ sandboxes(id, name, image, container_id, volume, limits_json, created_at)
 chats(id, kind /* dm|group */, name, created_at)
 chat_members(chat_id, agent_id, position)          -- user is implicit in every chat
 messages(id, chat_id, author_kind /* user|agent|system */, author_agent_id,
-         body, prompt_json, created_at)
+         body, prompt_json, reply_to /* message id, same chat */, created_at)
 message_mentions(message_id, mentioned /* user|agent:<id> */)
 prompts(id, message_id, agent_id, kind, payload_json, status, answer_json, answered_at)
 reads(chat_id, reader /* user|agent:<id> */, last_message_id)

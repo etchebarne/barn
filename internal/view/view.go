@@ -21,7 +21,30 @@ func Message(m store.Message) gen.Message {
 		Reactions:   reactions(m.Reactions),
 		Mentions:    mentions(m.Mentions),
 		Attachments: attachmentList(m.Attachments),
+		ReplyTo:     quoted(m),
 	}
+}
+
+// quoteLength is how much of a replied-to message's text clients get.
+const quoteLength = 300
+
+func quoted(m store.Message) *gen.QuotedMessage {
+	if m.ReplyTo == nil {
+		return nil
+	}
+	q := &gen.QuotedMessage{Id: *m.ReplyTo}
+	if m.Quoted == nil {
+		return q
+	}
+	body := m.Quoted.Body
+	if r := []rune(body); len(r) > quoteLength {
+		body = string(r[:quoteLength]) + "…"
+	}
+	attachments := attachmentList(m.Quoted.Attachments)
+	q.Available = true
+	q.Author = &gen.MessageAuthor{Kind: gen.MessageAuthorKind(m.Quoted.AuthorKind), AgentId: m.Quoted.AuthorAgentID}
+	q.Body, q.Attachments = &body, &attachments
+	return q
 }
 
 // Attachment is how clients see an attached file.

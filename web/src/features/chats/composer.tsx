@@ -1,5 +1,6 @@
-import { ArrowUpIcon, PaperclipIcon } from "lucide-react"
+import { ArrowUpIcon, PaperclipIcon, ReplyIcon, XIcon } from "lucide-react"
 import {
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -63,6 +64,9 @@ export function Composer({
   onAddFiles,
   onRemoveUpload,
   onRetryUpload,
+  replyTo = null,
+  onCancelReply,
+  focusRequest = 0,
 }: {
   value: string
   onChange: (value: string) => void
@@ -76,6 +80,11 @@ export function Composer({
   onAddFiles?: (files: File[]) => void
   onRemoveUpload?: (localId: string) => void
   onRetryUpload?: (localId: string) => void
+  /** The message being replied to, shown above the input with a cancel button. */
+  replyTo?: { name: string; excerpt: string } | null
+  onCancelReply?: () => void
+  /** Changes when something (e.g. Reply) wants the composer focused. */
+  focusRequest?: number
 }) {
   const groupRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -112,6 +121,15 @@ export function Composer({
     setCaret(next.caret)
     pendingCaret.current = next.caret
   }
+
+  // Reply (or anything else) asked for focus. Only changes after mount count, so opening a chat
+  // doesn't grab focus (and pop the keyboard on phones).
+  const seenFocusRequest = useRef(focusRequest)
+  useEffect(() => {
+    if (focusRequest === seenFocusRequest.current) return
+    seenFocusRequest.current = focusRequest
+    textareaRef.current?.focus()
+  }, [focusRequest])
 
   // Place the caret after an inserted mention as soon as the new value is in the DOM.
   const pendingCaret = useRef<number | null>(null)
@@ -169,6 +187,12 @@ export function Composer({
       event.preventDefault()
       return
     }
+    if (event.key === "Escape" && replyTo && onCancelReply) {
+      event.preventDefault()
+      event.stopPropagation()
+      onCancelReply()
+      return
+    }
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
     event.preventDefault()
     submit(false)
@@ -183,6 +207,33 @@ export function Composer({
     >
       {/* Nested radius: group radius = button radius (--radius) + addon padding (0.5rem). */}
       <InputGroup ref={groupRef} className="rounded-[calc(var(--radius)+0.5rem)] bg-background">
+        {replyTo && (
+          <div
+            role="status"
+            aria-label={`Replying to ${replyTo.name}`}
+            className="flex w-full min-w-0 items-center gap-2 border-b px-3 py-1.5 text-xs"
+          >
+            <ReplyIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">
+              <span className="text-muted-foreground">Replying to </span>
+              <span className="font-medium">{replyTo.name}</span>
+              {replyTo.excerpt && (
+                <span className="text-muted-foreground"> · {replyTo.excerpt}</span>
+              )}
+            </span>
+            <InputGroupButton
+              type="button"
+              size="icon-xs"
+              aria-label="Cancel reply"
+              onClick={() => {
+                onCancelReply?.()
+                textareaRef.current?.focus()
+              }}
+            >
+              <XIcon />
+            </InputGroupButton>
+          </div>
+        )}
         <AttachmentRow
           uploads={uploads}
           notice={uploadNotice}

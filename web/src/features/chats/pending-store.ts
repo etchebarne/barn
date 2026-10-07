@@ -4,6 +4,8 @@ import { createStore } from "zustand/vanilla"
 import type { Message } from "@/lib/api-client"
 import type { Attachment } from "@/lib/attachments"
 
+import type { QuotedMessage } from "./reply-store"
+
 /** An attachment on a not-yet-confirmed message, with a local preview for images. */
 export type PendingAttachment = { attachment: Attachment; previewUrl: string | null }
 
@@ -11,6 +13,8 @@ export type PendingMessage = {
   clientId: string
   body: string
   attachments?: PendingAttachment[]
+  /** The quoted message, built from the cache so the bubble shows it right away. */
+  replyTo?: QuotedMessage | null
   /**
    * "confirmed": the server accepted it as `messageId`. It's hidden once that message is cached,
    * but kept for the session so the delivered message keeps this entry's row key.

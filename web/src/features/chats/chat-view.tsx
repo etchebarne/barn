@@ -20,6 +20,8 @@ import { useDraftStore } from "./draft-store"
 import { FileDropZone } from "./file-drop-zone"
 import { MessageList } from "./message-list"
 import { dmAgent } from "./preview"
+import { quoteAuthorName } from "./quote-block"
+import { quoteExcerpt, useReplyStore, useReplyTo } from "./reply-store"
 import {
   addFiles,
   removeUpload,
@@ -101,6 +103,10 @@ export function ChatComposer({ chat, members }: { chat: Chat; members: Agent[] }
   const { send } = useSendMessage(chat.id)
   const uploads = useUploads(chat.id)
   const uploadNotice = useUploadNotice(chat.id)
+  const replyTo = useReplyTo(chat.id)
+  const cancelReply = useReplyStore((s) => s.cancelReply)
+  const focusRequest = useReplyStore((s) => s.focusRequest)
+  const agents = useAgentsById()
   return (
     <Composer
       value={draft}
@@ -110,8 +116,19 @@ export function ChatComposer({ chat, members }: { chat: Chat; members: Agent[] }
         const attached = takeUploads(chat.id).flatMap((u) =>
           u.attachment ? [{ attachment: u.attachment, previewUrl: u.previewUrl }] : [],
         )
-        send(text, attached)
+        send(text, attached, replyTo)
+        cancelReply(chat.id)
       }}
+      replyTo={
+        replyTo
+          ? {
+              name: quoteAuthorName(replyTo.author, agents),
+              excerpt: quoteExcerpt(replyTo, 120),
+            }
+          : null
+      }
+      onCancelReply={() => cancelReply(chat.id)}
+      focusRequest={focusRequest}
       uploads={uploads}
       uploadNotice={uploadNotice}
       onAddFiles={(files) => addFiles(chat.id, files)}

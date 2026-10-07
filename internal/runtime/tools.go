@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -47,7 +48,8 @@ var (
 			"properties": {
 				"chat_id": {"type": "string", "description": "The chat to post in (from your chat list)."},
 				"text": {"type": "string", "description": "The message, in Markdown. May be empty when you attach files."},
-				"files": {"type": "array", "items": {"type": "string"}, "description": "Files from your computer to attach (up to 10, 25 MB each), e.g. /home/agent/report.pdf or /shared/chart.png. Images show in the chat."}
+				"files": {"type": "array", "items": {"type": "string"}, "description": "Files from your computer to attach (up to 10, 25 MB each), e.g. /home/agent/report.pdf or /shared/chart.png. Images show in the chat."},
+				"reply_to": {"type": "string", "description": "Optional: the message_id of an earlier message in this chat you're answering, shown quoted above yours. Use it when it wouldn't be clear otherwise (e.g. answering an older message in a busy group); not for every reply."}
 			},
 			"required": ["chat_id", "text"],
 			"additionalProperties": false
@@ -367,9 +369,10 @@ func (l *loop) memberChat(ctx context.Context, agent store.Agent, chatID string)
 
 func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
 	var args struct {
-		ChatID string   `json:"chat_id"`
-		Text   string   `json:"text"`
-		Files  []string `json:"files"`
+		ChatID  string   `json:"chat_id"`
+		Text    string   `json:"text"`
+		Files   []string `json:"files"`
+		ReplyTo string   `json:"reply_to"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return toolError("invalid arguments: %v", err), false
@@ -385,7 +388,11 @@ func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (
 	if err != nil {
 		return toolError("couldn't attach: %v", err), false
 	}
-	msg, err := l.m.postMessage(ctx, chat.ID, "agent", &agent.ID, args.Text, attached...)
+	msg, err := l.m.postMessage(ctx, store.NewMessage{ChatID: chat.ID, AuthorKind: "agent", AuthorAgentID: &agent.ID,
+		Body: args.Text, AttachmentIDs: attached, ReplyTo: strings.TrimSpace(args.ReplyTo)})
+	if errors.Is(err, store.ErrBadReply) {
+		return toolError("reply_to %q isn't a message in this chat", args.ReplyTo), false
+	}
 	if err != nil {
 		logger(agent.ID).Error("send_message", "err", err)
 		return toolError("failed to send the message"), false

@@ -1561,11 +1561,32 @@ components:
           allOf: [{ $ref: "#/components/schemas/MessageEvent" }]
           nullable: true
           description: Set on system messages that mark something that happened, e.g. an agent was created
+        replyTo:
+          allOf: [{ $ref: "#/components/schemas/QuotedMessage" }]
+          nullable: true
+          description: The earlier message in this chat that this one replies to
         clientId:
           type: string
           description: |
             Echo of SendMessageRequest.clientId. Only present on the sendMessage response and the
             matching message.created event.
+
+    QuotedMessage:
+      type: object
+      required: [id, available]
+      description: A message being replied to, as shown above the reply
+      properties:
+        id: { type: string }
+        available:
+          type: boolean
+          description: False when the message no longer exists; the other fields are then absent
+        author: { $ref: "#/components/schemas/MessageAuthor" }
+        body:
+          type: string
+          description: The start of its text (at most 300 characters), Markdown
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/Attachment" }
 
     MessageFailure:
       type: object
@@ -1760,6 +1781,9 @@ components:
           maxItems: 10
           description: Uploaded attachments (from uploadAttachment in this chat) to send with it
           items: { type: string }
+        replyToId:
+          type: string
+          description: An earlier message in this chat to reply to
         clientId:
           type: string
           maxLength: 64

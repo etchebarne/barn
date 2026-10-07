@@ -50,6 +50,10 @@ type Message struct {
 	// unsent uploads with these ids are attached.
 	Attachments []Attachment
 	attachIDs   []string
+	// ReplyTo is the earlier message in the same chat this one replies to; Quoted is that
+	// message, filled with Attachments (nil if it no longer exists).
+	ReplyTo *string
+	Quoted  *Message
 }
 
 // Reaction is one emoji on a message and who used it. Reactors are "user" or "agent:<id>".
@@ -301,13 +305,13 @@ func sortChatsByActivity(chats []Chat) {
 	slices.SortFunc(chats, func(a, b Chat) int { return strings.Compare(activity(b), activity(a)) })
 }
 
-const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at, failure, prompt, event, mentions`
+const messageColumns = `id, chat_id, author_kind, author_agent_id, body, created_at, failure, prompt, event, mentions, reply_to`
 
 func scanMessage(row interface{ Scan(...any) error }) (Message, error) {
 	var m Message
 	var failure, prompt, event, mentions sql.NullString
 	if err := row.Scan(&m.ID, &m.ChatID, &m.AuthorKind, &m.AuthorAgentID, &m.Body, &m.CreatedAt,
-		&failure, &prompt, &event, &mentions); err != nil {
+		&failure, &prompt, &event, &mentions, &m.ReplyTo); err != nil {
 		return m, err
 	}
 	if mentions.Valid {
@@ -348,15 +352,51 @@ func (s *Store) InsertMessage(ctx context.Context, chatID, authorKind string, au
 	return s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body, Mentions: mentions})
 }
 
+// NewMessage is a user or agent message to post with InsertFull.
+type NewMessage struct {
+	ChatID        string
+	AuthorKind    string
+	AuthorAgentID *string
+	Body          string
+	Mentions      []string
+	// AttachmentIDs are unsent uploads from the same chat, attached in order
+	// (ErrBadAttachment if any isn't one).
+	AttachmentIDs []string
+	// ReplyTo is an earlier message in the same chat (ErrBadReply if it isn't one).
+	ReplyTo string
+}
+
+// ErrBadReply means a reply's message isn't in the same chat.
+var ErrBadReply = errors.New("the message replied to isn't in this chat")
+
 // InsertMessageWithAttachments posts a message and attaches unsent uploads from the same chat
 // to it, in order (ErrBadAttachment if any isn't one).
 func (s *Store) InsertMessageWithAttachments(ctx context.Context, chatID, authorKind string, authorAgentID *string, body string, attachmentIDs []string, mentions ...string) (Message, error) {
-	m, err := s.insertMessage(ctx, Message{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID, Body: body, Mentions: mentions, attachIDs: attachmentIDs})
+	return s.InsertFull(ctx, NewMessage{ChatID: chatID, AuthorKind: authorKind, AuthorAgentID: authorAgentID,
+		Body: body, Mentions: mentions, AttachmentIDs: attachmentIDs})
+}
+
+// InsertFull posts a message with attachments and what it replies to, and returns it filled.
+func (s *Store) InsertFull(ctx context.Context, n NewMessage) (Message, error) {
+	m := Message{ChatID: n.ChatID, AuthorKind: n.AuthorKind, AuthorAgentID: n.AuthorAgentID, Body: n.Body,
+		Mentions: n.Mentions, attachIDs: n.AttachmentIDs}
+	if n.ReplyTo != "" {
+		var chatID string
+		err := s.db.QueryRowContext(ctx, `SELECT chat_id FROM messages WHERE id = ?`, n.ReplyTo).Scan(&chatID)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && chatID != n.ChatID) {
+			return m, ErrBadReply
+		}
+		if err != nil {
+			return m, err
+		}
+		m.ReplyTo = &n.ReplyTo
+	}
+	m, err := s.insertMessage(ctx, m)
 	if err != nil {
 		return m, err
 	}
 	msgs := []Message{m}
-	err = s.fillAttachments(ctx, msgs)
+	err = s.fillDetails(ctx, msgs, false)
 	return msgs[0], err
 }
 
@@ -436,8 +476,8 @@ func (s *Store) insertMessage(ctx context.Context, m Message) (Message, error) {
 		mentions = &v
 	}
 	err = s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure, prompt, event, mentions); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO messages (`+messageColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			m.ID, m.ChatID, m.AuthorKind, m.AuthorAgentID, m.Body, m.CreatedAt, failure, prompt, event, mentions, m.ReplyTo); err != nil {
 			return err
 		}
 		return attach(ctx, tx, m.ChatID, m.ID, m.attachIDs)
@@ -466,10 +506,7 @@ func (s *Store) GetMessage(ctx context.Context, id string) (Message, error) {
 		return m, err
 	}
 	msgs := []Message{m}
-	if err := s.fillReactions(ctx, msgs); err != nil {
-		return m, err
-	}
-	err = s.fillAttachments(ctx, msgs)
+	err = s.fillDetails(ctx, msgs, true)
 	return msgs[0], err
 }
 
@@ -497,6 +534,64 @@ func (s *Store) AddReaction(ctx context.Context, messageID, reactor, emoji strin
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+
+// fillDetails loads what isn't in a message's row: attachments, the quoted message and,
+// with reactions, its reactions.
+func (s *Store) fillDetails(ctx context.Context, msgs []Message, reactions bool) error {
+	if reactions {
+		if err := s.fillReactions(ctx, msgs); err != nil {
+			return err
+		}
+	}
+	if err := s.fillAttachments(ctx, msgs); err != nil {
+		return err
+	}
+	return s.fillQuoted(ctx, msgs)
+}
+
+// fillQuoted loads the messages that msgs reply to, with their attachments.
+func (s *Store) fillQuoted(ctx context.Context, msgs []Message) error {
+	var args []any
+	for _, m := range msgs {
+		if m.ReplyTo != nil {
+			args = append(args, *m.ReplyTo)
+		}
+	}
+	if len(args) == 0 {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+messageColumns+` FROM messages
+		WHERE id IN (?`+strings.Repeat(",?", len(args)-1)+`)`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var quoted []Message
+	for rows.Next() {
+		q, err := scanMessage(rows)
+		if err != nil {
+			return err
+		}
+		quoted = append(quoted, q)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	if err := s.fillAttachments(ctx, quoted); err != nil {
+		return err
+	}
+	byID := make(map[string]*Message, len(quoted))
+	for i := range quoted {
+		byID[quoted[i].ID] = &quoted[i]
+	}
+	for i := range msgs {
+		if msgs[i].ReplyTo != nil {
+			msgs[i].Quoted = byID[*msgs[i].ReplyTo]
+		}
+	}
+	return nil
 }
 
 // fillReactions loads reactions for msgs, grouped by emoji in first-use order.
@@ -568,10 +663,7 @@ func (s *Store) ListMessages(ctx context.Context, chatID, before string, limit i
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
 	}
-	if err := s.fillReactions(ctx, out); err != nil {
-		return nil, false, err
-	}
-	if err := s.fillAttachments(ctx, out); err != nil {
+	if err := s.fillDetails(ctx, out, true); err != nil {
 		return nil, false, err
 	}
 	return out, hasMore, nil
@@ -606,7 +698,7 @@ func (s *Store) MessagesAfter(ctx context.Context, chatID, afterID string, limit
 		return nil, err
 	}
 	rows.Close()
-	return out, s.fillAttachments(ctx, out)
+	return out, s.fillDetails(ctx, out, false)
 }
 
 // ReadMarker returns how far a reader ("user" or "agent:<id>") has read a chat ("" if never).

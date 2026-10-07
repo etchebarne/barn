@@ -313,21 +313,15 @@ func (l *loop) renderGroupTurn(ctx context.Context, payload json.RawMessage) (st
 		if msg.AuthorAgentID != nil && *msg.AuthorAgentID == l.agentID {
 			continue // its own messages are already in its context
 		}
-		from := user.Username
-		switch {
-		case msg.AuthorKind == "agent" && msg.AuthorAgentID != nil:
-			from = names[*msg.AuthorAgentID]
-		case msg.AuthorKind == "system":
-			from = "system"
-		}
 		mentioned := ""
 		if slices.Contains(msg.Mentions, l.agentID) {
 			mentioned = ` mentions_you="true"`
 		}
 		files, images := l.renderAttachments(msg)
 		l.images = append(l.images, images...)
-		fmt.Fprintf(&b, "<message message_id=%q from=%q sent_at=%q%s>\n%s%s\n</message>\n",
-			msg.ID, from, store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339), mentioned, msg.Body, files)
+		fmt.Fprintf(&b, "<message message_id=%q from=%q sent_at=%q%s>\n%s%s%s\n</message>\n",
+			msg.ID, author(msg, user.Username, names), store.Time(msg.CreatedAt).In(l.m.location(ctx)).Format(time.RFC3339),
+			mentioned, renderReply(msg, user.Username, names), msg.Body, files)
 	}
 	b.WriteString("It's your turn in this group. Reply (send_message to this chat_id) only if something is " +
 		"directed at you or you have something useful to add that others haven't said; otherwise react or stay " +

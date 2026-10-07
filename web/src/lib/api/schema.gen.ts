@@ -1154,11 +1154,23 @@ export interface components {
             prompt?: components["schemas"]["Prompt"] | null;
             /** @description Set on system messages that mark something that happened, e.g. an agent was created */
             event?: components["schemas"]["MessageEvent"] | null;
+            /** @description The earlier message in this chat that this one replies to */
+            replyTo?: components["schemas"]["QuotedMessage"] | null;
             /**
              * @description Echo of SendMessageRequest.clientId. Only present on the sendMessage response and the
              *     matching message.created event.
              */
             clientId?: string;
+        };
+        /** @description A message being replied to, as shown above the reply */
+        QuotedMessage: {
+            id: string;
+            /** @description False when the message no longer exists; the other fields are then absent */
+            available: boolean;
+            author?: components["schemas"]["MessageAuthor"];
+            /** @description The start of its text (at most 300 characters), Markdown */
+            body?: string;
+            attachments?: components["schemas"]["Attachment"][];
         };
         MessageFailure: {
             agentId: string;
@@ -1291,6 +1303,8 @@ export interface components {
             body: string;
             /** @description Uploaded attachments (from uploadAttachment in this chat) to send with it */
             attachmentIds?: string[];
+            /** @description An earlier message in this chat to reply to */
+            replyToId?: string;
             /** @description Client-generated id, echoed back so the sender can reconcile its optimistic message */
             clientId?: string;
         };

@@ -78,9 +78,18 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request, chatID gen.
 	if !s.chatExists(w, r, chatID) {
 		return
 	}
-	msg, err := s.store.InsertMessageWithAttachments(ctx, chatID, "user", nil, req.Body, attachmentIDs, s.runtime.MentionsIn(ctx, chatID, req.Body)...)
+	replyTo := ""
+	if req.ReplyToId != nil {
+		replyTo = *req.ReplyToId
+	}
+	msg, err := s.store.InsertFull(ctx, store.NewMessage{ChatID: chatID, AuthorKind: "user", Body: req.Body,
+		Mentions: s.runtime.MentionsIn(ctx, chatID, req.Body), AttachmentIDs: attachmentIDs, ReplyTo: replyTo})
 	if errors.Is(err, store.ErrBadAttachment) {
 		writeError(w, http.StatusBadRequest, "an attachment isn't an upload in this chat, or was already sent")
+		return
+	}
+	if errors.Is(err, store.ErrBadReply) {
+		writeError(w, http.StatusBadRequest, "replyToId isn't a message in this chat")
 		return
 	}
 	if err != nil {

@@ -810,3 +810,31 @@ func TestSidebarLayoutAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestReplies(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	_, dm, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	_, other, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "b", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+
+	long := strings.Repeat("é", 400)
+	_, first := c.do("POST", "/api/chats/"+dm+"/messages", `{"body":"`+long+`"}`, true)
+	resp, reply := c.do("POST", "/api/chats/"+dm+"/messages", `{"body":"yes, this","replyToId":"`+first["id"].(string)+`"}`, true)
+	q, _ := reply["replyTo"].(map[string]any)
+	if resp.StatusCode != http.StatusCreated || q == nil || q["id"] != first["id"] || q["available"] != true ||
+		q["body"] != strings.Repeat("é", 300)+"…" || q["author"].(map[string]any)["kind"] != "user" {
+		t.Fatalf("reply: %d %v", resp.StatusCode, reply)
+	}
+	_, page := c.do("GET", "/api/chats/"+dm+"/messages", "", false)
+	msgs := page["messages"].([]any)
+	last := msgs[len(msgs)-1].(map[string]any)
+	if last["replyTo"].(map[string]any)["id"] != first["id"] || msgs[0].(map[string]any)["replyTo"] != nil {
+		t.Fatalf("listed: %v", msgs)
+	}
+	// Only to messages in the same chat.
+	for _, id := range []string{"nope", first["id"].(string)} {
+		if resp, _ := c.do("POST", "/api/chats/"+other+"/messages", `{"body":"x","replyToId":"`+id+`"}`, true); resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("reply to %s from another chat: %d", id, resp.StatusCode)
+		}
+	}
+}

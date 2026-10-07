@@ -23,6 +23,7 @@ import { MessageAttachments, type ShownAttachment } from "./message-attachments"
 import { MessageReactions, ReactButton } from "./message-reactions"
 import type { PendingMessage } from "./pending-store"
 import { agentAuthorName } from "./preview"
+import { QuoteBlock, ReplyButton } from "./quote-block"
 
 /** Per-message actions, revealed on hover or keyboard focus (always shown on touch screens). */
 function MessageActions({ side, children }: { side: "start" | "end"; children: ReactNode }) {
@@ -140,6 +141,7 @@ export function MessageRow({
     return (
       <Message align="end">
         <MessageContent>
+          {message.replyTo && <QuoteBlock quote={message.replyTo} agents={agents} align="end" />}
           {hasText && <MessageAttachments attachments={message.attachments} align="end" />}
           <Bubble
             variant={hasText ? "default" : "ghost"}
@@ -155,6 +157,7 @@ export function MessageRow({
             )}
             <MessageReactions message={message} agents={agents} align="start" />
             <MessageActions side="end">
+              <ReplyButton message={message} />
               <ReactButton message={message} />
               {hasText && <CopyButton text={message.body} />}
               {time}
@@ -188,6 +191,7 @@ export function MessageRow({
             {name}
           </MessageHeader>
         )}
+        {message.replyTo && <QuoteBlock quote={message.replyTo} agents={agents} align="start" />}
         {message.prompt ? (
           <Bubble
             variant="muted"
@@ -221,6 +225,7 @@ export function MessageRow({
               <MessageActions side="start">
                 {hasText && <CopyButton text={message.body} />}
                 <ReactButton message={message} />
+                <ReplyButton message={message} />
                 {time}
               </MessageActions>
             </Bubble>
@@ -233,10 +238,12 @@ export function MessageRow({
 
 export function PendingRow({
   pending,
+  agents,
   onRetry,
   onDiscard,
 }: {
   pending: PendingMessage
+  agents: Map<string, Agent>
   onRetry: () => void
   onDiscard: () => void
 }) {
@@ -247,6 +254,7 @@ export function PendingRow({
   return (
     <Message align="end">
       <MessageContent>
+        {pending.replyTo && <QuoteBlock quote={pending.replyTo} agents={agents} align="end" />}
         {attachments.length > 0 && (
           <div className={cn(!failed && "opacity-70")}>
             <MessageAttachments attachments={attachments} align="end" />

@@ -50,3 +50,34 @@
 @utility animate-rise-in {
   animation: rise-in var(--duration-delight) var(--ease-out-expo) both;
 }
+
+/* Jumping to a quoted message: a short tinted flash over the row (opacity only), then gone. */
+@keyframes reply-flash-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.reply-flash {
+  position: relative;
+}
+
+.reply-flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  pointer-events: none;
+  animation: reply-flash-fade 1s var(--ease-out-quad) 0.15s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No fade: a steady tint that disappears when the class is removed. */
+  .reply-flash::after {
+    animation: none;
+  }
+}
