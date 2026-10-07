@@ -104,6 +104,13 @@ type Type interface {
 	Verify(ctx context.Context, acct Account) error
 }
 
+// Describer is implemented by types that can show a tool call's arguments in the user's terms
+// on approval cards: names instead of ids (#alerts for C0123, the message a thread_ts points
+// to). It returns readable values for the arguments it knows; the rest are shown as they are.
+type Describer interface {
+	DescribeArgs(ctx context.Context, acct Account, tool string, args map[string]json.RawMessage) map[string]string
+}
+
 // WebhookReceiver is implemented by types that receive signals over HTTP. HandleWebhook
 // verifies the request (signatures) and turns it into signals.
 type WebhookReceiver interface {

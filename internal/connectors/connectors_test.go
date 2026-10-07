@@ -593,3 +593,37 @@ func TestSlackPostsAsUser(t *testing.T) {
 		t.Fatalf("a bot token in the user field should be caught: %v", err)
 	}
 }
+
+func TestSlackDescribeArgs(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/conversations.info":
+			fmt.Fprint(w, `{"ok":true,"channel":{"id":"C9","name":"bot-ception"}}`)
+		case "/conversations.replies":
+			if r.URL.Query().Get("ts") != "1791409461.645449" {
+				fmt.Fprint(w, `{"ok":false,"error":"thread_not_found"}`)
+				return
+			}
+			fmt.Fprint(w, `{"ok":true,"messages":[{"user":"U7","text":"do we   approve <@U7>?"}]}`)
+		case "/users.info":
+			fmt.Fprint(w, `{"ok":true,"user":{"profile":{"display_name":"Steve J"}}}`)
+		}
+	}))
+	defer api.Close()
+	acct := Account{ID: "describe", Credentials: map[string]string{"bot_token": "xoxb-1"}, Config: map[string]string{"base_url": api.URL}}
+	args := map[string]json.RawMessage{
+		"channel": json.RawMessage(`"C9"`), "thread_ts": json.RawMessage(`"1791409461.645449"`), "text": json.RawMessage(`"sounds good"`),
+	}
+	got := Slack{}.DescribeArgs(context.Background(), acct, "post_message", args)
+	if got["channel"] != "#bot-ception" || got["thread_ts"] != "Steve J: do we approve @Steve J?" || got["text"] != "" {
+		t.Fatalf("described: %v", got)
+	}
+	// Names are left alone; other tools aren't described.
+	args["channel"], args["thread_ts"] = json.RawMessage(`"#alerts"`), nil
+	if got := (Slack{}).DescribeArgs(context.Background(), acct, "post_message", args); len(got) != 0 {
+		t.Fatalf("a name needs no description: %v", got)
+	}
+	if got := (Slack{}).DescribeArgs(context.Background(), acct, "read_channel", args); got != nil {
+		t.Fatalf("read_channel: %v", got)
+	}
+}

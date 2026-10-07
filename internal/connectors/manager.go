@@ -284,6 +284,29 @@ func (m *Manager) Call(ctx context.Context, agentID, name string, args json.RawM
 	return out, err
 }
 
+// DescribeArgs returns readable values for some of a call's arguments, for approval cards
+// (nil when the connector can't describe them or looking them up fails).
+func (m *Manager) DescribeArgs(ctx context.Context, accountID, tool string, args json.RawMessage) map[string]string {
+	acct, t, err := m.account(ctx, accountID)
+	if err != nil {
+		return nil
+	}
+	d, ok := t.(Describer)
+	if !ok {
+		return nil
+	}
+	var parsed map[string]json.RawMessage
+	if json.Unmarshal(args, &parsed) != nil {
+		return nil
+	}
+	dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if acct, err = m.fresh(dctx, acct, false); err != nil {
+		return nil
+	}
+	return d.DescribeArgs(dctx, acct, tool, parsed)
+}
+
 // ServeWebhook handles POST /hooks/{accountID}.
 func (m *Manager) ServeWebhook(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("accountID")

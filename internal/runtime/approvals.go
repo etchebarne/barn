@@ -115,6 +115,14 @@ func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool strin
 				body = guessBody(args)
 			}
 			p.Fields, p.Body = previewFields(args, t.Tool.Labels, body)
+			// Names instead of ids where the app can tell (#alerts for C0123…).
+			if readable := l.m.Connectors.DescribeArgs(ctx, t.AccountID, t.Tool.Name, args); len(readable) > 0 {
+				for i, f := range p.Fields {
+					if v, ok := readable[f.Key]; ok {
+						p.Fields[i].Value, _ = json.Marshal(v)
+					}
+				}
+			}
 			app := p.AppName
 			if app == "" {
 				app = "an app"

@@ -41,7 +41,7 @@ func (Slack) SignalTypes() []SignalType {
 
 func (Slack) Tools(_ context.Context, acct Account) ([]Tool, error) {
 	post := Tool{Name: "post_message", Description: "Post a message to a channel (by name like #alerts or id), optionally in a thread.", External: true,
-		Title: "Slack message", Verb: "Send message", Body: "text", Labels: map[string]string{"channel": "To", "thread_ts": "Thread"},
+		Title: "Slack message", Verb: "Send message", Body: "text", Labels: map[string]string{"channel": "To", "thread_ts": "In reply to"},
 		Parameters: params(map[string]string{"channel": "#name or channel id", "text": "message (Slack mrkdwn)", "?thread_ts": "reply in this thread"})}
 	if acct.Credentials["user_token"] != "" {
 		// With the user's token, messages always go out as them ("Sent using" the app).

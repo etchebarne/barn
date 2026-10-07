@@ -238,6 +238,16 @@ func TestPlainTextIsPrivateAndNudged(t *testing.T) {
 	if f.llm.calls() != 3 {
 		t.Fatalf("expected 3 model calls, got %d", f.llm.calls())
 	}
+	// The nudge and the text it answered were for that one call: neither is kept.
+	entries, err := f.store.Context(context.Background(), f.agent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.Contains(string(e.Entry), "nobody can see") || strings.Contains(string(e.Entry), "but nobody sees this") {
+			t.Fatalf("kept in the context: %s", e.Entry)
+		}
+	}
 }
 
 func TestMessagesArrivingMidTurnAreInjected(t *testing.T) {

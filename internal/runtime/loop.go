@@ -32,6 +32,7 @@ type loop struct {
 	handled []string          // events consumed by the current turn
 	fresh   map[string]bool   // messages the agent was shown in the current turn
 	sent    map[string]string // chat + text + files → message id, for messages sent this turn
+	aside   []model.Message   // shown to the model on its next call only, never stored
 	images  []string          // image attachments of the event being rendered
 }
 
@@ -86,6 +87,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 	defer func() { l.m.eventsHandled(l.handled) }()
 	l.fresh = map[string]bool{}
 	l.sent = map[string]string{}
+	l.aside = nil
 
 	added, err := l.consume(ctx, events)
 	if err != nil {
@@ -116,20 +118,20 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 		}
 		reply := resp.Message
 		reply.Role = "assistant"
+		l.aside = nil
+		// Plain text before saying anything: point out that nobody saw it, for this one call. The
+		// text and the nudge stay out of the context, so a pile of old nudges doesn't teach the
+		// model to never end a turn with plain text.
+		if len(reply.ToolCalls) == 0 && !spoke && !nudged && strings.TrimSpace(reply.Text()) != "" {
+			nudged = true
+			l.aside = []model.Message{reply, model.Text("user", nudgeText)}
+			continue
+		}
 		if err := l.appendEntries(ctx, reply); err != nil {
 			log.Error("append reply", "err", err)
 			return
 		}
-
 		if len(reply.ToolCalls) == 0 {
-			if !spoke && !nudged && strings.TrimSpace(reply.Text()) != "" {
-				nudged = true
-				if err := l.appendEntries(ctx, model.Text("user", nudgeText)); err != nil {
-					log.Error("append nudge", "err", err)
-					return
-				}
-				continue
-			}
 			return
 		}
 
@@ -250,6 +252,7 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 		}
 		msgs = append(msgs, m)
 	}
+	msgs = append(msgs, l.aside...)
 	l.loadImages(ctx, msgs)
 	// Each agent is one continuous conversation, so its id is a stable session id.
 	tools := toolsFor(agent, l.m.sandboxesAvailable())
