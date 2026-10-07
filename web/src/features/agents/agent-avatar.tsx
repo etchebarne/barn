@@ -84,8 +84,8 @@ export function GroupAvatar({
   const gap = size === "sm" ? 1.5 : 2
   const cutout = (i: number) => {
     const holes = spots.slice(i + 1).map((s) => {
-      const cx = s.x - spots[i]!.x + diameter / 2
-      const cy = s.y - spots[i]!.y + diameter / 2
+      const cx = s.x - spots[i].x + diameter / 2
+      const cy = s.y - spots[i].y + diameter / 2
       const r = diameter / 2 + gap
       return `radial-gradient(circle at ${cx}px ${cy}px, transparent ${r}px, #000 ${r + 0.5}px)`
     })
@@ -110,8 +110,8 @@ export function GroupAvatar({
           style={{
             width: diameter,
             height: diameter,
-            left: spots[i]!.x,
-            top: spots[i]!.y,
+            left: spots[i].x,
+            top: spots[i].y,
             ...cutout(i),
           }}
         >

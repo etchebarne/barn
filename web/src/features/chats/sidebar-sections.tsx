@@ -24,7 +24,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
-import { ChevronRightIcon, EllipsisIcon, FolderInputIcon, PlusIcon } from "lucide-react"
+import { ChevronRightIcon, EllipsisIcon, EraserIcon, FolderInputIcon, PlusIcon } from "lucide-react"
 import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -32,6 +32,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -43,6 +44,7 @@ import { AgentAvatar, GroupAvatar } from "@/features/agents"
 import type { Agent, Chat } from "@/lib/api-client"
 import { readStorage, writeStorage } from "@/lib/storage"
 
+import { ClearHistoryDialog } from "./clear-history-dialog"
 import { usePaletteStore } from "./palette-store"
 import { chatPreview, dmAgent } from "./preview"
 import {
@@ -124,51 +126,72 @@ function ChatRowContent({ chat, agents }: { chat: Chat; agents: Map<string, Agen
   )
 }
 
-/** "Move to →": a keyboard and touch friendly alternative to dragging. */
-function MoveToMenu({
+/**
+ * A chat row's ⋯ menu: "Move to →" (a keyboard and touch friendly alternative to dragging) and,
+ * for DMs, "Clear history".
+ */
+function ChatRowMenu({
   chat,
   sections,
   onMove,
 }: {
   chat: Chat
-  sections: Section[]
+  /** null: no categories yet, so nowhere to move to. */
+  sections: Section[] | null
   onMove: (toKey: SectionKey) => void
 }) {
-  const current = findSection(sections, chat.id)?.key
+  const current = sections && findSection(sections, chat.id)?.key
+  const [clearing, setClearing] = useState(false)
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`More for ${chat.name}`}
-            className="absolute top-1/2 right-2 -translate-y-1/2 opacity-100 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
-          />
-        }
-      >
-        <EllipsisIcon />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <FolderInputIcon />
-            Move to
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            {sections.map((section) => (
-              <DropdownMenuItem
-                key={section.key}
-                disabled={section.key === current}
-                onClick={() => onMove(section.key)}
-              >
-                {section.name}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`More for ${chat.name}`}
+              className="absolute top-1/2 right-2 -translate-y-1/2 opacity-100 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
+            />
+          }
+        >
+          <EllipsisIcon />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          {sections && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <FolderInputIcon />
+                Move to
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {sections.map((section) => (
+                  <DropdownMenuItem
+                    key={section.key}
+                    disabled={section.key === current}
+                    onClick={() => onMove(section.key)}
+                  >
+                    {section.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+          {chat.kind === "dm" && (
+            <>
+              {sections && <DropdownMenuSeparator />}
+              <DropdownMenuItem variant="destructive" onClick={() => setClearing(true)}>
+                <EraserIcon />
+                Clear history
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {chat.kind === "dm" && (
+        <ClearHistoryDialog chat={chat} open={clearing} onOpenChange={setClearing} />
+      )}
+    </>
   )
 }
 
@@ -588,10 +611,10 @@ export function SidebarSections({
               indicator={dropTarget?.key === section.key && dropTarget.beforeChatId === chat.id}
               onNavigate={onNavigate}
               menu={
-                hasCategories ? (
-                  <MoveToMenu
+                hasCategories || chat.kind === "dm" ? (
+                  <ChatRowMenu
                     chat={chat}
-                    sections={sections}
+                    sections={hasCategories ? sections : null}
                     onMove={(toKey) => {
                       const dest = sections.find((s) => s.key === toKey)
                       moveTo(chat.id, toKey, dest?.chats.length ?? 0)

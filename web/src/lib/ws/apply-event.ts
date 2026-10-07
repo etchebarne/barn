@@ -12,6 +12,7 @@ import {
   upsertAgent,
   upsertChat,
 } from "../chat-cache"
+import { applyChatCleared } from "../chat-history"
 import { queryKeys } from "../query-keys"
 import { sidebarChangedRemotely } from "../sidebar-sync"
 
@@ -57,6 +58,11 @@ export function applyWsEvent(queryClient: QueryClient, event: WsEvent): ApplyRes
       return NOTHING_REMOVED
     case "agent.updated":
       updateAgentInCache(queryClient, event.agent)
+      return NOTHING_REMOVED
+    case "chat.cleared":
+      // A DM's history was cleared (here or on another device). The server follows up with
+      // `chat.created` carrying the emptied summary.
+      applyChatCleared(queryClient, event.chatId)
       return NOTHING_REMOVED
     case "chat.read":
       markChatReadInCache(queryClient, event.chatId, event.lastMessageId)

@@ -264,6 +264,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{chatId}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * @description Clears a DM: deletes its messages (and their attachments and reactions), and the agent
+         *     forgets that conversation (it keeps its saved memories, settings, tasks and what happened
+         *     in groups). Group chats can't be cleared.
+         */
+        delete: operations["clearChatHistory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{chatId}/read": {
         parameters: {
             query?: never;
@@ -1318,7 +1341,7 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"] | components["schemas"]["WsChatCleared"];
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1379,6 +1402,15 @@ export interface components {
              */
             type: "chat.created";
             chat: components["schemas"]["Chat"];
+        };
+        /** @description A chat's history was cleared; drop its messages (newer ones arrive as message.created) */
+        WsChatCleared: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "chat.cleared";
+            chatId: string;
         };
         /** @description An agent was archived; drop it and its DM from the app */
         WsAgentArchived: {
@@ -1887,6 +1919,29 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Message"];
                 };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    clearChatHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];

@@ -111,6 +111,20 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request, chatID gen.
 	writeJSON(w, http.StatusCreated, out)
 }
 
+func (s *Server) ClearChatHistory(w http.ResponseWriter, r *http.Request, chatID gen.ChatId) {
+	err := s.runtime.ClearDM(r.Context(), chatID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "chat not found")
+	case errors.Is(err, runtime.ErrNotDM):
+		writeError(w, http.StatusBadRequest, "only DMs can be cleared")
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func (s *Server) MarkChatRead(w http.ResponseWriter, r *http.Request, chatID gen.ChatId) {
 	var req gen.MarkReadRequest
 	if !decode(w, r, &req) {

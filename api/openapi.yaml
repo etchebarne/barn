@@ -339,6 +339,22 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /chats/{chatId}/history:
+    parameters:
+      - $ref: "#/components/parameters/ChatId"
+    delete:
+      operationId: clearChatHistory
+      tags: [chats]
+      description: |
+        Clears a DM: deletes its messages (and their attachments and reactions), and the agent
+        forgets that conversation (it keeps its saved memories, settings, tasks and what happened
+        in groups). Group chats can't be cleared.
+      responses:
+        "204": { description: Cleared }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /chats/{chatId}/read:
     parameters:
       - $ref: "#/components/parameters/ChatId"
@@ -1822,6 +1838,7 @@ components:
         - $ref: "#/components/schemas/WsAgentArchived"
         - $ref: "#/components/schemas/WsAgentDeleted"
         - $ref: "#/components/schemas/WsSidebarUpdated"
+        - $ref: "#/components/schemas/WsChatCleared"
       discriminator:
         propertyName: type
         mapping:
@@ -1835,6 +1852,7 @@ components:
           agent.archived: "#/components/schemas/WsAgentArchived"
           agent.deleted: "#/components/schemas/WsAgentDeleted"
           sidebar.updated: "#/components/schemas/WsSidebarUpdated"
+          chat.cleared: "#/components/schemas/WsChatCleared"
 
     WsMessageCreated:
       type: object
@@ -1889,6 +1907,14 @@ components:
       properties:
         type: { type: string, enum: [chat.created] }
         chat: { $ref: "#/components/schemas/Chat" }
+
+    WsChatCleared:
+      type: object
+      required: [type, chatId]
+      description: A chat's history was cleared; drop its messages (newer ones arrive as message.created)
+      properties:
+        type: { type: string, enum: [chat.cleared] }
+        chatId: { type: string }
 
     WsAgentArchived:
       type: object

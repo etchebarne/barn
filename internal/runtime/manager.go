@@ -125,7 +125,7 @@ func (m *Manager) AddAgent(agentID string) {
 		return
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	l := &loop{m: m, agentID: agentID, wake: make(chan struct{}, 1), stop: cancel}
+	l := &loop{m: m, agentID: agentID, wake: make(chan struct{}, 1), jobs: make(chan func(context.Context), 16), stop: cancel}
 	m.loops[agentID] = l
 	m.wg.Add(1)
 	go func() {

@@ -292,3 +292,23 @@ function removeAgentAndDm(
 export function chatPath(chatId: string): string {
   return `/chats/${encodeURIComponent(chatId)}`
 }
+
+/**
+ * A DM's history was cleared: its loaded messages become an empty page (so an open chat shows
+ * its empty state rather than a loader), and its list entry loses its preview and unread count.
+ * Other chats are untouched.
+ */
+export function clearChatInCache(queryClient: QueryClient, chatId: string) {
+  const key = queryKeys.messages(chatId)
+  void queryClient.cancelQueries({ queryKey: key })
+  queryClient.setQueryData<MessagesData>(key, (data) =>
+    data
+      ? { pages: [{ messages: [], hasMore: false }], pageParams: data.pageParams.slice(0, 1) }
+      : data,
+  )
+  queryClient.setQueryData<Chat[]>(queryKeys.chats, (chats) =>
+    chats?.map((chat) =>
+      chat.id === chatId ? { ...chat, unreadCount: 0, lastMessage: null } : chat,
+    ),
+  )
+}

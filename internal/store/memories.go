@@ -78,3 +78,9 @@ func (s *Store) Compact(ctx context.Context, agentID, keepFromID, summary string
 		return err
 	})
 }
+
+// ClearContextSummary drops the agent's summary of compacted context.
+func (s *Store) ClearContextSummary(ctx context.Context, agentID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM context_summaries WHERE agent_id = ?`, agentID)
+	return err
+}

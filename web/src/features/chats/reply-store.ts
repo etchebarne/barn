@@ -2,6 +2,7 @@ import { create } from "zustand"
 
 import type { Message, Schemas } from "@/lib/api-client"
 import { isImage } from "@/lib/attachments"
+import { onChatCleared } from "@/lib/chat-history"
 
 import { plainPreview } from "./preview"
 
@@ -26,6 +27,9 @@ export const useReplyStore = create<ReplyState>()((set) => ({
     })),
   cancelReply: (chatId) => set((s) => ({ byChat: { ...s.byChat, [chatId]: null } })),
 }))
+
+// A cleared chat has nothing left to reply to.
+onChatCleared((chatId) => useReplyStore.getState().cancelReply(chatId))
 
 export function useReplyTo(chatId: string): Message | null {
   return useReplyStore((s) => s.byChat[chatId] ?? null)

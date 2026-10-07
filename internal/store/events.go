@@ -108,3 +108,32 @@ func (s *Store) Context(ctx context.Context, agentID string) ([]ContextEntry, er
 	}
 	return out, rows.Err()
 }
+
+// DeleteContextEntries removes some of an agent's context entries.
+func (s *Store) DeleteContextEntries(ctx context.Context, agentID string, ids []string) error {
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM context_entries WHERE agent_id = ? AND id = ?`, agentID, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// DropPendingEvents deletes an agent's unprocessed events for which drop returns true.
+func (s *Store) DropPendingEvents(ctx context.Context, agentID string, drop func(Event) bool) error {
+	events, err := s.PendingEvents(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	for _, e := range events {
+		if !drop(e) {
+			continue
+		}
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM events WHERE id = ? AND consumed_at IS NULL`, e.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}

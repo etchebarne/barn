@@ -1,3 +1,4 @@
+import { EraserIcon } from "lucide-react"
 import { useState, type KeyboardEvent, type ReactNode } from "react"
 import { toast } from "sonner"
 
@@ -9,6 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { Agent } from "@/lib/api-client"
+import { clearHistoryCopy, useAgentDm, useClearChatHistory } from "@/lib/chat-history"
 import { useLeaveRemovedChats } from "@/lib/leave-removed-chats"
 
 import { useArchiveAgent, useDeleteAgent, useUpdateAgent } from "./api"
@@ -451,7 +453,10 @@ export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: ()
   const archive = useArchiveAgent(agent.id)
   const remove = useDeleteAgent(agent)
   const leaveRemovedChats = useLeaveRemovedChats()
-  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
+  const dm = useAgentDm(agent.id)
+  const clear = useClearChatHistory({ id: dm?.id ?? "", name: agent.name })
+  const clearCopy = clearHistoryCopy(agent.name)
+  const [confirming, setConfirming] = useState<"clear" | "archive" | "delete" | null>(null)
   const row =
     "flex items-center justify-between gap-4 rounded-[calc(var(--radius-md)+0.75rem)] border border-destructive/30 p-3"
 
@@ -460,7 +465,21 @@ export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: ()
       <h3 id="agent-danger-zone" className="text-sm font-medium text-destructive">
         Danger zone
       </h3>
-      {confirming === "archive" ? (
+      {confirming === "clear" && dm ? (
+        <InlineConfirm
+          tone="destructive"
+          title={clearCopy.title}
+          confirmLabel="Clear history"
+          pending={clear.isPending}
+          onConfirm={() => clear.mutate(undefined, { onSuccess: () => setConfirming(null) })}
+          onCancel={() => {
+            setConfirming(null)
+            clear.reset()
+          }}
+        >
+          {clearCopy.body}
+        </InlineConfirm>
+      ) : confirming === "archive" ? (
         <InlineConfirm
           tone="destructive"
           title={`Archive ${agent.name}?`}
@@ -501,6 +520,17 @@ export function DangerZone({ agent, onArchived }: { agent: Agent; onArchived: ()
         </InlineConfirm>
       ) : (
         <>
+          {dm && (
+            <div className={row}>
+              <p className="text-sm text-muted-foreground">
+                Delete your DM's messages and files. {agent.name} forgets the conversation.
+              </p>
+              <Button variant="destructive" size="sm" onClick={() => setConfirming("clear")}>
+                <EraserIcon />
+                Clear history
+              </Button>
+            </div>
+          )}
           <div className={row}>
             <p className="text-sm text-muted-foreground">Stop this agent and remove its DM.</p>
             <Button variant="destructive" size="sm" onClick={() => setConfirming("archive")}>

@@ -3,6 +3,7 @@ import { createStore } from "zustand/vanilla"
 
 import type { Message } from "@/lib/api-client"
 import type { Attachment } from "@/lib/attachments"
+import { onChatCleared } from "@/lib/chat-history"
 
 import type { QuotedMessage } from "./reply-store"
 
@@ -62,6 +63,14 @@ export const pendingStore = createStore<PendingState>()((set) => ({
   retrying: (chatId, clientId) =>
     set((s) => update(s.byChat, chatId, setStatus("sending", clientId))),
 }))
+
+// Clearing a chat drops its unsent and failed bubbles along with its history.
+onChatCleared((chatId) =>
+  pendingStore.setState((s) => {
+    const { [chatId]: _dropped, ...byChat } = s.byChat
+    return { byChat }
+  }),
+)
 
 const EMPTY: PendingMessage[] = []
 

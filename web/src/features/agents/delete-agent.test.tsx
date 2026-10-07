@@ -124,3 +124,22 @@ describe("Delete agent", () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 })
+
+describe("Clear history", () => {
+  it("confirms inline, then clears the agent's DM", async () => {
+    const del = deleteResponds(204)
+    const { client } = await renderDangerZone()
+    await userEvent.click(await screen.findByRole("button", { name: "Clear history" }))
+    expect(screen.getByRole("alertdialog", { name: "Clear your DM with Tracker?" })).toBeVisible()
+    await userEvent.click(screen.getByRole("button", { name: "Clear history" }))
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Cleared your DM with Tracker"))
+    expect(del).toHaveBeenCalledWith("/chats/{chatId}/history", {
+      params: { path: { chatId: "dm-tracker" } },
+    })
+    expect(
+      client.getQueryData<Chat[]>(queryKeys.chats)?.find((c) => c.id === "dm-tracker"),
+    ).toMatchObject({ unreadCount: 0, lastMessage: null })
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+})

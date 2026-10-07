@@ -28,6 +28,7 @@ type loop struct {
 	m       *Manager
 	agentID string
 	wake    chan struct{}
+	jobs    chan func(context.Context) // run between turns, never during one
 	stop    context.CancelFunc
 	handled []string          // events consumed by the current turn
 	fresh   map[string]bool   // messages the agent was shown in the current turn
@@ -51,6 +52,21 @@ func (l *loop) run(ctx context.Context) {
 			return
 		case <-l.wake:
 			l.drain(ctx)
+		case job := <-l.jobs:
+			job(ctx)
+			l.drain(ctx)
+		}
+	}
+}
+
+// runJobs runs the jobs queued so far.
+func (l *loop) runJobs(ctx context.Context) {
+	for {
+		select {
+		case job := <-l.jobs:
+			job(ctx)
+		default:
+			return
 		}
 	}
 }
@@ -58,6 +74,7 @@ func (l *loop) run(ctx context.Context) {
 // drain runs turns until the inbox is empty.
 func (l *loop) drain(ctx context.Context) {
 	for ctx.Err() == nil {
+		l.runJobs(ctx)
 		events, err := l.m.store.PendingEvents(ctx, l.agentID)
 		if err != nil {
 			logger(l.agentID).Error("load pending events", "err", err)

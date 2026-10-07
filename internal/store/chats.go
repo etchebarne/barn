@@ -781,3 +781,41 @@ func (s *Store) UpdateGroup(ctx context.Context, chatID string, name *string, ad
 		return nil
 	})
 }
+
+// ClearChat deletes a chat's messages (their reactions and attachments go with them) and its
+// read markers, and returns the ids of the deleted messages.
+func (s *Store) ClearChat(ctx context.Context, chatID string) ([]string, error) {
+	var ids []string
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM messages WHERE chat_id = ?`, chatID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			ids = append(ids, id)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM messages WHERE chat_id = ?`, chatID); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM reads WHERE chat_id = ?`, chatID)
+		return err
+	})
+	return ids, err
+}
+
+// InGroups reports whether an agent is a member of any group chat.
+func (s *Store) InGroups(ctx context.Context, agentID string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM chat_members m JOIN chats c ON c.id = m.chat_id
+		WHERE m.agent_id = ? AND c.kind = 'group')`, agentID).Scan(&n)
+	return n == 1, err
+}

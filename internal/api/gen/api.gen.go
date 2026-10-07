@@ -352,6 +352,21 @@ func (e WsAgentUpdatedType) Valid() bool {
 	}
 }
 
+// Defines values for WsChatClearedType.
+const (
+	ChatCleared WsChatClearedType = "chat.cleared"
+)
+
+// Valid indicates whether the value is a known member of the WsChatClearedType enum.
+func (e WsChatClearedType) Valid() bool {
+	switch e {
+	case ChatCleared:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WsChatCreatedType.
 const (
 	ChatCreated WsChatCreatedType = "chat.created"
@@ -1172,6 +1187,15 @@ type WsAgentUpdated struct {
 // WsAgentUpdatedType defines model for WsAgentUpdated.Type.
 type WsAgentUpdatedType string
 
+// WsChatCleared A chat's history was cleared; drop its messages (newer ones arrive as message.created)
+type WsChatCleared struct {
+	ChatId string            `json:"chatId"`
+	Type   WsChatClearedType `json:"type"`
+}
+
+// WsChatClearedType defines model for WsChatCleared.Type.
+type WsChatClearedType string
+
 // WsChatCreated defines model for WsChatCreated.
 type WsChatCreated struct {
 	Chat Chat              `json:"chat"`
@@ -1649,6 +1673,40 @@ func (t *WsEvent) MergeWsSidebarUpdated(v WsSidebarUpdated) error {
 	return err
 }
 
+// AsWsChatCleared returns the union data inside the WsEvent as a WsChatCleared
+func (t WsEvent) AsWsChatCleared() (WsChatCleared, error) {
+	var body WsChatCleared
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsChatCleared overwrites any union data inside the WsEvent as the provided WsChatCleared
+func (t *WsEvent) FromWsChatCleared(v WsChatCleared) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"chat.cleared"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsChatCleared performs a merge with any union data inside the WsEvent, using the provided WsChatCleared
+func (t *WsEvent) MergeWsChatCleared(v WsChatCleared) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"chat.cleared"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -1673,6 +1731,8 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 		return t.AsWsAgentDeleted()
 	case "agent.updated":
 		return t.AsWsAgentUpdated()
+	case "chat.cleared":
+		return t.AsWsChatCleared()
 	case "chat.created":
 		return t.AsWsChatCreated()
 	case "chat.read":
@@ -1757,6 +1817,9 @@ type ServerInterface interface {
 
 	// (POST /chats/{chatId}/attachments)
 	UploadAttachment(w http.ResponseWriter, r *http.Request, chatId ChatId)
+
+	// (DELETE /chats/{chatId}/history)
+	ClearChatHistory(w http.ResponseWriter, r *http.Request, chatId ChatId)
 
 	// (GET /chats/{chatId}/messages)
 	ListMessages(w http.ResponseWriter, r *http.Request, chatId ChatId, params ListMessagesParams)
@@ -2308,6 +2371,32 @@ func (siw *ServerInterfaceWrapper) UploadAttachment(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UploadAttachment(w, r, chatId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearChatHistory operation middleware
+func (siw *ServerInterfaceWrapper) ClearChatHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "chatId" -------------
+	var chatId ChatId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "chatId", r.PathValue("chatId"), &chatId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "chatId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearChatHistory(w, r, chatId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3074,6 +3163,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/attachments/{attachmentId}", wrapper.GetAttachment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/chats/{chatId}/messages", wrapper.ListMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/messages", wrapper.SendMessage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/chats/{chatId}/history", wrapper.ClearChatHistory)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/read", wrapper.MarkChatRead)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}", wrapper.DeleteAgent)

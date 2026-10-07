@@ -111,6 +111,12 @@ log is summarized (preserving per-chat threads, open commitments, and pending pr
 replaced with the summary. Full messages remain in the store; only the agent's working context
 is compacted. Compaction may use a cheaper model.
 
+**Clearing a DM.** The user can clear their DM with an agent: its messages are deleted, and the
+agent forgets that conversation. Between turns (never during one), its context loses each turn
+the DM started, and each non-group turn that wrote to the DM (e.g. a task that messaged the user);
+group turns stay. The summary of older context can't be split by chat, so it's dropped only for
+agents in no groups. Saved memories, personality, settings and tasks are kept.
+
 ### 4.4 Built-in tools
 
 | Tool | Purpose |

@@ -847,3 +847,28 @@ func TestReplies(t *testing.T) {
 		}
 	}
 }
+
+func TestClearChatHistory(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	a, dm, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	b, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "b", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	c.do("POST", "/api/chats/"+dm+"/messages", `{"body":"secret"}`, true)
+	group, err := st.CreateGroup(ctx, "crew", []string{a.ID, b.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp, _ := c.do("DELETE", "/api/chats/"+dm+"/history", "", true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("clear: %d", resp.StatusCode)
+	}
+	if _, page := c.do("GET", "/api/chats/"+dm+"/messages", "", false); len(page["messages"].([]any)) != 0 {
+		t.Fatalf("messages left: %v", page)
+	}
+	if resp, _ := c.do("DELETE", "/api/chats/"+group.ID+"/history", "", true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("clearing a group: %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("DELETE", "/api/chats/missing/history", "", true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown chat: %d", resp.StatusCode)
+	}
+}
