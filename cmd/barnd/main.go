@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/etchebarne/barn/internal/config"
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/runtime"
+	"github.com/etchebarne/barn/internal/sandbox"
 	"github.com/etchebarne/barn/internal/secrets"
 	"github.com/etchebarne/barn/internal/settings"
 	"github.com/etchebarne/barn/internal/store"
@@ -65,6 +67,14 @@ func run() error {
 	llm := model.New(cfg.OpenCodeBaseURL, "barn/"+strings.TrimPrefix(version, "v"), set.APIKey)
 	rt := runtime.New(st, b, llm)
 	rt.CompactAtTokens = cfg.CompactAtTokens
+	if cfg.Sandboxes == "docker" {
+		sbx := sandbox.New(sandbox.Options{Image: cfg.SandboxImage, SharedDir: filepath.Join(cfg.DataDir, "shared")})
+		if sbx.Available() {
+			rt.Sandboxes = sbx
+		} else {
+			slog.Warn("Docker isn't available; agents won't have sandboxes")
+		}
+	}
 	srv := api.New(st, b, rt, llm, set, api.Options{
 		SecureCookies:  cfg.SecureCookies,
 		AllowedOrigins: cfg.AllowedOrigins,

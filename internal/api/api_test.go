@@ -82,6 +82,19 @@ func (c *client) do(method, path, body string, csrf bool) (*http.Response, map[s
 	return resp, out
 }
 
+func (c *client) doList(method, path string) (*http.Response, []any) {
+	c.t.Helper()
+	req, _ := http.NewRequest(method, c.base+path, nil)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out []any
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp, out
+}
+
 func TestAuthFlow(t *testing.T) {
 	ts := newTestServer(t)
 	c := newClient(t, ts)
@@ -310,5 +323,46 @@ func TestAnswerPrompt(t *testing.T) {
 	plain, _ := st.InsertMessage(ctx, chatID, "user", nil, "hi")
 	if resp, _ := c.do("POST", "/api/messages/"+plain.ID+"/answer", `{"selected":[0]}`, true); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404 for a non-prompt message, got %d", resp.StatusCode)
+	}
+}
+
+func TestUserReactionsAndArchiving(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	admin, chatID, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask", IsAdmin: true})
+	other, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "Notes", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	msg, _ := st.InsertMessage(ctx, chatID, "agent", &admin.ID, "hello")
+
+	resp, body := c.do("POST", "/api/messages/"+msg.ID+"/reactions", `{"emoji":"🎉"}`, true)
+	reactions, _ := body["reactions"].([]any)
+	if resp.StatusCode != http.StatusOK || len(reactions) != 1 {
+		t.Fatalf("react: %d %v", resp.StatusCode, body)
+	}
+	pending, _ := st.PendingEvents(ctx, admin.ID)
+	if len(pending) == 0 || pending[len(pending)-1].Kind != "reaction" {
+		t.Fatalf("the agent should be told about the reaction, events %+v", pending)
+	}
+	resp, body = c.do("POST", "/api/messages/"+msg.ID+"/reactions", `{"emoji":"🎉"}`, true)
+	if reactions, _ := body["reactions"].([]any); resp.StatusCode != http.StatusOK || len(reactions) != 0 {
+		t.Fatalf("reacting again should remove it: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := c.do("POST", "/api/messages/"+msg.ID+"/reactions", `{"emoji":"lol"}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a non-emoji, got %d", resp.StatusCode)
+	}
+
+	if resp, _ := c.do("POST", "/api/agents/"+admin.ID+"/archive", "", true); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("the last admin can't be archived, got %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("POST", "/api/agents/"+other.ID+"/archive", "", true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("archive: %d", resp.StatusCode)
+	}
+	_, list := c.doList("GET", "/api/chats")
+	if len(list) != 1 {
+		t.Fatalf("the archived agent's DM should be hidden, have %d chats", len(list))
+	}
+
+	resp, body = c.do("PATCH", "/api/agents/"+admin.ID, `{"name":"Barn","trustMode":"trusted","instructions":"Be brief."}`, true)
+	if resp.StatusCode != http.StatusOK || body["name"] != "Barn" || body["trustMode"] != "trusted" || body["instructions"] != "Be brief." {
+		t.Fatalf("update: %d %v", resp.StatusCode, body)
 	}
 }

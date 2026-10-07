@@ -1,7 +1,7 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api, ApiError, unwrap, type Agent, type Schemas } from "@/lib/api-client"
-import { updateAgentInCache } from "@/lib/chat-cache"
+import { removeArchivedAgent, updateAgentInCache } from "@/lib/chat-cache"
 import { queryKeys } from "@/lib/query-keys"
 
 export const agentsQueryOptions = queryOptions({
@@ -80,5 +80,18 @@ export function useDeleteMemory(agentId: string) {
     },
     onError: (_error, _id, context) => queryClient.setQueryData(key, context?.previous),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+  })
+}
+
+/** Archives an agent. 409: it can't be archived (e.g. the last admin agent). */
+export function useArchiveAgent(agentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // Doesn't wait for the WebSocket: drops the agent and its DM right away, and resolves to the
+    // removed chat ids.
+    mutationFn: async () => {
+      await unwrap(api.POST("/agents/{agentId}/archive", { params: { path: { agentId } } }))
+      return removeArchivedAgent(queryClient, agentId)
+    },
   })
 }

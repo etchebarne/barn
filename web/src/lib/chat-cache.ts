@@ -231,3 +231,28 @@ export function upsertChat(chats: Chat[], chat: Chat): Chat[] {
   const rest = chats.filter((c) => c.id !== chat.id)
   return sortChats([...rest, chat])
 }
+
+/** DMs that belong to `agentId` (group chats are kept when an agent is archived). */
+export function agentDmIds(chats: Chat[], agentId: string): string[] {
+  return chats
+    .filter((chat) => chat.kind === "dm" && chat.members.some((m) => m.agentId === agentId))
+    .map((chat) => chat.id)
+}
+
+/** Removes an archived agent and its DM. Returns the removed chat ids. */
+export function removeArchivedAgent(queryClient: QueryClient, agentId: string): string[] {
+  const removed = agentDmIds(queryClient.getQueryData<Chat[]>(queryKeys.chats) ?? [], agentId)
+  queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) =>
+    agents?.filter((agent) => agent.id !== agentId),
+  )
+  queryClient.setQueryData<Chat[]>(queryKeys.chats, (chats) =>
+    chats?.filter((chat) => !removed.includes(chat.id)),
+  )
+  for (const chatId of removed) queryClient.removeQueries({ queryKey: queryKeys.messages(chatId) })
+  return removed
+}
+
+/** Path of a chat view, for checking whether the user is looking at it. */
+export function chatPath(chatId: string): string {
+  return `/chats/${encodeURIComponent(chatId)}`
+}

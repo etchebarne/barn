@@ -102,6 +102,7 @@ func Agent(a store.Agent, activity gen.AgentActivity) gen.Agent {
 	return gen.Agent{
 		Id:            a.ID,
 		Name:          a.Name,
+		Instructions:  a.Instructions,
 		Model:         a.Model,
 		Language:      a.Language,
 		Notifications: a.Notifications,

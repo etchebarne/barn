@@ -13,6 +13,7 @@
 #   --addr <host:port>
 #                     Address to listen on (default: Tailscale IP if available, else 127.0.0.1:8080)
 #   --tailscale       Install Tailscale if missing, connect, and listen on the tailnet
+#   --no-docker       Don't install Docker (agents then have no sandbox to run commands in)
 #   -h, --help        Show this help
 set -euo pipefail
 
@@ -199,18 +200,33 @@ EOF
   ok "Wrote $CONF"
 }
 
+# Agents run commands in Docker sandboxes. barn talks to the Docker daemon, so the barn user
+# joins the docker group (which is root-equivalent on the host).
+setup_docker() {
+  if ! command -v docker >/dev/null; then
+    info "Installing Docker (agents' sandboxes)"
+    curl -fsSL https://get.docker.com | as_root sh >/dev/null
+  fi
+  as_root systemctl enable --now --quiet docker 2>/dev/null || true
+  if ! id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -qx docker; then
+    as_root usermod -aG docker "$SERVICE_USER"
+  fi
+  ok "Docker is ready for sandboxes"
+}
+
 write_unit() {
   as_root tee "$UNIT" >/dev/null <<EOF
 [Unit]
 Description=barn - persistent AI agents
 Documentation=https://github.com/$REPO
 Wants=network-online.target
-After=network-online.target tailscaled.service
+After=network-online.target tailscaled.service docker.service
 
 [Service]
 Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
+SupplementaryGroups=$(id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -qx docker && echo docker)
 EnvironmentFile=$CONF
 ExecStart=$BIN
 Restart=on-failure
@@ -245,12 +261,13 @@ wait_healthy() {
 }
 
 main() {
-  local version="" addr="" use_tailscale=false
+  local version="" addr="" use_tailscale=false use_docker=true
   while [ $# -gt 0 ]; do
     case "$1" in
       --version) version="${2:?--version needs a value}"; shift 2 ;;
       --addr) addr="${2:?--addr needs a value}"; shift 2 ;;
       --tailscale) use_tailscale=true; shift ;;
+      --no-docker) use_docker=false; shift ;;
       -h | --help) usage; exit 0 ;;
       *) die "unknown option: $1 (see --help)" ;;
     esac
@@ -279,6 +296,9 @@ main() {
 
   install_binary "$version" "$arch"
   ensure_user
+  if $use_docker; then
+    setup_docker
+  fi
   write_config "$addr"
   write_unit
   as_root systemctl daemon-reload

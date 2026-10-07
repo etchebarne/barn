@@ -5,6 +5,7 @@ import {
   addMessageToCache,
   applyActivityToAgents,
   markChatReadInCache,
+  removeArchivedAgent,
   updateAgentInCache,
   updateMessageInCache,
   upsertAgent,
@@ -12,36 +13,48 @@ import {
 } from "../chat-cache"
 import { queryKeys } from "../query-keys"
 
+export type ApplyResult = {
+  /** Chats that no longer exist (e.g. an archived agent's DM); leave them if open. */
+  removedChatIds: string[]
+}
+
+const NOTHING_REMOVED: ApplyResult = { removedChatIds: [] }
+
 /** Applies one realtime event to the TanStack Query cache (the single source of truth). */
-export function applyWsEvent(queryClient: QueryClient, event: WsEvent): void {
+export function applyWsEvent(queryClient: QueryClient, event: WsEvent): ApplyResult {
   switch (event.type) {
+    case "agent.archived":
+      return { removedChatIds: removeArchivedAgent(queryClient, event.agentId) }
     case "message.created":
       addMessageToCache(queryClient, event.message)
-      return
+      return NOTHING_REMOVED
     case "message.updated":
       updateMessageInCache(queryClient, event.message)
-      return
+      return NOTHING_REMOVED
     case "agent.created":
       queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) =>
         agents ? upsertAgent(agents, event.agent) : agents,
       )
-      return
+      return NOTHING_REMOVED
     case "chat.created":
       queryClient.setQueryData<Chat[]>(queryKeys.chats, (chats) =>
         chats ? upsertChat(chats, event.chat) : chats,
       )
-      return
+      return NOTHING_REMOVED
     case "agent.activity":
       queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) =>
         agents ? applyActivityToAgents(agents, event.agentId, event.activity) : agents,
       )
-      return
+      return NOTHING_REMOVED
     case "agent.updated":
       updateAgentInCache(queryClient, event.agent)
-      return
+      return NOTHING_REMOVED
     case "chat.read":
       markChatReadInCache(queryClient, event.chatId, event.lastMessageId)
-      return
+      return NOTHING_REMOVED
+    default:
+      // Events this client doesn't know yet.
+      return NOTHING_REMOVED
   }
 }
 

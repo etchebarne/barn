@@ -235,6 +235,39 @@ describe("applyWsEvent", () => {
     })
   })
 
+  describe("agent.archived", () => {
+    it("drops the agent and its DM, keeps group chats, and reports the removed chat", () => {
+      qc.setQueryData<Agent[]>(queryKeys.agents, [makeAgent(), makeAgent({ id: "tracker" })])
+      const dm = makeChat({ id: "dm-tracker", members: [{ agentId: "tracker", position: 0 }] })
+      const group = makeChat({
+        id: "group",
+        kind: "group",
+        members: [
+          { agentId: "agent-1", position: 0 },
+          { agentId: "tracker", position: 1 },
+        ],
+      })
+      qc.setQueryData<Chat[]>(queryKeys.chats, [makeChat(), dm, group])
+      seedMessages(qc, "dm-tracker", { pages: [], pageParams: [] })
+
+      const result = applyWsEvent(qc, { type: "agent.archived", agentId: "tracker" })
+
+      expect(result.removedChatIds).toEqual(["dm-tracker"])
+      expect(qc.getQueryData<Agent[]>(queryKeys.agents)?.map((a) => a.id)).toEqual(["agent-1"])
+      expect(qc.getQueryData<Chat[]>(queryKeys.chats)?.map((c) => c.id)).toEqual([
+        "chat-1",
+        "group",
+      ])
+      expect(qc.getQueryData(queryKeys.messages("dm-tracker"))).toBeUndefined()
+    })
+
+    it("reports nothing removed for other events", () => {
+      expect(
+        applyWsEvent(qc, { type: "chat.read", chatId: "x", lastMessageId: "y" }).removedChatIds,
+      ).toEqual([])
+    })
+  })
+
   describe("chat.read", () => {
     it("clears the unread count when read up to the last message", () => {
       const last = makeMessage()

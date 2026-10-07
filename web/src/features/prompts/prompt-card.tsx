@@ -16,6 +16,8 @@ import { ApiError, type Message } from "@/lib/api-client"
 import { ensureChatLoaded, useAnswerPrompt, useDismissPrompt } from "./api"
 import {
   acceptsLetterKeys,
+  approvalAnswer,
+  approvalOutcome,
   buildAnswer,
   chatToOpen,
   letterIndex,
@@ -271,6 +273,54 @@ function PendingCard({
 }
 
 /**
+ * An agent asking permission for a gated action: Approve (primary) or Decline. No keyboard
+ * shortcuts, so nothing gets approved by accident.
+ */
+function ApprovalActions({
+  onAnswer,
+  disabled,
+}: {
+  onAnswer: (answer: PromptAnswer) => void
+  disabled: boolean
+}) {
+  return (
+    <div className="flex justify-end gap-2 px-1.5 pb-1">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => onAnswer(approvalAnswer(false))}
+      >
+        Decline
+      </Button>
+      <Button size="sm" disabled={disabled} onClick={() => onAnswer(approvalAnswer(true))}>
+        Approve
+      </Button>
+    </div>
+  )
+}
+
+function ApprovalOutcome({ prompt }: { prompt: Prompt }) {
+  const outcome = approvalOutcome(prompt)
+  if (!outcome) return null
+  return (
+    <p className="flex items-center gap-1.5 px-1.5 pb-1 text-xs font-medium text-muted-foreground">
+      {outcome === "approved" ? (
+        <>
+          <CheckIcon className="size-3.5" aria-hidden="true" />
+          Approved
+        </>
+      ) : (
+        <>
+          <XIcon className="size-3.5" aria-hidden="true" />
+          Declined
+        </>
+      )}
+    </p>
+  )
+}
+
+/**
  * An agent's question with clickable answers. Pending: options (single answers on click, multi
  * toggles then submits), optional "type your own", or a text field. Answered: collapses to the
  * chosen answers, dimmed. Dismissed: just the question, muted. The card is the record of the
@@ -333,7 +383,11 @@ export function PromptCard({
           </Button>
         )}
       </div>
-      {prompt.status === "pending" && (
+      {prompt.kind === "approval" && prompt.status === "pending" && (
+        <ApprovalActions onAnswer={onAnswer} disabled={busy} />
+      )}
+      {prompt.kind === "approval" && <ApprovalOutcome prompt={prompt} />}
+      {prompt.kind !== "approval" && prompt.status === "pending" && (
         <PendingCard
           message={message}
           prompt={prompt}
@@ -342,7 +396,9 @@ export function PromptCard({
           disabled={busy}
         />
       )}
-      {prompt.status === "answered" && <AnsweredCard prompt={prompt} />}
+      {prompt.kind !== "approval" && prompt.status === "answered" && (
+        <AnsweredCard prompt={prompt} />
+      )}
       {dismissed && <p className="px-1.5 pb-1 text-xs text-muted-foreground">Dismissed</p>}
       {error && (
         <p role="alert" className="px-1.5 text-xs text-destructive">

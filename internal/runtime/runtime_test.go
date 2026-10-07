@@ -537,12 +537,12 @@ func TestSayingNothingIsFine(t *testing.T) {
 
 func TestIsEmoji(t *testing.T) {
 	for _, ok := range []string{"👍", "❤️", "👍🏽", "👨‍👩‍👧", "✅", "🎉"} {
-		if !isEmoji(ok) {
+		if !IsEmoji(ok) {
 			t.Errorf("%q should be accepted", ok)
 		}
 	}
 	for _, bad := range []string{"", "ok", ":+1:", "👍 👍", "a👍", strings.Repeat("👍", 9)} {
-		if isEmoji(bad) {
+		if IsEmoji(bad) {
 			t.Errorf("%q should be rejected", bad)
 		}
 	}

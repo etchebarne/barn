@@ -1,4 +1,4 @@
-export { applyWsEvent, resyncAfterReconnect } from "./apply-event"
+export { applyWsEvent, resyncAfterReconnect, type ApplyResult } from "./apply-event"
 export { backoffDelay, defaultWsUrl, parseWsEvent, RealtimeClient } from "./client"
 export type { RealtimeOptions } from "./client"
 export { useConnectionStore } from "./status"

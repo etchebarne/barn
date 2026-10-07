@@ -291,6 +291,67 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /agents/{agentId}/archive:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: archiveAgent
+      tags: [agents]
+      description: |
+        Archive an agent: it stops working and disappears from the app (its DM is hidden). The
+        last admin agent can't be archived. Broadcasts agent.archived.
+      responses:
+        "204": { description: Archived }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The agent can't be archived (e.g. it's the only admin agent)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /agents/{agentId}/sandbox:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getSandbox
+      tags: [agents]
+      description: The agent's computer (Docker sandbox)
+      responses:
+        "200":
+          description: Sandbox state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/sandbox/restart:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: restartSandbox
+      tags: [agents]
+      description: Restart the agent's computer. Running processes stop; files in /home/agent stay.
+      responses:
+        "200":
+          description: Sandbox state after the restart
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sandbox" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
   /agents/{agentId}/retry:
     parameters:
       - name: agentId
@@ -344,6 +405,33 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+
+  /messages/{messageId}/reactions:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: toggleReaction
+      tags: [chats]
+      description: |
+        Add the user's reaction with this emoji, or remove it if it's already there. Broadcasts
+        message.updated; a new reaction on an agent's message is also delivered to that agent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ToggleReactionRequest" }
+      responses:
+        "200":
+          description: The updated message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 
   /messages/{messageId}/dismiss:
     parameters:
@@ -491,10 +579,13 @@ components:
 
     Agent:
       type: object
-      required: [id, name, model, language, notifications, trustMode, isAdmin, activity, createdAt]
+      required: [id, name, instructions, model, language, notifications, trustMode, isAdmin, activity, createdAt]
       properties:
         id: { type: string }
         name: { type: string }
+        instructions:
+          type: string
+          description: What the agent is for and how it should work (its own system instructions)
         model: { type: string }
         language: { type: string, description: 'Reply language, or "auto"' }
         notifications: { type: boolean }
@@ -511,12 +602,37 @@ components:
         text: { type: string }
         createdAt: { type: string, format: date-time }
 
+    Sandbox:
+      type: object
+      required: [status, sharedWith]
+      properties:
+        status:
+          type: string
+          enum: [unavailable, none, stopped, running]
+          description: |
+            unavailable: Docker isn't set up on the server; none: not created yet (created on
+            first use)
+        sharedWith:
+          type: array
+          description: Other agents using the same computer
+          items: { type: string }
+
     UpdateAgentRequest:
       type: object
       properties:
         model:
           type: string
           description: Model id from GET /models
+        name: { type: string, minLength: 1, maxLength: 64 }
+        instructions: { type: string, minLength: 1, maxLength: 20000 }
+        language:
+          type: string
+          maxLength: 40
+          description: '"auto" (reply in the language people write in) or a language name'
+        trustMode:
+          type: string
+          enum: [ask, trusted]
+          description: trusted skips approvals for gated actions
 
     AgentActivity:
       type: object
@@ -613,6 +729,12 @@ components:
             data and the workspace's privacy settings forbid that). Offer to change the model.
         retryable: { type: boolean }
 
+    ToggleReactionRequest:
+      type: object
+      required: [emoji]
+      properties:
+        emoji: { type: string, minLength: 1, maxLength: 32 }
+
     Reaction:
       type: object
       required: [emoji, by]
@@ -629,8 +751,10 @@ components:
       properties:
         kind:
           type: string
-          enum: [single, multi, text]
-          description: single = pick one; multi = pick any number; text = free-text answer
+          enum: [single, multi, text, approval]
+          description: |
+            single = pick one; multi = pick any number; text = free-text answer; approval = the
+            agent wants to do something that needs the user's OK (options: Approve, Decline)
         question: { type: string }
         options:
           type: array
@@ -718,6 +842,7 @@ components:
         - $ref: "#/components/schemas/WsMessageUpdated"
         - $ref: "#/components/schemas/WsAgentCreated"
         - $ref: "#/components/schemas/WsChatCreated"
+        - $ref: "#/components/schemas/WsAgentArchived"
       discriminator:
         propertyName: type
         mapping:
@@ -728,6 +853,7 @@ components:
           message.updated: "#/components/schemas/WsMessageUpdated"
           agent.created: "#/components/schemas/WsAgentCreated"
           chat.created: "#/components/schemas/WsChatCreated"
+          agent.archived: "#/components/schemas/WsAgentArchived"
 
     WsMessageCreated:
       type: object
@@ -782,6 +908,14 @@ components:
       properties:
         type: { type: string, enum: [chat.created] }
         chat: { $ref: "#/components/schemas/Chat" }
+
+    WsAgentArchived:
+      type: object
+      required: [type, agentId]
+      description: An agent was archived; drop it and its DM from the app
+      properties:
+        type: { type: string, enum: [agent.archived] }
+        agentId: { type: string }
 
 security:
   - session: []

@@ -54,7 +54,20 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	if agent.IsAdmin {
 		b.WriteString("- Set up new agents (create_agent): persistent teammates that each own one job and talk to the user in their own DM. Before creating one, confirm the job and ask which model to use (offer your own model first).\n")
 	}
-	b.WriteString("- Not yet available (coming soon): running commands or code, browsing the web, connecting to apps like Slack, Linear or email, and acting on a schedule. Don't promise these; if they come up, say they're on the way.\n\n")
+	b.WriteString("- Change settings with update_agent: rename yourself, switch your model or reply language, or refine your own instructions when the user asks for that.\n")
+	if agent.TrustMode == "trusted" {
+		b.WriteString("- You're trusted: actions that normally need the user's approval run right away. Use that responsibly.\n")
+	} else {
+		b.WriteString("- Some actions (like archiving an agent) need the user's approval: calling them posts an Approve/Decline card and ends your turn; the outcome arrives as an <approval_result>. If you're unsure whether the user wants something done, ask first.\n")
+	}
+	if l.m.sandboxesAvailable() {
+		b.WriteString("- Not yet available (coming soon): connecting to apps like Slack, Linear or email, and acting on a schedule. Don't promise these; if they come up, say they're on the way.\n\n")
+	} else {
+		b.WriteString("- Not yet available: running commands or code (sandboxes aren't set up on this server), connecting to apps like Slack, Linear or email, and acting on a schedule. Don't promise these.\n\n")
+	}
+	if err := l.writeComputer(ctx, &b, agent); err != nil {
+		return "", err
+	}
 
 	memories, err := l.m.store.Memories(ctx, agent.ID)
 	if err != nil {
@@ -80,6 +93,34 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 
 	fmt.Fprintf(&b, "Current time: %s\n", time.Now().Format("Monday, 2 January 2006 15:04 MST"))
 	return b.String(), nil
+}
+
+// writeComputer describes the agent's sandbox, if sandboxes are available.
+func (l *loop) writeComputer(ctx context.Context, b *strings.Builder, agent store.Agent) error {
+	if !l.m.sandboxesAvailable() {
+		return nil
+	}
+	b.WriteString("# Your computer\n")
+	b.WriteString("You have your own Linux computer: a Debian sandbox where you're root, used through run_command, read_file, write_file and list_files. ")
+	b.WriteString("Use it to actually do the work (run code, fetch things from the internet, process files) instead of describing how. ")
+	b.WriteString("/home/agent is yours and persists; /shared is a folder every agent can read and write, for handing files to each other.\n")
+	if agent.SandboxID != nil {
+		members, err := l.m.store.SandboxMembers(ctx, *agent.SandboxID)
+		if err != nil {
+			return err
+		}
+		var others []string
+		for _, m := range members {
+			if m.ID != agent.ID {
+				others = append(others, m.Name)
+			}
+		}
+		if len(others) > 0 {
+			fmt.Fprintf(b, "You share this computer with %s, so coordinate before changing things you didn't create.\n", strings.Join(others, ", "))
+		}
+	}
+	b.WriteString("\n")
+	return nil
 }
 
 func describeChat(c store.Chat, username, selfID string, names map[string]string) string {
@@ -169,6 +210,40 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 			return "", nil
 		}
 		return renderAnswer(msg), nil
+
+	case EventApproval:
+		var p struct {
+			MessageID string          `json:"messageId"`
+			Outcome   json.RawMessage `json:"outcome"`
+		}
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return "", err
+		}
+		msg, err := l.m.store.GetMessage(ctx, p.MessageID)
+		if err != nil || msg.Prompt == nil {
+			return "", err
+		}
+		return renderApproval(msg, p.Outcome), nil
+
+	case EventReaction:
+		var p struct {
+			MessageID string `json:"messageId"`
+			Emoji     string `json:"emoji"`
+		}
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return "", err
+		}
+		msg, err := l.m.store.GetMessage(ctx, p.MessageID)
+		if err != nil {
+			return "", err
+		}
+		user, err := l.m.store.PrimaryUser(ctx)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("<reaction from=%q emoji=%q message_id=%q chat_id=%q>\n%s reacted %s to your message: %q\n"+
+			"(Reactions rarely need a reply. Act on it only if it changes something, e.g. a 👍 that approves what you proposed.)\n</reaction>",
+			user.Username, p.Emoji, msg.ID, msg.ChatID, user.Username, p.Emoji, truncate(msg.Body, 200)), nil
 
 	case EventRetry:
 		return "", nil // no new input; the turn re-runs on the existing context

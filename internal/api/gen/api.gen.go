@@ -17,16 +17,16 @@ import (
 
 // Defines values for AgentTrustMode.
 const (
-	Ask     AgentTrustMode = "ask"
-	Trusted AgentTrustMode = "trusted"
+	AgentTrustModeAsk     AgentTrustMode = "ask"
+	AgentTrustModeTrusted AgentTrustMode = "trusted"
 )
 
 // Valid indicates whether the value is a known member of the AgentTrustMode enum.
 func (e AgentTrustMode) Valid() bool {
 	switch e {
-	case Ask:
+	case AgentTrustModeAsk:
 		return true
-	case Trusted:
+	case AgentTrustModeTrusted:
 		return true
 	default:
 		return false
@@ -134,14 +134,17 @@ func (e MessageFailureReason) Valid() bool {
 
 // Defines values for PromptKind.
 const (
-	Multi  PromptKind = "multi"
-	Single PromptKind = "single"
-	Text   PromptKind = "text"
+	Approval PromptKind = "approval"
+	Multi    PromptKind = "multi"
+	Single   PromptKind = "single"
+	Text     PromptKind = "text"
 )
 
 // Valid indicates whether the value is a known member of the PromptKind enum.
 func (e PromptKind) Valid() bool {
 	switch e {
+	case Approval:
+		return true
 	case Multi:
 		return true
 	case Single:
@@ -189,6 +192,48 @@ func (e ProviderSettingsProvider) Valid() bool {
 	}
 }
 
+// Defines values for SandboxStatus.
+const (
+	None        SandboxStatus = "none"
+	Running     SandboxStatus = "running"
+	Stopped     SandboxStatus = "stopped"
+	Unavailable SandboxStatus = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the SandboxStatus enum.
+func (e SandboxStatus) Valid() bool {
+	switch e {
+	case None:
+		return true
+	case Running:
+		return true
+	case Stopped:
+		return true
+	case Unavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateAgentRequestTrustMode.
+const (
+	UpdateAgentRequestTrustModeAsk     UpdateAgentRequestTrustMode = "ask"
+	UpdateAgentRequestTrustModeTrusted UpdateAgentRequestTrustMode = "trusted"
+)
+
+// Valid indicates whether the value is a known member of the UpdateAgentRequestTrustMode enum.
+func (e UpdateAgentRequestTrustMode) Valid() bool {
+	switch e {
+	case UpdateAgentRequestTrustModeAsk:
+		return true
+	case UpdateAgentRequestTrustModeTrusted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WsAgentActivityType.
 const (
 	WsAgentActivityTypeAgentActivity WsAgentActivityType = "agent.activity"
@@ -198,6 +243,21 @@ const (
 func (e WsAgentActivityType) Valid() bool {
 	switch e {
 	case WsAgentActivityTypeAgentActivity:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WsAgentArchivedType.
+const (
+	AgentArchived WsAgentArchivedType = "agent.archived"
+)
+
+// Valid indicates whether the value is a known member of the WsAgentArchivedType enum.
+func (e WsAgentArchivedType) Valid() bool {
+	switch e {
+	case AgentArchived:
 		return true
 	default:
 		return false
@@ -299,7 +359,10 @@ type Agent struct {
 	Activity  AgentActivity `json:"activity"`
 	CreatedAt time.Time     `json:"createdAt"`
 	Id        string        `json:"id"`
-	IsAdmin   bool          `json:"isAdmin"`
+
+	// Instructions What the agent is for and how it should work (its own system instructions)
+	Instructions string `json:"instructions"`
+	IsAdmin      bool   `json:"isAdmin"`
 
 	// Language Reply language, or "auto"
 	Language      string         `json:"language"`
@@ -488,14 +551,16 @@ type Prompt struct {
 	AllowOther bool          `json:"allowOther"`
 	Answer     *PromptAnswer `json:"answer"`
 
-	// Kind single = pick one; multi = pick any number; text = free-text answer
+	// Kind single = pick one; multi = pick any number; text = free-text answer; approval = the
+	// agent wants to do something that needs the user's OK (options: Approve, Decline)
 	Kind     PromptKind     `json:"kind"`
 	Options  []PromptOption `json:"options"`
 	Question string         `json:"question"`
 	Status   PromptStatus   `json:"status"`
 }
 
-// PromptKind single = pick one; multi = pick any number; text = free-text answer
+// PromptKind single = pick one; multi = pick any number; text = free-text answer; approval = the
+// agent wants to do something that needs the user's OK (options: Approve, Decline)
 type PromptKind string
 
 // PromptStatus defines model for Prompt.Status.
@@ -537,6 +602,20 @@ type Reaction struct {
 	Emoji string          `json:"emoji"`
 }
 
+// Sandbox defines model for Sandbox.
+type Sandbox struct {
+	// SharedWith Other agents using the same computer
+	SharedWith []string `json:"sharedWith"`
+
+	// Status unavailable: Docker isn't set up on the server; none: not created yet (created on
+	// first use)
+	Status SandboxStatus `json:"status"`
+}
+
+// SandboxStatus unavailable: Docker isn't set up on the server; none: not created yet (created on
+// first use)
+type SandboxStatus string
+
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
 	Body string `json:"body"`
@@ -545,11 +624,28 @@ type SendMessageRequest struct {
 	ClientId *string `json:"clientId,omitempty"`
 }
 
+// ToggleReactionRequest defines model for ToggleReactionRequest.
+type ToggleReactionRequest struct {
+	Emoji string `json:"emoji"`
+}
+
 // UpdateAgentRequest defines model for UpdateAgentRequest.
 type UpdateAgentRequest struct {
+	Instructions *string `json:"instructions,omitempty"`
+
+	// Language "auto" (reply in the language people write in) or a language name
+	Language *string `json:"language,omitempty"`
+
 	// Model Model id from GET /models
 	Model *string `json:"model,omitempty"`
+	Name  *string `json:"name,omitempty"`
+
+	// TrustMode trusted skips approvals for gated actions
+	TrustMode *UpdateAgentRequestTrustMode `json:"trustMode,omitempty"`
 }
+
+// UpdateAgentRequestTrustMode trusted skips approvals for gated actions
+type UpdateAgentRequestTrustMode string
 
 // UpdateProviderSettingsRequest defines model for UpdateProviderSettingsRequest.
 type UpdateProviderSettingsRequest struct {
@@ -571,6 +667,15 @@ type WsAgentActivity struct {
 
 // WsAgentActivityType defines model for WsAgentActivity.Type.
 type WsAgentActivityType string
+
+// WsAgentArchived An agent was archived; drop it and its DM from the app
+type WsAgentArchived struct {
+	AgentId string              `json:"agentId"`
+	Type    WsAgentArchivedType `json:"type"`
+}
+
+// WsAgentArchivedType defines model for WsAgentArchived.Type.
+type WsAgentArchivedType string
 
 // WsAgentCreated defines model for WsAgentCreated.
 type WsAgentCreated struct {
@@ -659,6 +764,9 @@ type MarkChatReadJSONRequestBody = MarkReadRequest
 
 // AnswerPromptJSONRequestBody defines body for AnswerPrompt for application/json ContentType.
 type AnswerPromptJSONRequestBody = PromptAnswer
+
+// ToggleReactionJSONRequestBody defines body for ToggleReaction for application/json ContentType.
+type ToggleReactionJSONRequestBody = ToggleReactionRequest
 
 // CompleteOnboardingJSONRequestBody defines body for CompleteOnboarding for application/json ContentType.
 type CompleteOnboardingJSONRequestBody = CompleteOnboardingRequest
@@ -904,6 +1012,40 @@ func (t *WsEvent) MergeWsChatCreated(v WsChatCreated) error {
 	return err
 }
 
+// AsWsAgentArchived returns the union data inside the WsEvent as a WsAgentArchived
+func (t WsEvent) AsWsAgentArchived() (WsAgentArchived, error) {
+	var body WsAgentArchived
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsAgentArchived overwrites any union data inside the WsEvent as the provided WsAgentArchived
+func (t *WsEvent) FromWsAgentArchived(v WsAgentArchived) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.archived"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsAgentArchived performs a merge with any union data inside the WsEvent, using the provided WsAgentArchived
+func (t *WsEvent) MergeWsAgentArchived(v WsAgentArchived) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.archived"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -920,6 +1062,8 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 	switch discriminator {
 	case "agent.activity":
 		return t.AsWsAgentActivity()
+	case "agent.archived":
+		return t.AsWsAgentArchived()
 	case "agent.created":
 		return t.AsWsAgentCreated()
 	case "agent.updated":
@@ -956,6 +1100,9 @@ type ServerInterface interface {
 	// (PATCH /agents/{agentId})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (POST /agents/{agentId}/archive)
+	ArchiveAgent(w http.ResponseWriter, r *http.Request, agentId string)
+
 	// (GET /agents/{agentId}/memories)
 	ListMemories(w http.ResponseWriter, r *http.Request, agentId string)
 
@@ -964,6 +1111,12 @@ type ServerInterface interface {
 
 	// (POST /agents/{agentId}/retry)
 	RetryAgent(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (GET /agents/{agentId}/sandbox)
+	GetSandbox(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (POST /agents/{agentId}/sandbox/restart)
+	RestartSandbox(w http.ResponseWriter, r *http.Request, agentId string)
 
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -994,6 +1147,9 @@ type ServerInterface interface {
 
 	// (POST /messages/{messageId}/dismiss)
 	DismissPrompt(w http.ResponseWriter, r *http.Request, messageId string)
+
+	// (POST /messages/{messageId}/reactions)
+	ToggleReaction(w http.ResponseWriter, r *http.Request, messageId string)
 
 	// (GET /models)
 	ListModels(w http.ResponseWriter, r *http.Request)
@@ -1051,6 +1207,32 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveAgent operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveAgent(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1138,6 +1320,58 @@ func (siw *ServerInterfaceWrapper) RetryAgent(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RetryAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSandbox operation middleware
+func (siw *ServerInterfaceWrapper) GetSandbox(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSandbox(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestartSandbox operation middleware
+func (siw *ServerInterfaceWrapper) RestartSandbox(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestartSandbox(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1376,6 +1610,32 @@ func (siw *ServerInterfaceWrapper) DismissPrompt(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ToggleReaction operation middleware
+func (siw *ServerInterfaceWrapper) ToggleReaction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ToggleReaction(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListModels operation middleware
 func (siw *ServerInterfaceWrapper) ListModels(w http.ResponseWriter, r *http.Request) {
 
@@ -1582,8 +1842,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/memories", wrapper.ListMemories)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/memories/{memoryId}", wrapper.DeleteMemory)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/archive", wrapper.ArchiveAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox", wrapper.GetSandbox)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/sandbox/restart", wrapper.RestartSandbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/answer", wrapper.AnswerPrompt)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/reactions", wrapper.ToggleReaction)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/dismiss", wrapper.DismissPrompt)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/models", wrapper.ListModels)
 

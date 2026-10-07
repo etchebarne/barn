@@ -9,6 +9,7 @@ import (
 
 	"github.com/etchebarne/barn/internal/api/gen"
 	"github.com/etchebarne/barn/internal/runtime"
+	"github.com/etchebarne/barn/internal/sandbox"
 	"github.com/etchebarne/barn/internal/store"
 	"github.com/etchebarne/barn/internal/view"
 )
@@ -159,31 +160,21 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID str
 		internalError(w, err)
 		return
 	}
-	if req.Model != nil {
-		if !s.checkModel(w, r, *req.Model) {
-			return
-		}
-		err := s.store.UpdateAgentModel(ctx, agentID, *req.Model)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "agent not found")
-			return
-		}
-		if err != nil {
-			internalError(w, err)
-			return
-		}
+	u := store.AgentUpdate{Name: req.Name, Instructions: req.Instructions, Model: req.Model, Language: req.Language}
+	if req.TrustMode != nil {
+		mode := string(*req.TrustMode)
+		u.TrustMode = &mode
 	}
-	agent, err := s.store.GetAgent(ctx, agentID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "agent not found")
+	agent, err := s.runtime.UpdateAgent(ctx, agentID, u)
+	var me *runtime.ModelError
+	if errors.As(err, &me) {
+		writeError(w, http.StatusBadRequest, me.Message)
 		return
 	}
 	if err != nil {
-		internalError(w, err)
+		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	out := view.Agent(agent, s.runtime.Activity(agent.ID))
-	s.bus.Publish(gen.WsAgentUpdated{Type: "agent.updated", Agent: out})
 
 	// A new model is the usual fix for a failed turn, so pick up where the agent left off.
 	if req.Model != nil {
@@ -193,6 +184,59 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID str
 			if err := s.runtime.Retry(ctx, agentID); err != nil && !errors.Is(err, runtime.ErrBusy) {
 				slog.Warn("retry after model change", "agent", agentID, "err", err)
 			}
+		}
+	}
+	writeJSON(w, http.StatusOK, view.Agent(agent, s.runtime.Activity(agent.ID)))
+}
+
+func (s *Server) ArchiveAgent(w http.ResponseWriter, r *http.Request, agentID string) {
+	err := s.runtime.ArchiveAgent(r.Context(), agentID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "agent not found")
+	case errors.Is(err, store.ErrLastAdmin):
+		writeError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) ToggleReaction(w http.ResponseWriter, r *http.Request, messageID string) {
+	ctx := r.Context()
+	var req gen.ToggleReactionRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	emoji := strings.TrimSpace(req.Emoji)
+	if !runtime.IsEmoji(emoji) {
+		writeError(w, http.StatusBadRequest, "emoji must be a single emoji")
+		return
+	}
+	msg, err := s.store.GetMessage(ctx, messageID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "message not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	added, err := s.store.ToggleReaction(ctx, msg.ID, "user", emoji)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if msg, err = s.store.GetMessage(ctx, msg.ID); err != nil {
+		internalError(w, err)
+		return
+	}
+	out := view.Message(msg)
+	s.bus.Publish(view.MessageUpdated(out))
+	if added {
+		if err := s.runtime.DeliverReaction(ctx, msg, emoji); err != nil {
+			slog.Warn("deliver reaction", "err", err)
 		}
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -277,7 +321,11 @@ func (s *Server) AnswerPrompt(w http.ResponseWriter, r *http.Request, messageID 
 	}
 	out := view.Message(msg)
 	s.bus.Publish(view.MessageUpdated(out))
-	if err := s.runtime.DeliverAnswer(ctx, msg); err != nil {
+	deliver := s.runtime.DeliverAnswer
+	if msg.Prompt.Kind == "approval" {
+		deliver = s.runtime.ResolveApproval
+	}
+	if err := deliver(ctx, msg); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -334,12 +382,16 @@ func validateAnswer(p store.Prompt, a store.PromptAnswer) error {
 		if len(a.Selected)+btoi(hasText) != 1 {
 			return bad("choose one option")
 		}
+	case "approval":
+		if len(a.Selected) != 1 || hasText {
+			return bad("approve or decline")
+		}
 	case "multi":
 		if len(a.Selected) == 0 && !hasText {
 			return bad("choose at least one option")
 		}
 	}
-	if hasText && p.Kind != "text" && !p.AllowOther {
+	if hasText && p.Kind != "text" && (!p.AllowOther || p.Kind == "approval") {
 		return bad("this question doesn't take a typed answer")
 	}
 	return nil
@@ -384,4 +436,40 @@ func (s *Server) DeleteMemory(w http.ResponseWriter, r *http.Request, agentID, m
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) GetSandbox(w http.ResponseWriter, r *http.Request, agentID string) {
+	s.writeSandbox(w, r, agentID)
+}
+
+func (s *Server) RestartSandbox(w http.ResponseWriter, r *http.Request, agentID string) {
+	err := s.runtime.RestartSandbox(r.Context(), agentID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	case errors.Is(err, sandbox.ErrUnavailable):
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	case err != nil:
+		writeError(w, http.StatusBadGateway, "couldn't restart the sandbox: "+err.Error())
+		return
+	}
+	s.writeSandbox(w, r, agentID)
+}
+
+func (s *Server) writeSandbox(w http.ResponseWriter, r *http.Request, agentID string) {
+	status, shared, err := s.runtime.SandboxState(r.Context(), agentID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if shared == nil {
+		shared = []string{}
+	}
+	writeJSON(w, http.StatusOK, gen.Sandbox{Status: gen.SandboxStatus(status), SharedWith: shared})
 }

@@ -75,7 +75,26 @@ export function chatToOpen(prompt: Prompt, answer: PromptAnswer): string | null 
   return null
 }
 
-/** Keyboard selection applies only to the latest pending choice prompt. */
+/**
+ * Keyboard selection applies only to the latest pending choice prompt. Never to approvals: a
+ * stray keypress must not approve a gated action.
+ */
 export function acceptsLetterKeys(prompt: Prompt, isLatest: boolean): boolean {
-  return isLatest && prompt.status === "pending" && prompt.kind !== "text"
+  return (
+    isLatest && prompt.status === "pending" && (prompt.kind === "single" || prompt.kind === "multi")
+  )
+}
+
+/** Approval options are always ["Approve", "Decline"]. */
+export const APPROVE_INDEX = 0
+export const DECLINE_INDEX = 1
+
+export function approvalAnswer(approve: boolean): PromptAnswer {
+  return { selected: [approve ? APPROVE_INDEX : DECLINE_INDEX] }
+}
+
+/** How an answered approval came out, or null while pending/dismissed. */
+export function approvalOutcome(prompt: Prompt): "approved" | "declined" | null {
+  if (prompt.kind !== "approval" || prompt.status !== "answered") return null
+  return prompt.answer?.selected?.includes(APPROVE_INDEX) ? "approved" : "declined"
 }

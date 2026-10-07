@@ -17,6 +17,13 @@ import { AgentAvatar } from "./agent-avatar"
 import { useAgentsById, useUpdateAgent } from "./api"
 import { useAgentDetailsStore } from "./details-store"
 import { MemoriesSection } from "./memories-section"
+import {
+  DangerZone,
+  InstructionsSection,
+  LanguageSection,
+  NameSection,
+  TrustSection,
+} from "./settings-sections"
 
 /** Model setting: changes apply as soon as a model is picked. */
 function ModelField({ agent, inputRef }: { agent: Agent; inputRef?: Ref<HTMLInputElement> }) {
@@ -68,8 +75,7 @@ function ModelField({ agent, inputRef }: { agent: Agent; inputRef?: Ref<HTMLInpu
 
 /**
  * Agent details in a side sheet, opened from the chat header or a failure notice (see
- * `openAgentDetails`). Mounted once. One section per setting so more fields (language,
- * notifications, trust mode) slot in later.
+ * `openAgentDetails`). Mounted once. One section per setting.
  */
 export function AgentDetailsSheet() {
   const agentId = useAgentDetailsStore((s) => s.agentId)
@@ -102,12 +108,17 @@ export function AgentDetailsSheet() {
             </div>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-            <div className="flex flex-col gap-8">
+            {/* Keyed by agent so switching agents never shows another agent's drafts. */}
+            <div key={shown.id} className="flex flex-col gap-8">
               <FieldGroup>
-                {/* Key by agent so switching agents never shows another agent's pending choice. */}
-                <ModelField key={shown.id} agent={shown} inputRef={modelInputRef} />
+                <NameSection agent={shown} />
+                <ModelField agent={shown} inputRef={modelInputRef} />
+                <InstructionsSection agent={shown} />
+                <LanguageSection agent={shown} />
+                <TrustSection agent={shown} />
               </FieldGroup>
-              <MemoriesSection key={`memories-${shown.id}`} agent={shown} />
+              <MemoriesSection agent={shown} />
+              <DangerZone agent={shown} onArchived={close} />
             </div>
           </div>
         </SheetContent>

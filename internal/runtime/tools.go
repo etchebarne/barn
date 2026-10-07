@@ -15,13 +15,16 @@ import (
 )
 
 const (
-	toolSendMessage = "send_message"
-	toolReact       = "react"
-	toolAskUser     = "ask_user"
-	toolListModels  = "list_models"
-	toolRemember    = "memory_save"
-	toolForget      = "memory_forget"
-	toolCreateAgent = "create_agent"
+	toolSendMessage  = "send_message"
+	toolReact        = "react"
+	toolAskUser      = "ask_user"
+	toolListModels   = "list_models"
+	toolListAgents   = "list_agents"
+	toolRemember     = "memory_save"
+	toolForget       = "memory_forget"
+	toolCreateAgent  = "create_agent"
+	toolUpdateAgent  = "update_agent"
+	toolArchiveAgent = "archive_agent"
 )
 
 const maxPromptOptions = 8
@@ -115,9 +118,39 @@ var (
 			"additionalProperties": false
 		}`)
 
+	listAgentsTool = function(toolListAgents,
+		"List the agents in barn (your teammates): their agent_id, name, what they do, and model.",
+		`{"type": "object", "properties": {}, "additionalProperties": false}`)
+
 	listModelsTool = function(toolListModels,
 		"List the model ids available from the user's OpenCode Go subscription.",
 		`{"type": "object", "properties": {}, "additionalProperties": false}`)
+
+	updateAgentTool = function(toolUpdateAgent,
+		"Change an agent's settings: rename it, rewrite its instructions, or switch its model or "+
+			"reply language. Leave agent_id out to change yourself. Only set the fields that change.",
+		`{
+			"type": "object",
+			"properties": {
+				"agent_id": {"type": "string", "description": "The agent to change; defaults to you."},
+				"name": {"type": "string"},
+				"instructions": {"type": "string", "description": "The full new instructions (they replace the old ones)."},
+				"model": {"type": "string", "description": "Model id (from list_models)."},
+				"language": {"type": "string", "description": "\"auto\" or a language name, e.g. \"Spanish\"."},
+				"sandbox_with": {"type": "string", "description": "Admins only: an agent_id whose computer this agent should share from now on."}
+			},
+			"additionalProperties": false
+		}`)
+
+	archiveAgentTool = function(toolArchiveAgent,
+		"Archive an agent: it stops working and its chat is hidden (history is kept). Needs the "+
+			"user's approval unless you're trusted. You can't archive yourself.",
+		`{
+			"type": "object",
+			"properties": {"agent_id": {"type": "string"}},
+			"required": ["agent_id"],
+			"additionalProperties": false
+		}`)
 
 	createAgentTool = function(toolCreateAgent,
 		"Create a new agent: a persistent teammate that owns one job. It gets its own DM with the "+
@@ -129,7 +162,8 @@ var (
 				"name": {"type": "string", "description": "Short, human name for the agent, e.g. \"Claude Sessions\"."},
 				"job": {"type": "string", "description": "One sentence: the job this agent owns."},
 				"instructions": {"type": "string", "description": "Detailed instructions for the agent: what it does, how, for whom, and any preferences the user mentioned."},
-				"model": {"type": "string", "description": "Model id (from list_models)."}
+				"model": {"type": "string", "description": "Model id (from list_models)."},
+				"sandbox_with": {"type": "string", "description": "Optional agent_id: share that agent's computer instead of getting a new one (for agents that work on the same files)."}
 			},
 			"required": ["name", "job", "instructions", "model"],
 			"additionalProperties": false
@@ -137,10 +171,13 @@ var (
 )
 
 // toolsFor returns the tools an agent may use.
-func toolsFor(agent store.Agent) []model.Tool {
-	tools := []model.Tool{sendMessageTool, reactTool, askUserTool, rememberTool, forgetTool}
+func toolsFor(agent store.Agent, sandboxes bool) []model.Tool {
+	tools := []model.Tool{sendMessageTool, reactTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool}
+	if sandboxes {
+		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool)
+	}
 	if agent.IsAdmin {
-		tools = append(tools, listModelsTool, createAgentTool)
+		tools = append(tools, createAgentTool, archiveAgentTool)
 	}
 	return tools
 }
@@ -159,8 +196,20 @@ func toolLabel(name string) string {
 		return "updating my notes"
 	case toolListModels:
 		return "checking models"
+	case toolListAgents:
+		return "checking the team"
 	case toolCreateAgent:
 		return "setting up an agent"
+	case toolUpdateAgent:
+		return "updating settings"
+	case toolReadFile:
+		return "reading a file"
+	case toolWriteFile:
+		return "writing a file"
+	case toolListFiles:
+		return "looking through files"
+	case toolArchiveAgent:
+		return "archiving an agent"
 	default:
 		return "using " + name
 	}
@@ -169,7 +218,7 @@ func toolLabel(name string) string {
 // runTool executes a tool call and returns the result for the model, and whether it succeeded.
 func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCall) (string, bool) {
 	args := []byte(call.Function.Arguments)
-	if !slices.ContainsFunc(toolsFor(agent), func(t model.Tool) bool { return t.Function.Name == call.Function.Name }) {
+	if !slices.ContainsFunc(toolsFor(agent, l.m.sandboxesAvailable()), func(t model.Tool) bool { return t.Function.Name == call.Function.Name }) {
 		return toolError("unknown tool %q", call.Function.Name), false
 	}
 	switch call.Function.Name {
@@ -192,6 +241,19 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 			return toolError("no memory with id %q", a.MemoryID), false
 		}
 		return toolOK(map[string]string{"forgot": a.MemoryID}), true
+	case toolListAgents:
+		agents, err := l.m.store.ListAgents(ctx)
+		if err != nil {
+			return toolError("couldn't list agents: %v", err), false
+		}
+		out := make([]map[string]any, 0, len(agents))
+		for _, a := range agents {
+			out = append(out, map[string]any{
+				"agent_id": a.ID, "name": a.Name, "model": a.Model, "is_you": a.ID == agent.ID,
+				"admin": a.IsAdmin, "about": truncate(strings.TrimSpace(a.Instructions), 200),
+			})
+		}
+		return toolOK(map[string]any{"agents": out}), true
 	case toolListModels:
 		models, err := l.m.llm.Models(ctx)
 		if err != nil {
@@ -200,6 +262,12 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 		return toolOK(map[string]any{"models": models, "your_model": agent.Model}), true
 	case toolCreateAgent:
 		return l.createAgent(ctx, agent, args)
+	case toolUpdateAgent:
+		return l.updateAgent(ctx, agent, args)
+	case toolRunCommand, toolReadFile, toolWriteFile, toolListFiles:
+		return l.runSandboxTool(ctx, agent, call.Function.Name, args)
+	case toolArchiveAgent:
+		return l.archiveAgent(ctx, agent, args)
 	default:
 		return toolError("unknown tool %q", call.Function.Name), false
 	}
@@ -277,7 +345,7 @@ func (l *loop) react(ctx context.Context, agent store.Agent, raw []byte) (string
 		return toolError("invalid arguments: %v", err), false
 	}
 	emoji := strings.TrimSpace(args.Emoji)
-	if !isEmoji(emoji) {
+	if !IsEmoji(emoji) {
 		return toolError("emoji must be a single emoji, like 👍"), false
 	}
 	msg, err := l.m.store.GetMessage(ctx, args.MessageID)
@@ -300,9 +368,9 @@ func (l *loop) react(ctx context.Context, agent store.Agent, raw []byte) (string
 	return toolOK(map[string]string{"reacted": emoji}), true
 }
 
-// isEmoji is a loose check that s is one short emoji (possibly with modifiers or joiners):
+// IsEmoji is a loose check that s is one short emoji (possibly with modifiers or joiners):
 // no letters, digits, spaces or other ASCII.
-func isEmoji(s string) bool {
+func IsEmoji(s string) bool {
 	if s == "" || len(s) > 32 {
 		return false
 	}
@@ -380,11 +448,13 @@ func (l *loop) createAgent(ctx context.Context, creator store.Agent, raw []byte)
 		Job          string `json:"job"`
 		Instructions string `json:"instructions"`
 		Model        string `json:"model"`
+		SandboxWith  string `json:"sandbox_with"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return toolError("invalid arguments: %v", err), false
 	}
 	created, chatID, err := l.m.CreateAgent(ctx, NewAgent{
+		SandboxWith:  args.SandboxWith,
 		Name:         args.Name,
 		Job:          args.Job,
 		Instructions: args.Instructions,
@@ -399,6 +469,62 @@ func (l *loop) createAgent(ctx context.Context, creator store.Agent, raw []byte)
 		"chat_id":  chatID,
 		"note":     created.Name + " now exists and is introducing itself in its own DM (chat_id " + chatID + ").",
 	}), true
+}
+
+func (l *loop) updateAgent(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
+	var args struct {
+		AgentID      string  `json:"agent_id"`
+		Name         *string `json:"name"`
+		Instructions *string `json:"instructions"`
+		Model        *string `json:"model"`
+		Language     *string `json:"language"`
+		SandboxWith  string  `json:"sandbox_with"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return toolError("invalid arguments: %v", err), false
+	}
+	if args.SandboxWith != "" && !agent.IsAdmin {
+		return toolError("only admin agents can change who shares a computer"), false
+	}
+	target := agent.ID
+	if args.AgentID != "" && args.AgentID != agent.ID {
+		if !agent.IsAdmin {
+			return toolError("you can only change your own settings"), false
+		}
+		target = args.AgentID
+	}
+	updated, err := l.m.UpdateAgent(ctx, target, store.AgentUpdate{
+		Name: args.Name, Instructions: args.Instructions, Model: args.Model, Language: args.Language,
+	})
+	if err != nil {
+		return toolError("%v", err), false
+	}
+	if args.SandboxWith != "" {
+		if err := l.m.store.ShareSandbox(ctx, target, args.SandboxWith); err != nil {
+			return toolError("couldn't share the computer: %v", err), false
+		}
+	}
+	return toolOK(map[string]string{"agent_id": updated.ID, "name": updated.Name, "model": updated.Model, "language": updated.Language}), true
+}
+
+func (l *loop) archiveAgent(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
+	var args struct {
+		AgentID string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return toolError("invalid arguments: %v", err), false
+	}
+	if args.AgentID == agent.ID {
+		return toolError("you can't archive yourself"), false
+	}
+	target, err := l.m.store.GetAgent(ctx, args.AgentID)
+	if err != nil {
+		return toolError("unknown agent_id %q", args.AgentID), false
+	}
+	if err := l.m.ArchiveAgent(ctx, target.ID); err != nil {
+		return toolError("%v", err), false
+	}
+	return toolOK(map[string]string{"archived": target.Name}), true
 }
 
 func toolOK(v any) string {

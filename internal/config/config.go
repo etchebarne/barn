@@ -21,6 +21,10 @@ type Config struct {
 
 	// CompactAtTokens is when agents' context gets compacted (0 = default).
 	CompactAtTokens int
+
+	// Sandboxes: "docker" (default) or "off". SandboxImage overrides the default image.
+	Sandboxes    string
+	SandboxImage string
 }
 
 func Load() (Config, error) {
@@ -29,6 +33,11 @@ func Load() (Config, error) {
 		DataDir:         env("BARN_DATA_DIR", "./data"),
 		WebDir:          env("BARN_WEB_DIR", ""),
 		OpenCodeBaseURL: env("BARN_OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1"),
+		Sandboxes:       env("BARN_SANDBOX", "docker"),
+		SandboxImage:    os.Getenv("BARN_SANDBOX_IMAGE"),
+	}
+	if c.Sandboxes != "docker" && c.Sandboxes != "off" {
+		return c, fmt.Errorf("BARN_SANDBOX must be docker or off")
 	}
 
 	var err error

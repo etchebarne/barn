@@ -37,6 +37,7 @@ export function makeAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     id: "agent-1",
     name: "barn",
+    instructions: "",
     model: "kimi-k2.6",
     language: "auto",
     notifications: true,

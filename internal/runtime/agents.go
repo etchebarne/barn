@@ -25,6 +25,8 @@ type NewAgent struct {
 	CreatedBy *store.Agent
 	// Welcome overrides the system notice that starts the new agent's first turn.
 	Welcome string
+	// SandboxWith is an agent whose sandbox the new agent shares (empty: its own).
+	SandboxWith string
 }
 
 // ModelError is a user-facing reason a model can't be used.
@@ -85,9 +87,14 @@ func (m *Manager) CreateAgent(ctx context.Context, n NewAgent) (store.Agent, str
 	if err != nil {
 		return agent, "", err
 	}
+	if n.SandboxWith != "" {
+		if err := m.store.ShareSandbox(ctx, agent.ID, n.SandboxWith); err != nil {
+			logger(agent.ID).Warn("share sandbox", "with", n.SandboxWith, "err", err)
+		}
+	}
 	m.AddAgent(agent.ID)
 	m.bus.Publish(gen.WsAgentCreated{Type: "agent.created", Agent: view.Agent(agent, m.Activity(agent.ID))})
-	if chat, err := m.store.GetChat(ctx, chatID); err == nil {
+	if chat, err := m.store.ChatSummary(ctx, chatID); err == nil {
 		m.bus.Publish(gen.WsChatCreated{Type: "chat.created", Chat: view.Chat(chat)})
 	}
 

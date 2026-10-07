@@ -57,11 +57,20 @@ type Prompt struct {
 	AllowOther bool           `json:"allowOther"`
 	Status     string         `json:"status"` // "pending" | "answered" | "dismissed"
 	Answer     *PromptAnswer  `json:"answer"`
+	// Action is the gated tool call an approval prompt is about. Never sent to clients.
+	Action *PendingAction `json:"action,omitempty"`
 }
 
 type PromptOption struct {
 	Label       string `json:"label"`
 	OpensChatID string `json:"opensChatId,omitempty"`
+}
+
+// PendingAction is a gated tool call waiting for the user's approval (kind "approval").
+type PendingAction struct {
+	AgentID string          `json:"agentId"`
+	Tool    string          `json:"tool"`
+	Args    json.RawMessage `json:"args"`
 }
 
 type PromptAnswer struct {
@@ -88,13 +97,34 @@ const readerUser = "user"
 // ListChats returns every chat with members, the user's unread count, and the last message,
 // most recently active first.
 func (s *Store) ListChats(ctx context.Context) ([]Chat, error) {
+	return s.chatSummaries(ctx, "", nil)
+}
+
+// ChatSummary returns one chat as ListChats would (members, unread count, last message).
+func (s *Store) ChatSummary(ctx context.Context, id string) (Chat, error) {
+	chats, err := s.chatSummaries(ctx, "AND c.id = ?", []any{id})
+	if err != nil {
+		return Chat{}, err
+	}
+	if len(chats) == 0 {
+		return Chat{}, ErrNotFound
+	}
+	return chats[0], nil
+}
+
+func (s *Store) chatSummaries(ctx context.Context, filter string, args []any) ([]Chat, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT c.id, c.kind, c.name, c.created_at,
 		       (SELECT COUNT(*) FROM messages m
 		         WHERE m.chat_id = c.id AND m.author_kind != 'user'
 		           AND m.id > COALESCE((SELECT last_message_id FROM reads r
 		                                 WHERE r.chat_id = c.id AND r.reader = ?), '')) AS unread
-		FROM chats c`, readerUser)
+		FROM chats c
+		-- DMs of archived agents are hidden.
+		WHERE NOT (c.kind = 'dm' AND EXISTS (
+			SELECT 1 FROM chat_members cm JOIN agents a ON a.id = cm.agent_id
+			WHERE cm.chat_id = c.id AND a.archived_at IS NOT NULL)) `+filter,
+		append([]any{readerUser}, args...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -355,6 +385,20 @@ func (s *Store) GetMessage(ctx context.Context, id string) (Message, error) {
 	msgs := []Message{m}
 	err = s.fillReactions(ctx, msgs)
 	return msgs[0], err
+}
+
+// ToggleReaction adds a reaction, or removes it if that reactor already used that emoji.
+// It reports whether the reaction now exists.
+func (s *Store) ToggleReaction(ctx context.Context, messageID, reactor, emoji string) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM reactions WHERE message_id = ? AND reactor = ? AND emoji = ?`, messageID, reactor, emoji)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return false, nil
+	}
+	return s.AddReaction(ctx, messageID, reactor, emoji)
 }
 
 // AddReaction records a reaction. It reports false if that reactor already used that emoji.

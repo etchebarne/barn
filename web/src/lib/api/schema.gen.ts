@@ -248,6 +248,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Archive an agent: it stops working and disappears from the app (its DM is hidden). The
+         *     last admin agent can't be archived. Broadcasts agent.archived.
+         */
+        post: operations["archiveAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/retry": {
         parameters: {
             query?: never;
@@ -286,6 +308,28 @@ export interface paths {
          *     message (broadcast as message.updated) and delivered to the agent that asked.
          */
         post: operations["answerPrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{messageId}/reactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Add the user's reaction with this emoji, or remove it if it's already there. Broadcasts
+         *     message.updated; a new reaction on an agent's message is also delivered to that agent.
+         */
+        post: operations["toggleReaction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -379,6 +423,8 @@ export interface components {
         Agent: {
             id: string;
             name: string;
+            /** @description What the agent is for and how it should work (its own system instructions) */
+            instructions: string;
             model: string;
             /** @description Reply language, or "auto" */
             language: string;
@@ -399,6 +445,15 @@ export interface components {
         UpdateAgentRequest: {
             /** @description Model id from GET /models */
             model?: string;
+            name?: string;
+            instructions?: string;
+            /** @description "auto" (reply in the language people write in) or a language name */
+            language?: string;
+            /**
+             * @description trusted skips approvals for gated actions
+             * @enum {string}
+             */
+            trustMode?: "ask" | "trusted";
         };
         AgentActivity: {
             /** @enum {string} */
@@ -464,6 +519,9 @@ export interface components {
             reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps";
             retryable: boolean;
         };
+        ToggleReactionRequest: {
+            emoji: string;
+        };
         Reaction: {
             emoji: string;
             /** @description Who reacted with this emoji, oldest first */
@@ -471,10 +529,11 @@ export interface components {
         };
         Prompt: {
             /**
-             * @description single = pick one; multi = pick any number; text = free-text answer
+             * @description single = pick one; multi = pick any number; text = free-text answer; approval = the
+             *     agent wants to do something that needs the user's OK (options: Approve, Decline)
              * @enum {string}
              */
-            kind: "single" | "multi" | "text";
+            kind: "single" | "multi" | "text" | "approval";
             question: string;
             options: components["schemas"]["PromptOption"][];
             /** @description Offer "type your own" in addition to the options */
@@ -517,7 +576,7 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"];
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -578,6 +637,15 @@ export interface components {
              */
             type: "chat.created";
             chat: components["schemas"]["Chat"];
+        };
+        /** @description An agent was archived; drop it and its DM from the app */
+        WsAgentArchived: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "agent.archived";
+            agentId: string;
         };
     };
     responses: {
@@ -996,6 +1064,37 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    archiveAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The agent can't be archived (e.g. it's the only admin agent) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     retryAgent: {
         parameters: {
             query?: never;
@@ -1063,6 +1162,35 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    toggleReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleReactionRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated message */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     dismissPrompt: {

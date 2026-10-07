@@ -4,10 +4,17 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 import { api, unwrap, type Message } from "@/lib/api-client"
-import { addMessageToCache, markChatReadInCache } from "@/lib/chat-cache"
+import {
+  addMessageToCache,
+  findCachedMessage,
+  markChatReadInCache,
+  updateMessageInCache,
+} from "@/lib/chat-cache"
 import { queryKeys } from "@/lib/query-keys"
+import { toggleUserReaction } from "@/lib/reactions"
 
 import { pendingStore } from "./pending-store"
 
@@ -88,5 +95,29 @@ export function useMarkRead(chatId: string) {
       ),
     onMutate: (lastMessageId) => markChatReadInCache(queryClient, chatId, lastMessageId),
     onError: () => void queryClient.invalidateQueries({ queryKey: queryKeys.chats, exact: true }),
+  })
+}
+
+/** Toggles the user's reaction on a message (optimistic; the server's copy replaces it). */
+export function useToggleReaction(message: Message) {
+  const queryClient = useQueryClient()
+  return useMutation<Message, Error, string, { previous: Message }>({
+    mutationFn: (emoji) =>
+      unwrap(
+        api.POST("/messages/{messageId}/reactions", {
+          params: { path: { messageId: message.id } },
+          body: { emoji },
+        }),
+      ),
+    onMutate: (emoji) => {
+      const previous = findCachedMessage(queryClient, message.chatId, message.id) ?? message
+      updateMessageInCache(queryClient, toggleUserReaction(previous, emoji))
+      return { previous }
+    },
+    onSuccess: (updated) => updateMessageInCache(queryClient, updated),
+    onError: (error, _emoji, context) => {
+      if (context) updateMessageInCache(queryClient, context.previous)
+      toast.error(`Couldn't react: ${error.message}`)
+    },
   })
 }

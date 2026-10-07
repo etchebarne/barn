@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/etchebarne/barn/internal/api/gen"
 	"github.com/etchebarne/barn/internal/bus"
@@ -28,6 +30,8 @@ const (
 	EventSystem  = "system"  // payload: {"text": "..."}
 	EventRetry   = "retry"   // payload: {}; re-runs the model on the current context
 	EventAnswer  = "answer"  // payload: {"messageId": "..."}; the user answered a prompt
+	// EventReaction: the user reacted to the agent's message. Payload: {"messageId", "emoji"}.
+	EventReaction = "reaction"
 )
 
 // ErrBusy is returned by Retry when the agent is already working or has pending events.
@@ -40,6 +44,8 @@ type Manager struct {
 
 	// CompactAtTokens overrides DefaultCompactAtTokens (set before Start).
 	CompactAtTokens int
+	// Sandboxes runs agents' commands; nil means no sandbox tools (set before Start).
+	Sandboxes Sandboxer
 
 	mu       sync.Mutex
 	ctx      context.Context
@@ -93,13 +99,85 @@ func (m *Manager) AddAgent(agentID string) {
 	if _, ok := m.loops[agentID]; ok {
 		return
 	}
-	l := &loop{m: m, agentID: agentID, wake: make(chan struct{}, 1)}
+	ctx, cancel := context.WithCancel(m.ctx)
+	l := &loop{m: m, agentID: agentID, wake: make(chan struct{}, 1), stop: cancel}
 	m.loops[agentID] = l
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		l.run(m.ctx)
+		l.run(ctx)
 	}()
+}
+
+// stopAgent ends an agent's loop (e.g. when it's archived).
+func (m *Manager) stopAgent(agentID string) {
+	m.mu.Lock()
+	l := m.loops[agentID]
+	delete(m.loops, agentID)
+	delete(m.activity, agentID)
+	m.mu.Unlock()
+	if l != nil {
+		l.stop()
+	}
+}
+
+// UpdateAgent applies settings changes (validating a new model) and broadcasts the result.
+func (m *Manager) UpdateAgent(ctx context.Context, agentID string, u store.AgentUpdate) (store.Agent, error) {
+	if u.Name != nil {
+		name := strings.TrimSpace(*u.Name)
+		if name == "" || utf8.RuneCountInString(name) > 64 {
+			return store.Agent{}, &ModelError{"name must be 1–64 characters"}
+		}
+		u.Name = &name
+	}
+	if u.Instructions != nil && strings.TrimSpace(*u.Instructions) == "" {
+		return store.Agent{}, &ModelError{"instructions can't be empty"}
+	}
+	if u.Language != nil {
+		lang := strings.TrimSpace(*u.Language)
+		if lang == "" || utf8.RuneCountInString(lang) > 40 {
+			return store.Agent{}, &ModelError{"language must be \"auto\" or a language name"}
+		}
+		u.Language = &lang
+	}
+	if u.TrustMode != nil && *u.TrustMode != "ask" && *u.TrustMode != "trusted" {
+		return store.Agent{}, &ModelError{"trust mode must be ask or trusted"}
+	}
+	if u.Model != nil {
+		if err := m.CheckModel(ctx, *u.Model); err != nil {
+			return store.Agent{}, err
+		}
+	}
+	if err := m.store.UpdateAgent(ctx, agentID, u); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Agent{}, &ModelError{"unknown agent"}
+		}
+		return store.Agent{}, err
+	}
+	agent, err := m.store.GetAgent(ctx, agentID)
+	if err != nil {
+		return agent, err
+	}
+	m.bus.Publish(gen.WsAgentUpdated{Type: "agent.updated", Agent: view.Agent(agent, m.Activity(agent.ID))})
+	if u.Name != nil {
+		// The DM is named after the agent; send the full summary so clients keep its preview.
+		if dm, err := m.store.DMChatID(ctx, agent.ID); err == nil {
+			if chat, err := m.store.ChatSummary(ctx, dm); err == nil {
+				m.bus.Publish(gen.WsChatCreated{Type: "chat.created", Chat: view.Chat(chat)})
+			}
+		}
+	}
+	return agent, nil
+}
+
+// ArchiveAgent archives an agent, stops it, and tells clients to drop it.
+func (m *Manager) ArchiveAgent(ctx context.Context, agentID string) error {
+	if err := m.store.ArchiveAgent(ctx, agentID); err != nil {
+		return err
+	}
+	m.stopAgent(agentID)
+	m.bus.Publish(gen.WsAgentArchived{Type: "agent.archived", AgentId: agentID})
+	return nil
 }
 
 func (m *Manager) wake(agentID string) {
@@ -186,6 +264,19 @@ func (m *Manager) LastTurnFailed(ctx context.Context, agentID string) (bool, err
 		return false, err
 	}
 	return last.Failure != nil && last.Failure.AgentID == agentID, nil
+}
+
+// DeliverReaction tells an agent that the user reacted to one of its messages.
+func (m *Manager) DeliverReaction(ctx context.Context, msg store.Message, emoji string) error {
+	if msg.AuthorKind != "agent" || msg.AuthorAgentID == nil {
+		return nil
+	}
+	if _, err := m.store.InsertEvent(ctx, *msg.AuthorAgentID, EventReaction,
+		map[string]string{"messageId": msg.ID, "emoji": emoji}); err != nil {
+		return err
+	}
+	m.wake(*msg.AuthorAgentID)
+	return nil
 }
 
 // DeliverAnswer tells the agent that asked a prompt how the user answered it.

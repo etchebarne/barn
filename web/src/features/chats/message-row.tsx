@@ -16,7 +16,7 @@ import { FailureNotice } from "./failure-notice"
 import type { Row } from "./grouping"
 import { formatDay, formatTime } from "./grouping"
 import { Markdown } from "./markdown"
-import { MessageReactions } from "./message-reactions"
+import { MessageReactions, ReactButton } from "./message-reactions"
 import type { PendingMessage } from "./pending-store"
 
 /** Per-message actions, revealed on hover or keyboard focus (always shown on touch screens). */
@@ -25,7 +25,7 @@ function MessageActions({ side, children }: { side: "start" | "end"; children: R
     <div
       className={cn(
         "absolute bottom-0 flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground",
-        "opacity-0 group-focus-within/message:opacity-100 group-hover/message:opacity-100 [@media(hover:none)]:opacity-100",
+        "opacity-0 group-focus-within/message:opacity-100 group-hover/message:opacity-100 has-data-popup-open:opacity-100 [@media(hover:none)]:opacity-100",
         side === "start" ? "left-full pl-1" : "right-full flex-row-reverse pr-1",
       )}
     >
@@ -44,8 +44,9 @@ function EventMarker({
   agents: Map<string, Agent>
   fallback: string
 }) {
+  // Archived agents aren't in the agents list; their marker stays but no longer links.
   const agent = agents.get(event.agentId)
-  const label = agent ? `Created ${agent.name}` : fallback || "Created a new agent"
+  const label = agent ? `Created ${agent.name}` : `${fallback || "Created an agent"} (archived)`
   const content = (
     <>
       <AgentAvatar id={agent?.id ?? event.agentId} name={agent?.name ?? "?"} size="sm" />
@@ -54,7 +55,7 @@ function EventMarker({
   )
   return (
     <Marker className="justify-center py-1 text-xs select-none">
-      {event.chatId ? (
+      {event.chatId && agent ? (
         <Link
           to="/chats/$chatId"
           params={{ chatId: event.chatId }}
@@ -131,8 +132,9 @@ export function MessageRow({
         <MessageContent>
           <Bubble variant="default" align="end" className={cn(reacted && "mb-3.5")}>
             <BubbleContent className="whitespace-pre-wrap">{message.body}</BubbleContent>
-            <MessageReactions reactions={message.reactions} agents={agents} align="start" />
+            <MessageReactions message={message} agents={agents} align="start" />
             <MessageActions side="end">
+              <ReactButton message={message} />
               <CopyButton text={message.body} />
               {time}
             </MessageActions>
@@ -159,16 +161,17 @@ export function MessageRow({
             <BubbleContent className="w-full p-2">
               <PromptCard message={message} prompt={message.prompt} isLatest={isLatest} />
             </BubbleContent>
-            <MessageReactions reactions={message.reactions} agents={agents} align="end" />
+            <MessageReactions message={message} agents={agents} align="end" />
           </Bubble>
         ) : (
           <Bubble variant="muted" className={cn(reacted && "mb-3.5")}>
             <BubbleContent>
               <Markdown>{message.body}</Markdown>
             </BubbleContent>
-            <MessageReactions reactions={message.reactions} agents={agents} align="end" />
+            <MessageReactions message={message} agents={agents} align="end" />
             <MessageActions side="start">
               <CopyButton text={message.body} />
+              <ReactButton message={message} />
               {time}
             </MessageActions>
           </Bubble>

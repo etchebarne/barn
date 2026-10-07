@@ -25,6 +25,7 @@ type loop struct {
 	m       *Manager
 	agentID string
 	wake    chan struct{}
+	stop    context.CancelFunc
 }
 
 func (l *loop) poke() {
@@ -116,8 +117,17 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 
 		asked := false
 		for _, call := range reply.ToolCalls {
-			l.m.setActivity(agent.ID, view.Working(toolLabel(call.Function.Name)))
-			result, ok := l.runTool(ctx, agent, call)
+			l.m.setActivity(agent.ID, view.Working(activityFor(call)))
+			var result string
+			var ok bool
+			if needsApproval(agent, call.Function.Name) {
+				// Waiting for approval ends the turn like asking a question does.
+				result, ok = l.requestApproval(ctx, agent, call)
+				asked = asked || ok
+				spoke = spoke || ok
+			} else {
+				result, ok = l.runTool(ctx, agent, call)
+			}
 			if ok && (call.Function.Name == toolSendMessage || call.Function.Name == toolAskUser || call.Function.Name == toolReact) {
 				spoke = true
 			}
@@ -216,7 +226,7 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 		msgs = append(msgs, m)
 	}
 	// Each agent is one continuous conversation, so its id is a stable session id.
-	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: toolsFor(agent)}, nil
+	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: toolsFor(agent, l.m.sandboxesAvailable())}, nil
 }
 
 // reportError tells the user, in the agent's DM, that the agent couldn't finish its turn. The

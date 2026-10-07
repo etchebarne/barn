@@ -5,6 +5,8 @@ import { makeMessage } from "@/test/fixtures"
 import {
   acceptsLetterKeys,
   answerMessage,
+  approvalAnswer,
+  approvalOutcome,
   buildAnswer,
   chatToOpen,
   dismissMessage,
@@ -73,6 +75,38 @@ describe("promptRows", () => {
 
   it("shows nothing for a dismissed prompt", () => {
     expect(promptRows(prompt({ status: "dismissed" }))).toEqual([])
+  })
+})
+
+function approval(overrides: Partial<Prompt> = {}): Prompt {
+  return prompt({
+    kind: "approval",
+    question: "Archive Tracker?",
+    options: [{ label: "Approve" }, { label: "Decline" }],
+    allowOther: false,
+    ...overrides,
+  })
+}
+
+describe("approval prompts", () => {
+  it("answers Approve with [0] and Decline with [1]", () => {
+    expect(approvalAnswer(true)).toEqual({ selected: [0] })
+    expect(approvalAnswer(false)).toEqual({ selected: [1] })
+  })
+
+  it("reports the outcome once answered", () => {
+    expect(approvalOutcome(approval())).toBeNull()
+    expect(approvalOutcome(approval({ status: "answered", answer: { selected: [0] } }))).toBe(
+      "approved",
+    )
+    expect(approvalOutcome(approval({ status: "answered", answer: { selected: [1] } }))).toBe(
+      "declined",
+    )
+    expect(approvalOutcome(approval({ status: "dismissed" }))).toBeNull()
+  })
+
+  it("never takes letter-key shortcuts", () => {
+    expect(acceptsLetterKeys(approval(), true)).toBe(false)
   })
 })
 
