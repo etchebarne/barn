@@ -226,6 +226,32 @@ paths:
                 items: { $ref: "#/components/schemas/Agent" }
         "401": { $ref: "#/components/responses/Error" }
 
+  /agents/{agentId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateAgent
+      tags: [agents]
+      description: Change an agent's settings. Broadcasts an agent.updated event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAgentRequest" }
+      responses:
+        "200":
+          description: The updated agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
   /models:
     get:
       operationId: listModels
@@ -360,6 +386,13 @@ components:
         activity: { $ref: "#/components/schemas/AgentActivity" }
         createdAt: { type: string, format: date-time }
 
+    UpdateAgentRequest:
+      type: object
+      properties:
+        model:
+          type: string
+          description: Model id from GET /models
+
     AgentActivity:
       type: object
       required: [state, label]
@@ -462,12 +495,14 @@ components:
         - $ref: "#/components/schemas/WsMessageCreated"
         - $ref: "#/components/schemas/WsAgentActivity"
         - $ref: "#/components/schemas/WsChatRead"
+        - $ref: "#/components/schemas/WsAgentUpdated"
       discriminator:
         propertyName: type
         mapping:
           message.created: "#/components/schemas/WsMessageCreated"
           agent.activity: "#/components/schemas/WsAgentActivity"
           chat.read: "#/components/schemas/WsChatRead"
+          agent.updated: "#/components/schemas/WsAgentUpdated"
 
     WsMessageCreated:
       type: object
@@ -492,6 +527,14 @@ components:
         type: { type: string, enum: [chat.read] }
         chatId: { type: string }
         lastMessageId: { type: string }
+
+    WsAgentUpdated:
+      type: object
+      required: [type, agent]
+      description: An agent's settings changed
+      properties:
+        type: { type: string, enum: [agent.updated] }
+        agent: { $ref: "#/components/schemas/Agent" }
 
 security:
   - session: []

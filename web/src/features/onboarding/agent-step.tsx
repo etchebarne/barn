@@ -1,29 +1,18 @@
-import { useQuery } from "@tanstack/react-query"
 import { useState, type FormEvent } from "react"
 
+import { ModelPicker } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/components/ui/combobox"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 
-import { DEFAULT_AGENT_NAME, modelsQueryOptions, useCompleteOnboarding } from "./api"
+import { DEFAULT_AGENT_NAME, useCompleteOnboarding } from "./api"
 
 export function AgentStep({ onComplete }: { onComplete: (chatId: string) => void }) {
-  const models = useQuery(modelsQueryOptions)
   const complete = useCompleteOnboarding()
   const [name, setName] = useState(DEFAULT_AGENT_NAME)
   const [model, setModel] = useState<string | null>(null)
   const [errors, setErrors] = useState<{ name?: string; model?: string }>({})
-
-  const modelIds = models.data?.map((m) => m.id) ?? []
 
   function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -59,46 +48,15 @@ export function AgentStep({ onComplete }: { onComplete: (chatId: string) => void
         </Field>
         <Field data-invalid={!!errors.model || undefined}>
           <FieldLabel htmlFor="agent-model">Model</FieldLabel>
-          {models.error ? (
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="text-destructive">Couldn't load models: {models.error.message}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void models.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : (
-            <Combobox
-              items={modelIds}
-              value={model}
-              onValueChange={(value: string | null) => {
-                setModel(value)
-                if (value) setErrors((e) => ({ ...e, model: undefined }))
-              }}
-            >
-              <ComboboxInput
-                id="agent-model"
-                className="w-full"
-                placeholder={models.isPending ? "Loading models…" : "Search models"}
-                disabled={models.isPending}
-                aria-invalid={!!errors.model || undefined}
-              />
-              <ComboboxContent>
-                <ComboboxEmpty>No models match.</ComboboxEmpty>
-                <ComboboxList>
-                  {(item: string) => (
-                    <ComboboxItem key={item} value={item}>
-                      {item}
-                    </ComboboxItem>
-                  )}
-                </ComboboxList>
-              </ComboboxContent>
-            </Combobox>
-          )}
+          <ModelPicker
+            id="agent-model"
+            value={model}
+            invalid={!!errors.model}
+            onValueChange={(value) => {
+              setModel(value)
+              if (value) setErrors((e) => ({ ...e, model: undefined }))
+            }}
+          />
           <FieldError>{errors.model}</FieldError>
         </Field>
         {complete.error && <FieldError>{complete.error.message}</FieldError>}

@@ -118,6 +118,27 @@ export function applyActivityToAgents(
   return next
 }
 
+/** Replaces an agent with its updated version. Returns `null` if it isn't in the list. */
+export function replaceAgent(agents: Agent[], agent: Agent): Agent[] | null {
+  const index = agents.findIndex((a) => a.id === agent.id)
+  if (index === -1) return null
+  const next = [...agents]
+  next[index] = agent
+  return next
+}
+
+/** Puts an updated agent (from a mutation or an `agent.updated` event) into the agents list. */
+export function updateAgentInCache(queryClient: QueryClient, agent: Agent) {
+  let missing = false
+  queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) => {
+    if (!agents) return agents
+    const next = replaceAgent(agents, agent)
+    if (next === null) missing = true
+    return next ?? agents
+  })
+  if (missing) void queryClient.invalidateQueries({ queryKey: queryKeys.agents, exact: true })
+}
+
 /** Adds a message to every cache that shows it: the chat's history and the chat list. */
 export function addMessageToCache(queryClient: QueryClient, message: Message) {
   queryClient.setQueryData<MessagesData>(queryKeys.messages(message.chatId), (data) =>

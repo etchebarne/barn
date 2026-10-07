@@ -19,6 +19,12 @@ import (
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	ts, _ := newTestServerWithProvider(t, "http://127.0.0.1:0")
+	return ts
+}
+
+func newTestServerWithProvider(t *testing.T, providerURL string) (*httptest.Server, *store.Store) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	dir := t.TempDir()
 	st, err := store.Open(ctx, dir)
@@ -31,7 +37,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	}
 	set := settings.New(st, box)
 	b := bus.New()
-	llm := model.New("http://127.0.0.1:0", "barn/test", set.APIKey)
+	llm := model.New(providerURL, "barn/test", set.APIKey)
 	rt := runtime.New(st, b, llm)
 	if err := rt.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -43,7 +49,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		rt.Wait()
 		st.Close()
 	})
-	return ts
+	return ts, st
 }
 
 type client struct {
@@ -142,5 +148,37 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 	if last != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 after repeated failures, got %d", last)
+	}
+}
+
+func TestUpdateAgentModel(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": "model-a"}, {"id": "model-b"}}})
+	}))
+	defer provider.Close()
+	ts, st := newTestServerWithProvider(t, provider.URL)
+	c := newClient(t, ts)
+	c.do("POST", "/api/auth/setup", `{"username":"martin","password":"a long enough password"}`, true)
+
+	agent, _, err := st.CreateAgentWithDM(context.Background(), store.Agent{
+		Name: "barn", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := c.do("PATCH", "/api/agents/"+agent.ID, `{"model":"model-b"}`, true)
+	if resp.StatusCode != http.StatusOK || body["model"] != "model-b" {
+		t.Fatalf("update failed: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := c.do("PATCH", "/api/agents/"+agent.ID, `{"model":"nope"}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown model, got %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("PATCH", "/api/agents/missing", `{"model":"model-a"}`, true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown agent, got %d", resp.StatusCode)
+	}
+	got, _ := st.GetAgent(context.Background(), agent.ID)
+	if got.Model != "model-b" {
+		t.Fatalf("stored model = %q", got.Model)
 	}
 }

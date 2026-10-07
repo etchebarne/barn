@@ -207,6 +207,11 @@ func (l *loop) reportError(ctx context.Context, agent store.Agent, err error) {
 		text = "No model provider is configured. Add your OpenCode Go API key in Settings."
 	case errors.Is(err, model.ErrInvalidKey):
 		text = "OpenCode Go rejected the API key. Replace it in Settings."
+	case errors.Is(err, model.ErrTrainsOnData):
+		text = fmt.Sprintf("%s can't use %s: that model's provider trains on request data, "+
+			"which your OpenCode workspace's Privacy settings don't allow. Switch %s to another model "+
+			"(open %s's details from the chat header), or allow these models in your OpenCode Privacy settings.",
+			agent.Name, agent.Model, agent.Name, agent.Name)
 	default:
 		text = fmt.Sprintf("%s couldn't finish responding: %v", agent.Name, err)
 	}

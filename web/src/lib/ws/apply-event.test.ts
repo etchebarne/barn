@@ -145,6 +145,27 @@ describe("applyWsEvent", () => {
     })
   })
 
+  describe("agent.updated", () => {
+    it("replaces the agent in the agents list", () => {
+      qc.setQueryData<Agent[]>(queryKeys.agents, [makeAgent(), makeAgent({ id: "agent-2" })])
+
+      applyWsEvent(qc, { type: "agent.updated", agent: makeAgent({ model: "glm-5" }) })
+
+      const agents = qc.getQueryData<Agent[]>(queryKeys.agents) ?? []
+      expect(agents.map((a) => [a.id, a.model])).toEqual([
+        ["agent-1", "glm-5"],
+        ["agent-2", "kimi-k2.6"],
+      ])
+    })
+
+    it("refetches the agents list when the agent is unknown", () => {
+      qc.setQueryData<Agent[]>(queryKeys.agents, [makeAgent()])
+      const spy = vi.spyOn(qc, "invalidateQueries")
+      applyWsEvent(qc, { type: "agent.updated", agent: makeAgent({ id: "new" }) })
+      expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.agents, exact: true })
+    })
+  })
+
   describe("chat.read", () => {
     it("clears the unread count when read up to the last message", () => {
       const last = makeMessage()

@@ -41,6 +41,9 @@ describe("parseWsEvent", () => {
       chatId: "c",
       lastMessageId: "m",
     })
+    expect(parseWsEvent('{"type":"agent.updated","agent":{}}')).toMatchObject({
+      type: "agent.updated",
+    })
     expect(parseWsEvent('{"type":"nope"}')).toBeNull()
     expect(parseWsEvent("not json")).toBeNull()
     expect(parseWsEvent(new ArrayBuffer(2))).toBeNull()

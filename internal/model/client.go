@@ -92,6 +92,10 @@ func (e *APIError) Error() string {
 // ErrInvalidKey is returned when the provider rejects the API key.
 var ErrInvalidKey = errors.New("the provider rejected the API key")
 
+// ErrTrainsOnData is returned when the model's upstream provider trains on request data and
+// the OpenCode workspace's privacy settings don't allow that.
+var ErrTrainsOnData = errors.New("this model trains on request data, which your OpenCode privacy settings don't allow")
+
 // ErrNoKey is returned when no API key is configured.
 var ErrNoKey = errors.New("no API key configured")
 
@@ -233,7 +237,11 @@ func (c *Client) do(ctx context.Context, key, session, method, path string, body
 		return ErrInvalidKey
 	}
 	if resp.StatusCode/100 != 2 {
-		return &APIError{Status: resp.StatusCode, Message: errorMessage(raw)}
+		msg := errorMessage(raw)
+		if strings.Contains(msg, "trains on request data") {
+			return fmt.Errorf("%w (%s)", ErrTrainsOnData, msg)
+		}
+		return &APIError{Status: resp.StatusCode, Message: msg}
 	}
 	return json.Unmarshal(raw, out)
 }

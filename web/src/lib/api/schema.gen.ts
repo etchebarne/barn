@@ -191,6 +191,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Change an agent's settings. Broadcasts an agent.updated event. */
+        patch: operations["updateAgent"];
+        trace?: never;
+    };
     "/models": {
         parameters: {
             query?: never;
@@ -270,6 +289,10 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        UpdateAgentRequest: {
+            /** @description Model id from GET /models */
+            model?: string;
+        };
         AgentActivity: {
             /** @enum {string} */
             state: "idle" | "working";
@@ -328,7 +351,7 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"];
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -355,6 +378,15 @@ export interface components {
             type: "chat.read";
             chatId: string;
             lastMessageId: string;
+        };
+        /** @description An agent's settings changed */
+        WsAgentUpdated: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "agent.updated";
+            agent: components["schemas"]["Agent"];
         };
     };
     responses: {
@@ -694,6 +726,36 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+        };
+    };
+    updateAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
         };
     };
     listModels: {

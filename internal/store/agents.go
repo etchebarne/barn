@@ -79,3 +79,14 @@ func (s *Store) CreateAgentWithDM(ctx context.Context, a Agent) (Agent, string, 
 	})
 	return a, chatID, err
 }
+
+func (s *Store) UpdateAgentModel(ctx context.Context, id, model string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE agents SET model = ? WHERE id = ?`, model, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

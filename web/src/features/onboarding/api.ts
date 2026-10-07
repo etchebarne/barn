@@ -9,12 +9,6 @@ export const onboardingQueryOptions = queryOptions({
   staleTime: Number.POSITIVE_INFINITY,
 })
 
-export const modelsQueryOptions = queryOptions({
-  queryKey: queryKeys.models,
-  queryFn: () => unwrap(api.GET("/models")),
-  staleTime: 5 * 60_000,
-})
-
 export const DEFAULT_AGENT_NAME = "barn"
 
 export function useCompleteOnboarding() {

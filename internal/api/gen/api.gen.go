@@ -120,6 +120,21 @@ func (e WsAgentActivityType) Valid() bool {
 	}
 }
 
+// Defines values for WsAgentUpdatedType.
+const (
+	AgentUpdated WsAgentUpdatedType = "agent.updated"
+)
+
+// Valid indicates whether the value is a known member of the WsAgentUpdatedType enum.
+func (e WsAgentUpdatedType) Valid() bool {
+	switch e {
+	case AgentUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WsChatReadType.
 const (
 	ChatRead WsChatReadType = "chat.read"
@@ -311,6 +326,12 @@ type SendMessageRequest struct {
 	ClientId *string `json:"clientId,omitempty"`
 }
 
+// UpdateAgentRequest defines model for UpdateAgentRequest.
+type UpdateAgentRequest struct {
+	// Model Model id from GET /models
+	Model *string `json:"model,omitempty"`
+}
+
 // UpdateProviderSettingsRequest defines model for UpdateProviderSettingsRequest.
 type UpdateProviderSettingsRequest struct {
 	ApiKey string `json:"apiKey"`
@@ -331,6 +352,15 @@ type WsAgentActivity struct {
 
 // WsAgentActivityType defines model for WsAgentActivity.Type.
 type WsAgentActivityType string
+
+// WsAgentUpdated An agent's settings changed
+type WsAgentUpdated struct {
+	Agent Agent              `json:"agent"`
+	Type  WsAgentUpdatedType `json:"type"`
+}
+
+// WsAgentUpdatedType defines model for WsAgentUpdated.Type.
+type WsAgentUpdatedType string
 
 // WsChatRead The user read a chat (possibly from another device); clears its unread count
 type WsChatRead struct {
@@ -365,6 +395,9 @@ type ListMessagesParams struct {
 	Before *string `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody = UpdateAgentRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = Credentials
@@ -486,6 +519,40 @@ func (t *WsEvent) MergeWsChatRead(v WsChatRead) error {
 	return err
 }
 
+// AsWsAgentUpdated returns the union data inside the WsEvent as a WsAgentUpdated
+func (t WsEvent) AsWsAgentUpdated() (WsAgentUpdated, error) {
+	var body WsAgentUpdated
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsAgentUpdated overwrites any union data inside the WsEvent as the provided WsAgentUpdated
+func (t *WsEvent) FromWsAgentUpdated(v WsAgentUpdated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.updated"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsAgentUpdated performs a merge with any union data inside the WsEvent, using the provided WsAgentUpdated
+func (t *WsEvent) MergeWsAgentUpdated(v WsAgentUpdated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"agent.updated"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -502,6 +569,8 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 	switch discriminator {
 	case "agent.activity":
 		return t.AsWsAgentActivity()
+	case "agent.updated":
+		return t.AsWsAgentUpdated()
 	case "chat.read":
 		return t.AsWsChatRead()
 	case "message.created":
@@ -526,6 +595,9 @@ type ServerInterface interface {
 
 	// (GET /agents)
 	ListAgents(w http.ResponseWriter, r *http.Request)
+
+	// (PATCH /agents/{agentId})
+	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -581,6 +653,32 @@ func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAgents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgent(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -970,6 +1068,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/messages", wrapper.SendMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/read", wrapper.MarkChatRead)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/models", wrapper.ListModels)
 
 	return m

@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
 import { UsersIcon } from "lucide-react"
+import { useState } from "react"
 
 import { PageHeader } from "@/components/page-header"
+import { Button } from "@/components/ui/button"
 import { MessageScrollerProvider } from "@/components/ui/message-scroller"
 import { Skeleton } from "@/components/ui/skeleton"
-import { activityLabel, AgentAvatar, useAgentsById } from "@/features/agents"
+import { activityLabel, AgentAvatar, AgentDetailsSheet, useAgentsById } from "@/features/agents"
 import type { Agent, Chat } from "@/lib/api-client"
 
 import { ActivityLine } from "./activity-line"
@@ -14,28 +16,69 @@ import { useDraftStore } from "./draft-store"
 import { MessageList } from "./message-list"
 import { dmAgent } from "./preview"
 
+function HeaderTitle({
+  title,
+  status,
+  inButton = false,
+}: {
+  title: string
+  status: string | null
+  /** Buttons only allow phrasing content, so render spans instead of a heading. */
+  inButton?: boolean
+}) {
+  const Title = inButton ? "span" : "h1"
+  return (
+    <span className="flex min-w-0 flex-col text-left">
+      <Title className="truncate text-sm leading-tight font-medium">{title}</Title>
+      {status && (
+        <span className="truncate text-xs font-normal text-muted-foreground">{status}</span>
+      )}
+    </span>
+  )
+}
+
 function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const agent = members[0]
-  const isDm = chat.kind === "dm"
-  const status = isDm
-    ? agent
-      ? (activityLabel(agent) ?? "idle")
-      : null
-    : `${members.length} ${members.length === 1 ? "agent" : "agents"}`
+
+  if (chat.kind === "dm") {
+    const status = agent ? (activityLabel(agent) ?? "idle") : null
+    return (
+      <PageHeader>
+        {agent ? (
+          <>
+            <h1 className="sr-only">{chat.name}</h1>
+            <Button
+              variant="ghost"
+              className="-ml-1.5 h-11 min-w-0 justify-start gap-3 rounded-xl px-1.5"
+              aria-haspopup="dialog"
+              onClick={() => setDetailsOpen(true)}
+            >
+              <AgentAvatar name={agent.name} />
+              <HeaderTitle title={chat.name} status={status} inButton />
+              <span className="sr-only">(agent details)</span>
+            </Button>
+            <AgentDetailsSheet agent={agent} open={detailsOpen} onOpenChange={setDetailsOpen} />
+          </>
+        ) : (
+          <>
+            <AgentAvatar name={chat.name} />
+            <HeaderTitle title={chat.name} status={status} />
+          </>
+        )}
+      </PageHeader>
+    )
+  }
 
   return (
     <PageHeader>
-      {isDm ? (
-        <AgentAvatar name={agent?.name ?? chat.name} />
-      ) : (
-        <span className="flex size-8 items-center justify-center rounded-full bg-muted">
-          <UsersIcon className="size-4 text-muted-foreground" />
-        </span>
-      )}
-      <div className="flex min-w-0 flex-col">
-        <h1 className="truncate text-sm leading-tight font-medium">{chat.name}</h1>
-        {status && <p className="truncate text-xs text-muted-foreground">{status}</p>}
-      </div>
+      <span className="flex size-8 items-center justify-center rounded-full bg-muted">
+        <UsersIcon className="size-4 text-muted-foreground" />
+      </span>
+      <HeaderTitle
+        title={chat.name}
+        status={`${members.length} ${members.length === 1 ? "agent" : "agents"}`}
+      />
     </PageHeader>
   )
 }

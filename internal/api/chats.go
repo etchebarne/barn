@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -141,5 +142,45 @@ func (s *Server) ListModels(w http.ResponseWriter, r *http.Request) {
 	for _, id := range models {
 		out = append(out, gen.Model{Id: id})
 	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx := r.Context()
+	var req gen.UpdateAgentRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Model != nil {
+		models, err := s.llm.Models(ctx)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "couldn't load models: "+err.Error())
+			return
+		}
+		if !slices.Contains(models, *req.Model) {
+			writeError(w, http.StatusBadRequest, "unknown model "+*req.Model)
+			return
+		}
+		err = s.store.UpdateAgentModel(ctx, agentID, *req.Model)
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	agent, err := s.store.GetAgent(ctx, agentID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	out := view.Agent(agent, s.runtime.Activity(agent.ID))
+	s.bus.Publish(gen.WsAgentUpdated{Type: "agent.updated", Agent: out})
 	writeJSON(w, http.StatusOK, out)
 }

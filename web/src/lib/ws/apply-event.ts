@@ -1,7 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query"
 
 import type { Agent, WsEvent } from "../api-client"
-import { addMessageToCache, applyActivityToAgents, markChatReadInCache } from "../chat-cache"
+import {
+  addMessageToCache,
+  applyActivityToAgents,
+  markChatReadInCache,
+  updateAgentInCache,
+} from "../chat-cache"
 import { queryKeys } from "../query-keys"
 
 /** Applies one realtime event to the TanStack Query cache (the single source of truth). */
@@ -14,6 +19,9 @@ export function applyWsEvent(queryClient: QueryClient, event: WsEvent): void {
       queryClient.setQueryData<Agent[]>(queryKeys.agents, (agents) =>
         agents ? applyActivityToAgents(agents, event.agentId, event.activity) : agents,
       )
+      return
+    case "agent.updated":
+      updateAgentInCache(queryClient, event.agent)
       return
     case "chat.read":
       markChatReadInCache(queryClient, event.chatId, event.lastMessageId)
