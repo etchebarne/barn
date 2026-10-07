@@ -1,9 +1,12 @@
 import { cn } from "cn"
 import {
   BlocksIcon,
+  BugIcon,
+  CreditCardIcon,
   GitPullRequestIcon,
   HashIcon,
   HouseIcon,
+  NotebookTextIcon,
   type LucideIcon,
   PlugIcon,
   ServerIcon,
@@ -20,6 +23,10 @@ const ICONS: Record<string, LucideIcon> = {
   mcp: BlocksIcon,
   mcp_local: SquareTerminalIcon,
   webhook: WebhookIcon,
+  // Sign-in apps from the catalog, by catalog id.
+  notion: NotebookTextIcon,
+  sentry: BugIcon,
+  stripe: CreditCardIcon,
   // barn's own actions (e.g. archiving an agent).
   barn: HouseIcon,
 }

@@ -87,6 +87,12 @@ func (MCP) connect(ctx context.Context, acct Account) (*mcpSession, error) {
 		return nil, userErr("the server URL must start with https:// or http://")
 	}
 	s := &mcpSession{url: u, auth: acct.Credentials["authorization"]}
+	if raw := acct.Credentials["oauth"]; raw != "" {
+		var t OAuthTokens
+		if json.Unmarshal([]byte(raw), &t) == nil && t.AccessToken != "" {
+			s.auth = "Bearer " + t.AccessToken
+		}
+	}
 	if err := mcpInitialize(ctx, s); err != nil {
 		return nil, err
 	}
@@ -221,8 +227,11 @@ func (s *mcpSession) rpc(ctx context.Context, method string, params any, out any
 	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
 		s.sessionID = sid
 	}
+	if resp.StatusCode == http.StatusUnauthorized && s.auth == "" && strings.Contains(resp.Header.Get("WWW-Authenticate"), "Bearer") {
+		return &UserError{Message: "this server uses sign-in: connect it with Sign in instead of a key", Code: "sign_in_required"}
+	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return userErr("the MCP server rejected the credentials (%d)", resp.StatusCode)
+		return &UserError{Message: sprintf("the MCP server rejected the credentials (%d)", resp.StatusCode), Code: "unauthorized"}
 	}
 	if resp.StatusCode/100 != 2 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 500))

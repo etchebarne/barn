@@ -120,7 +120,12 @@ type Listener interface {
 var ErrUnauthorized = errors.New("webhook verification failed")
 
 // UserError is a problem the agent or user can act on (bad arguments, not found, …).
-type UserError struct{ Message string }
+type UserError struct {
+	Message string
+	// Code lets clients react: "sign_in_required" (the server wants an OAuth sign-in),
+	// "reconnect" (a sign-in expired), "unauthorized" (credentials rejected).
+	Code string
+}
 
 func (e *UserError) Error() string { return e.Message }
 

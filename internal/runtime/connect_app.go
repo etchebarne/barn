@@ -46,6 +46,12 @@ func connectAppTool() model.Tool {
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString("Apps that connect by signing in (type mcp with this url; the user just clicks Sign in and " +
+		"Allow, no token needed):")
+	for _, app := range connectors.Catalog {
+		fmt.Fprintf(&b, " %s %s;", app.Name, app.URL)
+	}
+	b.WriteString(" other MCP servers that use sign-in work the same way.\n")
 	enum, _ := json.Marshal(names)
 	return function(toolConnectApp, b.String(), `{
 		"type": "object",
@@ -122,6 +128,8 @@ func (l *loop) connectApp(ctx context.Context, agent store.Agent, args []byte) (
 	if err != nil {
 		return toolError("couldn't find your DM to show the card"), false
 	}
+	// MCP servers that use sign-in get a Sign in button instead of key fields.
+	signIn := t.Name() == "mcp" && connectors.UsesSignIn(ctx, config["url"])
 	question := fmt.Sprintf("Connect %s (%s)?", name, t.DisplayName())
 	if r := strings.TrimSpace(a.Reason); r != "" {
 		question += "\n" + truncate(r, 300)
@@ -131,7 +139,7 @@ func (l *loop) connectApp(ctx context.Context, agent store.Agent, args []byte) (
 		Question: question,
 		Options:  []store.PromptOption{{Label: "Connect"}, {Label: "Decline"}},
 		Connection: &store.PendingConnection{
-			AgentID: agent.ID, Type: t.Name(), Name: name, Config: config, AgentIDs: agentIDs,
+			AgentID: agent.ID, Type: t.Name(), Name: name, Config: config, AgentIDs: agentIDs, SignIn: signIn,
 		},
 	})
 	if err != nil {
@@ -209,25 +217,41 @@ func (m *Manager) Connect(ctx context.Context, messageID, name string, creds map
 		_ = m.Connectors.Delete(ctx, acct.ID)
 		return store.Message{}, err
 	}
-	msg, err = m.store.UpdatePrompt(ctx, messageID, func(p store.Prompt) (store.Prompt, error) {
+	return m.answerConnectCard(ctx, messageID, acct.ID, name)
+}
+
+// ConnectedBySignIn answers a connect card whose connection was made by signing in.
+func (m *Manager) ConnectedBySignIn(ctx context.Context, messageID, accountID, name string) (store.Message, error) {
+	return m.answerConnectCard(ctx, messageID, accountID, name)
+}
+
+// answerConnectCard marks a connect card connected and tells the agent which tools it got.
+// If the card was answered meanwhile, the new connection is removed again.
+func (m *Manager) answerConnectCard(ctx context.Context, messageID, accountID, name string) (store.Message, error) {
+	var c store.PendingConnection
+	msg, err := m.store.UpdatePrompt(ctx, messageID, func(p store.Prompt) (store.Prompt, error) {
+		if p.Kind != "connect" || p.Connection == nil {
+			return p, ErrNotConnectPrompt
+		}
 		p.Status, p.Answer = "answered", &store.PromptAnswer{Selected: []int{0}}
-		p.Connection.AccountID, p.Connection.Name = acct.ID, name
+		p.Connection.AccountID, p.Connection.Name = accountID, name
+		c = *p.Connection
 		return p, nil
 	})
 	if err != nil {
 		// Answered elsewhere in the meantime: don't leave a second connection behind.
-		_ = m.Connectors.Delete(ctx, acct.ID)
+		_ = m.Connectors.Delete(ctx, accountID)
 		return store.Message{}, err
 	}
 	var tools []string
 	if all, err := m.Connectors.ToolsFor(ctx, c.AgentID); err == nil {
 		for _, t := range all {
-			if t.AccountID == acct.ID {
+			if t.AccountID == accountID {
 				tools = append(tools, t.Name)
 			}
 		}
 	}
-	outcome := map[string]any{"connected": true, "account_id": acct.ID, "name": name}
+	outcome := map[string]any{"connected": true, "account_id": accountID, "name": name}
 	if slices.Contains(c.AgentIDs, c.AgentID) {
 		outcome["your_new_tools"] = tools
 	} else {

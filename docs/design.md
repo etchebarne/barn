@@ -205,6 +205,18 @@ Messages in a group are visible to every participant; DMs are visible only to th
   returns them. A failed check leaves the card open; the agent learns the outcome (and its new
   tool names) as a `<connection_result>`. Only admin agents may propose access for others.
   Several accounts per type are fine ("Slack — work", "Slack — side").
+- **Sign-in** (MCP authorization spec): for MCP servers that answer 401 with OAuth metadata,
+  barn discovers the authorization server (RFC 9728 → RFC 8414), registers itself (dynamic
+  client registration, RFC 7591), and sends the user to the authorize page with PKCE (S256)
+  and a resource indicator. The browser comes back to `/oauth/callback`, which exchanges the
+  code and redirects into the app. Services that refuse plain-http, non-loopback redirects
+  (Linear, Notion) get the loopback redirect instead: the user lands on an error page and
+  pastes its address into barn (HTTPS for barn, e.g. Tailscale Serve, avoids this). Tokens are
+  stored encrypted with the account and refreshed shortly before expiry, or once when a call
+  is rejected; a refused refresh marks the connection "sign-in expired" until Reconnect.
+  Pending sign-ins are in memory, single use, and expire after 15 minutes. A catalog lists
+  servers verified to support all of this (Linear, Notion, Sentry, Stripe); agents can
+  propose them with `connect_app`, and the card then offers Sign in instead of key fields.
 - **Grants** decide which agents may use an account. Tools appear to an agent as
   `<account slug>__<tool>`; the system prompt lists its accounts and their signal types.
 - **Signals** arrive at `POST /hooks/{accountID}` (public, verified per type) or over a

@@ -1,3 +1,4 @@
+import { CheckIcon, TriangleAlertIcon } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
@@ -22,6 +23,8 @@ import {
   type ConnectorType,
 } from "./logic"
 import { SetupSteps } from "./setup-steps"
+import { SignInButton } from "./sign-in-button"
+import type { SignInDeps } from "./signin"
 import { SignalsList, WebhookInfo, WebhookSecret } from "./webhook-info"
 
 function NameField({ connector }: { connector: Connector }) {
@@ -263,6 +266,65 @@ function ReceiveEvents({
   )
 }
 
+/**
+ * A signed-in connection: no keys to edit, just its status, the server address (read-only),
+ * and Reconnect when the sign-in expires.
+ */
+export function SignInStatus({
+  connector,
+  type,
+  deps,
+}: {
+  connector: Connector
+  type: ConnectorType | undefined
+  deps?: SignInDeps
+}) {
+  const expired = connector.signIn === "expired"
+  const url = connector.config.url
+  const reconnect = (
+    <SignInButton
+      appName={connector.name}
+      label="Reconnect"
+      variant={expired ? "default" : "outline"}
+      request={{ connectorId: connector.id }}
+      deps={deps}
+    />
+  )
+  return (
+    <section aria-labelledby={`signin-${connector.id}`} className="flex flex-col gap-3">
+      <h3 id={`signin-${connector.id}`} className="text-sm font-medium">
+        Sign-in
+      </h3>
+      {expired ? (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-[calc(var(--radius-md)+0.75rem)] border border-warning/40 bg-warning/10 p-3 text-sm"
+        >
+          <p className="flex items-start gap-2 text-warning-foreground">
+            <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            {connector.name}'s sign-in expired. Agents can't use it until you reconnect.
+          </p>
+          {reconnect}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="flex items-center gap-1.5 pt-1 text-sm">
+            <CheckIcon className="size-4" aria-hidden="true" />
+            Signed in{type ? ` to ${type.name}` : ""}
+          </p>
+          {reconnect}
+        </div>
+      )}
+      {url && (
+        <div className="flex min-w-0 flex-col gap-0.5 text-xs">
+          <span className="text-muted-foreground">Server</span>
+          <code className="font-mono break-all">{url}</code>
+        </div>
+      )}
+    </section>
+  )
+}
+
 /** One connected account: rename, credentials and config, agent access, webhook, disconnect. */
 export function ConnectorDetail({
   connector,
@@ -278,7 +340,11 @@ export function ConnectorDetail({
       <FieldGroup>
         <NameField connector={connector} />
       </FieldGroup>
-      {type && <CredentialsForm connector={connector} type={type} />}
+      {connector.signIn !== null ? (
+        <SignInStatus connector={connector} type={type} />
+      ) : (
+        type && <CredentialsForm connector={connector} type={type} />
+      )}
       <Access connector={connector} />
       {hasEventsSection(type, connector) && <ReceiveEvents connector={connector} type={type} />}
       <Disconnect connector={connector} onDisconnected={onDisconnected} />

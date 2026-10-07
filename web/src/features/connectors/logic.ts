@@ -178,3 +178,14 @@ export function maskWebhookUrl(url: string): string {
     token.length > 4 ? `${path.slice(0, slash + 1)}${token.slice(0, 4)}${"•".repeat(8)}` : path
   return query === undefined ? maskedPath : `${maskedPath}?${"•".repeat(8)}`
 }
+
+/** The server URL typed into an MCP-server form (the `url` config field, or any URL value). */
+export function signInUrl(fields: FormField[], values: FormValues): string {
+  const urlField = fields.find((f) => f.group === "config" && f.key === "url")
+  if (urlField) return (values[fieldId(urlField)] ?? "").trim()
+  for (const field of fields) {
+    const value = (values[fieldId(field)] ?? "").trim()
+    if (/^https?:\/\//.test(value)) return value
+  }
+  return ""
+}

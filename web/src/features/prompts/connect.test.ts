@@ -40,6 +40,7 @@ function prompt(overrides: Partial<Prompt> = {}): Prompt {
       name: "Notion",
       config: { url: "https://mcp.notion.com/mcp", region: "" },
       agentIds: ["a1", "a2"],
+      signIn: false,
       accountId: null,
     },
     ...overrides,

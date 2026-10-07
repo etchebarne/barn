@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query"
 import { ArrowLeftIcon, CircleCheckIcon } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
@@ -17,12 +18,14 @@ import { Spinner } from "@/components/ui/spinner"
 
 import { AgentAccess } from "./agent-access"
 import { useConnectorTypes, useCreateConnector } from "./api"
+import { CatalogList, CatalogSignIn } from "./catalog"
 import { ConnectorFields } from "./connector-fields"
 import { ConnectorIcon } from "./connector-icon"
 import {
   buildCreateRequest,
   buildFormFields,
   connectFormFields,
+  signInUrl,
   initialValues,
   toggleGrant,
   validateForm,
@@ -30,9 +33,43 @@ import {
   type ConnectorType,
 } from "./logic"
 import { SetupSteps } from "./setup-steps"
+import { SignInButton } from "./sign-in-button"
+import { catalogQueryOptions, needsSignIn, type CatalogApp } from "./signin"
 import { SignalsList, WebhookInfo, WebhookSecret } from "./webhook-info"
 
-function TypePicker({ onPick }: { onPick: (type: ConnectorType) => void }) {
+/** Types that share a name with a sign-in app connect with a key instead; say so. */
+export function apiKeyNote(type: ConnectorType, catalog: CatalogApp[] | undefined): string | null {
+  const same = catalog?.some((app) => app.name.toLowerCase() === type.name.toLowerCase())
+  return same ? "API key · needed for webhooks and events" : null
+}
+
+function TypePicker({
+  onPick,
+  onPickApp,
+}: {
+  onPick: (type: ConnectorType) => void
+  onPickApp: (app: CatalogApp) => void
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section aria-labelledby="sign-in-with" className="flex flex-col gap-2">
+        <h3 id="sign-in-with" className="text-sm font-medium">
+          Sign in with
+        </h3>
+        <CatalogList onPick={onPickApp} />
+      </section>
+      <section aria-labelledby="other-apps" className="flex flex-col gap-2">
+        <h3 id="other-apps" className="text-sm font-medium">
+          Other apps
+        </h3>
+        <TypeList onPick={onPick} />
+      </section>
+    </div>
+  )
+}
+
+function TypeList({ onPick }: { onPick: (type: ConnectorType) => void }) {
+  const { data: catalog } = useQuery(catalogQueryOptions)
   const { data: types, isPending, error } = useConnectorTypes()
   if (isPending) {
     return (
@@ -56,6 +93,9 @@ function TypePicker({ onPick }: { onPick: (type: ConnectorType) => void }) {
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="text-sm font-medium">{type.name}</span>
               <span className="text-sm text-muted-foreground">{type.description}</span>
+              {apiKeyNote(type, catalog) && (
+                <span className="text-xs text-muted-foreground">{apiKeyNote(type, catalog)}</span>
+              )}
             </span>
           </button>
         </li>
@@ -90,6 +130,32 @@ function ConnectForm({
         onConnected(connector)
       },
     })
+  }
+
+  if (needsSignIn(create.error)) {
+    const url = signInUrl(fields, values)
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">This server uses sign-in</p>
+        <p className="text-sm text-muted-foreground">
+          Instead of a key, you'll allow access on the server's own page, then come back here.
+        </p>
+        <SignInButton
+          label="Sign in"
+          appName={name.trim() || type.name}
+          request={() => ({ url, name: name.trim() || type.name, agentIds })}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-fit"
+          onClick={() => create.reset()}
+        >
+          Back to the form
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -135,7 +201,9 @@ function ConnectForm({
           onToggle={(agentId, on) => setAgentIds((ids) => toggleGrant(ids, agentId, on))}
         />
       </FieldSet>
-      {create.error && <FieldError>{create.error.message}</FieldError>}
+      {create.error && !needsSignIn(create.error) && (
+        <FieldError>{create.error.message}</FieldError>
+      )}
       <Button type="submit" disabled={create.isPending}>
         {create.isPending && <Spinner />}
         {create.isPending ? `Checking with ${type.name}…` : "Connect"}
@@ -182,6 +250,7 @@ export function Connected({
 
 export type AddStep =
   | { step: "type" }
+  | { step: "signin"; app: CatalogApp }
   | { step: "form"; type: ConnectorType }
   | { step: "done"; type: ConnectorType; connector: Connector }
 
@@ -202,7 +271,35 @@ export function AddConnection({
   }
 
   if (state.step === "type") {
-    return <TypePicker onPick={(type) => go({ step: "form", type })} />
+    return (
+      <TypePicker
+        onPick={(type) => go({ step: "form", type })}
+        onPickApp={(app) => go({ step: "signin", app })}
+      />
+    )
+  }
+  if (state.step === "signin") {
+    return (
+      <div className="flex flex-col gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 w-fit"
+          onClick={() => go({ step: "type" })}
+        >
+          <ArrowLeftIcon />
+          Back
+        </Button>
+        <div className="flex items-center gap-3">
+          <ConnectorIcon type={state.app.id} />
+          <div className="flex min-w-0 flex-col">
+            <span className="text-sm font-medium">{state.app.name}</span>
+            <span className="text-sm text-muted-foreground">{state.app.description}</span>
+          </div>
+        </div>
+        <CatalogSignIn app={state.app} />
+      </div>
+    )
   }
   if (state.step === "form") {
     return (

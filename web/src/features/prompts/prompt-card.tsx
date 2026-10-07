@@ -348,6 +348,7 @@ function ConnectPrompt({
   return (
     <ConnectCard
       prompt={prompt}
+      messageId={message.id}
       type={types.data?.find((t) => t.type === prompt.connection?.type)}
       typesLoading={types.isPending}
       agentNames={agentNames}

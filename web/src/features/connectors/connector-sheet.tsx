@@ -19,6 +19,7 @@ const ADD_TITLES: Record<AddStep["step"], { title: string; description: string }
     title: "Add connection",
     description: "barn checks the details with the app before saving.",
   },
+  signin: { title: "Add connection", description: "Sign in once; no keys to copy." },
   done: { title: "Connected", description: "Agents you picked can use it now." },
 }
 

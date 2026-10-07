@@ -228,17 +228,24 @@ func (m *Manager) ToolsFor(ctx context.Context, agentID string) ([]AgentTool, er
 	var out []AgentTool
 	seen := map[string]int{}
 	for i, a := range accts {
-		tools, err := types[i].Tools(ctx, a)
-		if err != nil {
-			slog.Warn("connector tools", "account", a.ID, "err", err)
-			continue
-		}
+		// Number duplicate names before skipping anything, so a connection's tool names don't
+		// change when another one is unreachable.
 		base := Slug(a.Name)
 		prefix := base
 		if n := seen[base]; n > 0 {
 			prefix = fmt.Sprintf("%s%d", base, n+1)
 		}
 		seen[base]++
+		a, err := m.fresh(ctx, a, false)
+		if err != nil {
+			slog.Warn("connector sign-in", "account", a.ID, "err", err)
+			continue
+		}
+		tools, err := types[i].Tools(ctx, a)
+		if err != nil {
+			slog.Warn("connector tools", "account", a.ID, "err", err)
+			continue
+		}
 		for _, t := range tools {
 			out = append(out, AgentTool{Name: prefix + "__" + t.Name, AccountID: a.ID, Tool: t})
 		}
@@ -262,7 +269,19 @@ func (m *Manager) Call(ctx context.Context, agentID, name string, args json.RawM
 	}
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	return t.Call(cctx, acct, tools[i].Tool.Name, args)
+	if acct, err = m.fresh(cctx, acct, false); err != nil {
+		return nil, err
+	}
+	out, err := t.Call(cctx, acct, tools[i].Tool.Name, args)
+	var ue *UserError
+	if errors.As(err, &ue) && ue.Code == "unauthorized" && acct.Credentials["oauth"] != "" {
+		// The access token was revoked or expired early: refresh once and try again.
+		if acct, err = m.fresh(cctx, acct, true); err != nil {
+			return nil, err
+		}
+		return t.Call(cctx, acct, tools[i].Tool.Name, args)
+	}
+	return out, err
 }
 
 // ServeWebhook handles POST /hooks/{accountID}.

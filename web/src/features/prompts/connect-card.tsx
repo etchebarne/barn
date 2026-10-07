@@ -11,9 +11,11 @@ import {
   ConnectorFields,
   ConnectorIcon,
   initialValues,
+  SignInButton,
   SetupSteps,
   validateForm,
   type ConnectorType,
+  type SignInDeps,
 } from "@/features/connectors"
 import { ApiError } from "@/lib/api-client"
 
@@ -178,6 +180,55 @@ function SetupGuide({ type, defaultOpen }: { type: ConnectorType; defaultOpen: b
   )
 }
 
+/** A sign-in app: no keys to type, just "Sign in with <name>" (the sign-in answers the card). */
+function SignInConnect({
+  connection,
+  type,
+  agentNames,
+  messageId,
+  disabled,
+  onDecline,
+  deps,
+}: {
+  connection: PromptConnection
+  type: ConnectorType | undefined
+  agentNames: Map<string, string>
+  messageId: string
+  disabled: boolean
+  onDecline: () => void
+  deps?: SignInDeps
+}) {
+  const rows = configRows(connection, type)
+  return (
+    <div className="flex flex-col gap-3 px-1.5 pb-1">
+      {rows.length > 0 && (
+        <dl className={cn("flex flex-col gap-1.5 bg-background/60 p-2 text-xs", INNER_RADIUS)}>
+          {rows.map((row) => (
+            <div key={row.key} className="flex min-w-0 flex-col gap-0.5">
+              <dt className="text-muted-foreground">{row.label}</dt>
+              <dd className="font-mono break-all">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {accessLabel(connection.agentIds, agentNames)}
+      </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={onDecline}>
+          Decline
+        </Button>
+        <SignInButton
+          appName={connection.name}
+          request={{ messageId }}
+          disabled={disabled}
+          deps={deps}
+        />
+      </div>
+    </div>
+  )
+}
+
 function ConnectOutcome({ prompt }: { prompt: Prompt }) {
   const outcome = connectOutcome(prompt)
   const accountId = prompt.connection?.accountId
@@ -225,8 +276,14 @@ export function ConnectCard({
   onConnect,
   onDecline,
   onDismiss,
+  messageId,
+  signInDeps,
 }: {
   prompt: Prompt
+  /** The card's message, used to start a sign-in that answers it. */
+  messageId: string
+  /** Injectable for tests. */
+  signInDeps?: SignInDeps
   /** The proposed connector type, from `/connectors/types` (undefined while loading). */
   type: ConnectorType | undefined
   typesLoading: boolean
@@ -263,8 +320,20 @@ export function ConnectCard({
         )}
       </div>
       <QuestionText question={prompt.question} muted={prompt.status !== "pending"} />
+      {prompt.status === "pending" && connection?.signIn && (
+        <SignInConnect
+          connection={connection}
+          type={type}
+          agentNames={agentNames}
+          messageId={messageId}
+          disabled={disabled}
+          onDecline={onDecline}
+          deps={signInDeps}
+        />
+      )}
       {prompt.status === "pending" &&
         connection &&
+        !connection.signIn &&
         (type ? (
           <ConnectForm
             connection={connection}

@@ -490,6 +490,81 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "502": { $ref: "#/components/responses/Error" }
 
+  /connectors/catalog:
+    get:
+      operationId: listConnectorCatalog
+      tags: [connectors]
+      description: Apps that connect with a sign-in (their official MCP servers), ready to pick.
+      responses:
+        "200":
+          description: The catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogApp" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /connectors/sign-in:
+    post:
+      operationId: startSignIn
+      tags: [connectors]
+      description: |
+        Start signing in to an MCP server that uses OAuth: for a new connection (url, name,
+        agentIds), a connect card in chat (messageId) or reconnecting a connection
+        (connectorId). Send the user to authorizeUrl. They come back to /oauth/callback, which
+        finishes and redirects into the app. When pasteBack is true the server wouldn't accept
+        barn's address: the user lands on an error page and pastes its address into
+        /connectors/sign-in/complete.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartSignInRequest" }
+      responses:
+        "200":
+          description: Where to send the user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StartSignInResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The connect card was already answered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: barn couldn't reach the server
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /connectors/sign-in/complete:
+    post:
+      operationId: completeSignIn
+      tags: [connectors]
+      description: Finish a paste-back sign-in with the address of the page the user landed on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompleteSignInRequest" }
+      responses:
+        "200":
+          description: The connection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignInResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "502":
+          description: barn couldn't reach the server
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /connectors/{connectorId}:
     parameters:
       - name: connectorId
@@ -733,6 +808,56 @@ components:
       required: [message]
       properties:
         message: { type: string }
+        code:
+          type: string
+          description: |
+            Machine-readable reason where clients react to it: sign_in_required (an MCP server
+            wants a sign-in instead of a key), reconnect (a sign-in expired)
+
+    CatalogApp:
+      type: object
+      required: [id, name, description, url]
+      properties:
+        id: { type: string, description: 'e.g. "linear"' }
+        name: { type: string }
+        description: { type: string }
+        url: { type: string, description: The app's MCP server }
+
+    StartSignInRequest:
+      type: object
+      properties:
+        url: { type: string, description: The MCP server (new connections) }
+        name: { type: string }
+        agentIds:
+          type: array
+          items: { type: string }
+        messageId: { type: string, description: A connect card to answer }
+        connectorId: { type: string, description: A connection to reconnect }
+
+    StartSignInResponse:
+      type: object
+      required: [authorizeUrl, pasteBack]
+      properties:
+        authorizeUrl: { type: string }
+        pasteBack:
+          type: boolean
+          description: The user will land on an error page whose address they paste back
+
+    CompleteSignInRequest:
+      type: object
+      required: [callbackUrl]
+      properties:
+        callbackUrl: { type: string, description: The address of the page the user landed on }
+
+    SignInResult:
+      type: object
+      required: [connector, chatId]
+      properties:
+        connector: { $ref: "#/components/schemas/Connector" }
+        chatId:
+          type: string
+          nullable: true
+          description: The chat whose connect card this answered
 
     Credentials:
       type: object
@@ -953,7 +1078,7 @@ components:
 
     Connector:
       type: object
-      required: [id, type, name, config, credentialsSet, agentIds, webhookUrl, webhookSecret, createdAt]
+      required: [id, type, name, config, credentialsSet, agentIds, webhookUrl, webhookSecret, signIn, createdAt]
       properties:
         id: { type: string }
         type: { type: string }
@@ -979,6 +1104,11 @@ components:
           description: |
             A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
             the user can copy it there
+        signIn:
+          type: string
+          nullable: true
+          enum: [ok, expired]
+          description: Connected by signing in (MCP OAuth); expired means it needs Reconnect
         createdAt: { type: string, format: date-time }
 
     CreateConnectorRequest:
@@ -1261,7 +1391,7 @@ components:
 
     PromptConnection:
       type: object
-      required: [type, name, config, agentIds, accountId]
+      required: [type, name, config, agentIds, accountId, signIn]
       properties:
         type: { type: string, description: Connector type name (see /connectors/types) }
         name: { type: string }
@@ -1273,6 +1403,9 @@ components:
           type: array
           items: { type: string }
           description: Agents that get access once it's connected
+        signIn:
+          type: boolean
+          description: The server uses sign-in, so the card offers Sign in instead of key fields
         accountId:
           type: string
           nullable: true

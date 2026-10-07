@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import {
   createMemoryHistory,
   createRootRoute,
@@ -10,7 +11,7 @@ import type { ReactNode } from "react"
 import { describe, expect, it, vi } from "vitest"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
-import type { ConnectorType } from "@/features/connectors"
+import type { ConnectorType, SignInDeps } from "@/features/connectors"
 import { ApiError } from "@/lib/api-client"
 
 import type { ConnectPromptRequest } from "./connect"
@@ -60,6 +61,7 @@ function prompt(overrides: Partial<Prompt> = {}): Prompt {
       name: "Notion",
       config: { url: "https://mcp.notion.com/mcp" },
       agentIds: ["a1"],
+      signIn: false,
       accountId: null,
     },
     ...overrides,
@@ -69,8 +71,12 @@ function prompt(overrides: Partial<Prompt> = {}): Prompt {
 async function renderInRouter(ui: ReactNode) {
   const rootRoute = createRootRoute({ component: () => <TooltipProvider>{ui}</TooltipProvider> })
   const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory() })
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a bare test router, not the app's registered one
-  render(<RouterProvider router={router as never} />)
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      {/* oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a bare test router */}
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  )
   await screen.findByText(/Connect Notion/)
 }
 
@@ -78,6 +84,7 @@ function card(overrides: Partial<Parameters<typeof ConnectCard>[0]> = {}) {
   return (
     <ConnectCard
       prompt={prompt()}
+      messageId="m1"
       type={mcp}
       typesLoading={false}
       agentNames={new Map([["a1", "barn"]])}
@@ -209,5 +216,31 @@ describe("ConnectCard", () => {
 
     await userEvent.click(toggle)
     expect(screen.queryByRole("link", { name: /Open settings/ })).not.toBeInTheDocument()
+  })
+
+  it("offers Sign in instead of credentials for sign-in apps", async () => {
+    const start = vi.fn<SignInDeps["start"]>().mockResolvedValue({
+      authorizeUrl: "https://mcp.notion.com/authorize",
+      pasteBack: false,
+    })
+    const assign = vi.fn<(url: string) => void>()
+    const connection = { ...prompt().connection!, signIn: true }
+    await renderInRouter(
+      card({
+        prompt: prompt({ connection }),
+        signInDeps: {
+          start,
+          complete: vi.fn<SignInDeps["complete"]>(),
+          navigate: { assign, open: vi.fn<(u: string) => void>() },
+        },
+      }),
+    )
+    expect(document.querySelector("input")).toBeNull()
+    expect(screen.queryByRole("button", { name: "How to get these" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Decline" })).toBeVisible()
+
+    await userEvent.click(screen.getByRole("button", { name: "Sign in with Notion" }))
+    expect(start).toHaveBeenCalledWith({ messageId: "m1" })
+    expect(assign).toHaveBeenCalledWith("https://mcp.notion.com/authorize")
   })
 })

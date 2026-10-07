@@ -78,7 +78,7 @@ func prompt(p *store.Prompt) *gen.Prompt {
 		out.Answer = &a
 	}
 	if c := p.Connection; c != nil {
-		pc := gen.PromptConnection{Type: c.Type, Name: c.Name, Config: c.Config, AgentIds: c.AgentIDs}
+		pc := gen.PromptConnection{Type: c.Type, Name: c.Name, Config: c.Config, AgentIds: c.AgentIDs, SignIn: c.SignIn}
 		if pc.Config == nil {
 			pc.Config = map[string]string{}
 		}

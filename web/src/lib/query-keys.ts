@@ -13,5 +13,6 @@ export const queryKeys = {
   chats: ["chats"] as const,
   connectorTypes: ["connectors", "types"] as const,
   connectors: ["connectors", "list"] as const,
+  connectorCatalog: ["connectors", "catalog"] as const,
   messages: (chatId: string) => ["chats", chatId, "messages"] as const,
 }

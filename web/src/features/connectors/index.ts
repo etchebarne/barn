@@ -3,6 +3,9 @@ export { ConnectorFields } from "./connector-fields"
 export { ConnectorIcon } from "./connector-icon"
 export { ConnectorsSection } from "./connectors-section"
 export { SetupSteps } from "./setup-steps"
+export { SignInButton } from "./sign-in-button"
+export { useSignInReturn } from "./sign-in-return"
+export { readSignInReturn, type SignInDeps, type SignInReturnParams } from "./signin"
 export { connectorsQueryOptions, connectorTypesQueryOptions, useConnectorTypes } from "./api"
 export {
   connectFormFields,

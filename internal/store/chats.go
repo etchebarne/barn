@@ -94,6 +94,7 @@ type PendingConnection struct {
 	Config    map[string]string `json:"config"`
 	AgentIDs  []string          `json:"agentIds"`
 	AccountID string            `json:"accountId,omitempty"` // set once connected
+	SignIn    bool              `json:"signIn,omitempty"`    // the server uses OAuth sign-in
 }
 
 type PromptOption struct {

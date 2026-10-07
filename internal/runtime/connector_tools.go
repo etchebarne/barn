@@ -112,6 +112,9 @@ func (l *loop) writeConnectedApps(ctx context.Context, b *strings.Builder, agent
 		"with on_signal {account, type, match}; match maps a field to text it must contain (case-insensitive).\n")
 	for i, a := range accts {
 		fmt.Fprintf(b, "- %s (%s, account_id %s)", a.Name, types[i].DisplayName(), a.ID)
+		if _, expired := connectors.SignedIn(a); expired {
+			b.WriteString(" [sign-in expired: its tools are unavailable until the user clicks Reconnect in Settings → Connectors]")
+		}
 		if sigs := types[i].SignalTypes(); len(sigs) > 0 {
 			b.WriteString(". Signals: ")
 			parts := make([]string, len(sigs))

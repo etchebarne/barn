@@ -46,6 +46,7 @@ const saved: Connector = {
   agentIds: ["a1"],
   webhookUrl: null,
   webhookSecret: null,
+  signIn: null,
   createdAt: "2026-10-01T00:00:00Z",
 }
 

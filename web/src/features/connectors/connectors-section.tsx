@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { PlusIcon } from "lucide-react"
+import { PlusIcon, TriangleAlertIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -71,6 +71,12 @@ export function ConnectorsSection({
                   <span className="truncate text-xs text-muted-foreground">
                     {usedByLabel(connector.agentIds, agents)}
                   </span>
+                  {connector.signIn === "expired" && (
+                    <span className="flex items-center gap-1 text-xs text-warning-foreground">
+                      <TriangleAlertIcon className="size-3" aria-hidden="true" />
+                      Sign-in expired
+                    </span>
+                  )}
                 </span>
               </button>
             </li>

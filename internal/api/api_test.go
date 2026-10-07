@@ -13,6 +13,7 @@ import (
 
 	"github.com/etchebarne/barn/internal/bus"
 	"github.com/etchebarne/barn/internal/connectors"
+	"github.com/etchebarne/barn/internal/connectors/oauthtest"
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/runtime"
 	"github.com/etchebarne/barn/internal/secrets"
@@ -541,5 +542,90 @@ func TestConnectorSetupGuides(t *testing.T) {
 	}
 	if s, _ := body["webhookSecret"].(string); len(s) < 32 {
 		t.Fatalf("webhookSecret = %v", body["webhookSecret"])
+	}
+}
+
+func TestSignInAPI(t *testing.T) {
+	ctx := context.Background()
+	srv := oauthtest.New(t, true) // refuses plain http, except on loopback
+	c, st := setupWithKey(t)
+	agent, dm, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	noRedirect := &http.Client{Jar: c.http.Jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+	// Connecting it with a key says it uses sign-in.
+	resp, body := c.do("POST", "/api/connectors", `{"type":"mcp","name":"Linear","credentials":{},"config":{"url":"`+srv.URL+`/mcp"}}`, true)
+	if resp.StatusCode != http.StatusBadRequest || body["code"] != "sign_in_required" {
+		t.Fatalf("key connect: %d %v", resp.StatusCode, body)
+	}
+
+	// A connect card: barn's own address is loopback here, so the service sends the browser
+	// straight back to /oauth/callback, which answers the card and returns to the chat.
+	card, _ := st.InsertPrompt(ctx, dm, agent.ID, store.Prompt{Kind: "connect", Question: "Connect Linear?",
+		Options: []store.PromptOption{{Label: "Connect"}, {Label: "Decline"}},
+		Connection: &store.PendingConnection{AgentID: agent.ID, Type: "mcp", Name: "Linear", SignIn: true,
+			Config: map[string]string{"url": srv.URL + "/mcp"}, AgentIDs: []string{agent.ID}}})
+	resp, body = c.do("POST", "/api/connectors/sign-in", `{"messageId":"`+card.ID+`"}`, true)
+	if resp.StatusCode != http.StatusOK || body["pasteBack"] != false {
+		t.Fatalf("start: %d %v", resp.StatusCode, body)
+	}
+	landed := srv.Approve(t, body["authorizeUrl"].(string))
+	if !strings.HasPrefix(landed, c.base+"/oauth/callback?") {
+		t.Fatalf("landed on %s", landed)
+	}
+	r, err := noRedirect.Get(landed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	loc, _ := url.Parse(r.Header.Get("Location"))
+	if r.StatusCode != http.StatusSeeOther || loc.Path != "/chats/"+dm || loc.Query().Get("connected") == "" {
+		t.Fatalf("callback redirect: %d %s", r.StatusCode, r.Header.Get("Location"))
+	}
+	msg, _ := st.GetMessage(ctx, card.ID)
+	if msg.Prompt.Status != "answered" || msg.Prompt.Connection.AccountID != loc.Query().Get("connected") {
+		t.Fatalf("card = %+v", msg.Prompt)
+	}
+	_, list := c.doList("GET", "/api/connectors")
+	if len(list) != 1 || list[0].(map[string]any)["signIn"] != "ok" {
+		t.Fatalf("connectors = %v", list)
+	}
+
+	// Opened over plain http on a tailnet address, the service refuses barn's address: the
+	// user lands on an error page and pastes its address back.
+	req, _ := http.NewRequest("POST", c.base+"/api/connectors/sign-in", strings.NewReader(`{"url":"`+srv.URL+`/mcp","name":"Notion","agentIds":["`+agent.ID+`"]}`))
+	req.Host = "100.64.0.1:8080"
+	base, _ := url.Parse(c.base)
+	for _, ck := range c.http.Jar.Cookies(base) {
+		req.AddCookie(ck)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfHeader, "1")
+	r, err = c.http.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var started map[string]any
+	json.NewDecoder(r.Body).Decode(&started)
+	r.Body.Close()
+	if started["pasteBack"] != true {
+		t.Fatalf("expected paste-back: %v", started)
+	}
+	pasted := srv.Approve(t, started["authorizeUrl"].(string))
+	resp, body = c.do("POST", "/api/connectors/sign-in/complete", `{"callbackUrl":"`+pasted+`"}`, true)
+	if resp.StatusCode != http.StatusOK || body["connector"].(map[string]any)["name"] != "Notion" || body["chatId"] != nil {
+		t.Fatalf("complete: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := c.do("POST", "/api/connectors/sign-in/complete", `{"callbackUrl":"`+pasted+`"}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("pasting twice should fail, got %d", resp.StatusCode)
+	}
+
+	// The service reporting a refusal goes back with a message.
+	resp, body = c.do("POST", "/api/connectors/sign-in", `{"url":"`+srv.URL+`/mcp","name":"X"}`, true)
+	authURL, _ := url.Parse(body["authorizeUrl"].(string))
+	r, _ = noRedirect.Get(c.base + "/oauth/callback?error=access_denied&state=" + url.QueryEscape(authURL.Query().Get("state")))
+	r.Body.Close()
+	loc, _ = url.Parse(r.Header.Get("Location"))
+	if loc.Path != "/settings" || loc.Query().Get("signin_error") != "Sign-in was cancelled" {
+		t.Fatalf("denied redirect: %s", r.Header.Get("Location"))
 	}
 }

@@ -69,6 +69,24 @@ func (e ChatKind) Valid() bool {
 	}
 }
 
+// Defines values for ConnectorSignIn.
+const (
+	Expired ConnectorSignIn = "expired"
+	Ok      ConnectorSignIn = "ok"
+)
+
+// Valid indicates whether the value is a known member of the ConnectorSignIn enum.
+func (e ConnectorSignIn) Valid() bool {
+	switch e {
+	case Expired:
+		return true
+	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageAuthorKind.
 const (
 	MessageAuthorKindAgent  MessageAuthorKind = "agent"
@@ -442,6 +460,18 @@ type AuthStatus struct {
 	User *User `json:"user"`
 }
 
+// CatalogApp defines model for CatalogApp.
+type CatalogApp struct {
+	Description string `json:"description"`
+
+	// Id e.g. "linear"
+	Id   string `json:"id"`
+	Name string `json:"name"`
+
+	// Url The app's MCP server
+	Url string `json:"url"`
+}
+
 // Chat defines model for Chat.
 type Chat struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -483,6 +513,12 @@ type CompleteOnboardingResponse struct {
 	ChatId string `json:"chatId"`
 }
 
+// CompleteSignInRequest defines model for CompleteSignInRequest.
+type CompleteSignInRequest struct {
+	// CallbackUrl The address of the page the user landed on
+	CallbackUrl string `json:"callbackUrl"`
+}
+
 // ConnectPromptRequest defines model for ConnectPromptRequest.
 type ConnectPromptRequest struct {
 	// Credentials Values for the type's credential fields
@@ -503,7 +539,10 @@ type Connector struct {
 	CredentialsSet []string `json:"credentialsSet"`
 	Id             string   `json:"id"`
 	Name           string   `json:"name"`
-	Type           string   `json:"type"`
+
+	// SignIn Connected by signing in (MCP OAuth); expired means it needs Reconnect
+	SignIn *ConnectorSignIn `json:"signIn"`
+	Type   string           `json:"type"`
 
 	// WebhookSecret A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
 	// the user can copy it there
@@ -512,6 +551,9 @@ type Connector struct {
 	// WebhookUrl Where the service should send events (types with webhooks)
 	WebhookUrl *string `json:"webhookUrl"`
 }
+
+// ConnectorSignIn Connected by signing in (MCP OAuth); expired means it needs Reconnect
+type ConnectorSignIn string
 
 // ConnectorField defines model for ConnectorField.
 type ConnectorField struct {
@@ -576,7 +618,10 @@ type Credentials struct {
 
 // Error defines model for Error.
 type Error struct {
-	Message string `json:"message"`
+	// Code Machine-readable reason where clients react to it: sign_in_required (an MCP server
+	// wants a sign-in instead of a key), reconnect (a sign-in expired)
+	Code    *string `json:"code,omitempty"`
+	Message string  `json:"message"`
 }
 
 // MarkReadRequest defines model for MarkReadRequest.
@@ -742,6 +787,9 @@ type PromptConnection struct {
 	Config map[string]string `json:"config"`
 	Name   string            `json:"name"`
 
+	// SignIn The server uses sign-in, so the card offers Sign in instead of key fields
+	SignIn bool `json:"signIn"`
+
 	// Type Connector type name (see /connectors/types)
 	Type string `json:"type"`
 }
@@ -834,6 +882,36 @@ type SetupStep struct {
 		Url   string `json:"url"`
 	} `json:"link"`
 	Text string `json:"text"`
+}
+
+// SignInResult defines model for SignInResult.
+type SignInResult struct {
+	// ChatId The chat whose connect card this answered
+	ChatId    *string   `json:"chatId"`
+	Connector Connector `json:"connector"`
+}
+
+// StartSignInRequest defines model for StartSignInRequest.
+type StartSignInRequest struct {
+	AgentIds *[]string `json:"agentIds,omitempty"`
+
+	// ConnectorId A connection to reconnect
+	ConnectorId *string `json:"connectorId,omitempty"`
+
+	// MessageId A connect card to answer
+	MessageId *string `json:"messageId,omitempty"`
+	Name      *string `json:"name,omitempty"`
+
+	// Url The MCP server (new connections)
+	Url *string `json:"url,omitempty"`
+}
+
+// StartSignInResponse defines model for StartSignInResponse.
+type StartSignInResponse struct {
+	AuthorizeUrl string `json:"authorizeUrl"`
+
+	// PasteBack The user will land on an error page whose address they paste back
+	PasteBack bool `json:"pasteBack"`
 }
 
 // Task defines model for Task.
@@ -1018,6 +1096,12 @@ type MarkChatReadJSONRequestBody = MarkReadRequest
 
 // CreateConnectorJSONRequestBody defines body for CreateConnector for application/json ContentType.
 type CreateConnectorJSONRequestBody = CreateConnectorRequest
+
+// StartSignInJSONRequestBody defines body for StartSignIn for application/json ContentType.
+type StartSignInJSONRequestBody = StartSignInRequest
+
+// CompleteSignInJSONRequestBody defines body for CompleteSignIn for application/json ContentType.
+type CompleteSignInJSONRequestBody = CompleteSignInRequest
 
 // UpdateConnectorJSONRequestBody defines body for UpdateConnector for application/json ContentType.
 type UpdateConnectorJSONRequestBody = UpdateConnectorRequest
@@ -1425,6 +1509,15 @@ type ServerInterface interface {
 
 	// (POST /connectors)
 	CreateConnector(w http.ResponseWriter, r *http.Request)
+
+	// (GET /connectors/catalog)
+	ListConnectorCatalog(w http.ResponseWriter, r *http.Request)
+
+	// (POST /connectors/sign-in)
+	StartSignIn(w http.ResponseWriter, r *http.Request)
+
+	// (POST /connectors/sign-in/complete)
+	CompleteSignIn(w http.ResponseWriter, r *http.Request)
 
 	// (GET /connectors/types)
 	ListConnectorTypes(w http.ResponseWriter, r *http.Request)
@@ -1917,6 +2010,48 @@ func (siw *ServerInterfaceWrapper) CreateConnector(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateConnector(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConnectorCatalog operation middleware
+func (siw *ServerInterfaceWrapper) ListConnectorCatalog(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConnectorCatalog(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartSignIn operation middleware
+func (siw *ServerInterfaceWrapper) StartSignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartSignIn(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteSignIn operation middleware
+func (siw *ServerInterfaceWrapper) CompleteSignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteSignIn(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2422,6 +2557,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connectors/types", wrapper.ListConnectorTypes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connectors", wrapper.ListConnectors)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/connectors", wrapper.CreateConnector)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connectors/catalog", wrapper.ListConnectorCatalog)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/connectors/sign-in", wrapper.StartSignIn)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/connectors/sign-in/complete", wrapper.CompleteSignIn)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/connectors/{connectorId}", wrapper.DeleteConnector)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/connectors/{connectorId}", wrapper.UpdateConnector)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)

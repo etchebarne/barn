@@ -21,7 +21,11 @@ func connectorErr(w http.ResponseWriter, err error) {
 	var ue *connectors.UserError
 	switch {
 	case errors.As(err, &ue):
-		writeError(w, http.StatusBadRequest, sentence(ue.Message))
+		e := gen.Error{Message: sentence(ue.Message)}
+		if ue.Code != "" {
+			e.Code = &ue.Code
+		}
+		writeJSON(w, http.StatusBadRequest, e)
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "Connection not found")
 	default:
@@ -127,6 +131,13 @@ func (s *Server) connectorView(ctx context.Context, r *http.Request, a store.Con
 			u += "?token=" + url.QueryEscape(acct.Credentials["token"])
 		}
 		out.WebhookUrl = &u
+	}
+	if signedIn, expired := connectors.SignedIn(acct); signedIn {
+		state := gen.Ok
+		if expired {
+			state = gen.Expired
+		}
+		out.SignIn = &state
 	}
 	if g, ok := t.(connectors.GeneratedSecret); ok {
 		if v := acct.Credentials[g.GeneratedSecret()]; v != "" {

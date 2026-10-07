@@ -414,6 +414,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/connectors/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Apps that connect with a sign-in (their official MCP servers), ready to pick. */
+        get: operations["listConnectorCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Start signing in to an MCP server that uses OAuth: for a new connection (url, name,
+         *     agentIds), a connect card in chat (messageId) or reconnecting a connection
+         *     (connectorId). Send the user to authorizeUrl. They come back to /oauth/callback, which
+         *     finishes and redirects into the app. When pasteBack is true the server wouldn't accept
+         *     barn's address: the user lands on an error page and pastes its address into
+         *     /connectors/sign-in/complete.
+         */
+        post: operations["startSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/sign-in/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Finish a paste-back sign-in with the address of the page the user landed on. */
+        post: operations["completeSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/connectors/{connectorId}": {
         parameters: {
             query?: never;
@@ -588,6 +646,43 @@ export interface components {
     schemas: {
         Error: {
             message: string;
+            /**
+             * @description Machine-readable reason where clients react to it: sign_in_required (an MCP server
+             *     wants a sign-in instead of a key), reconnect (a sign-in expired)
+             */
+            code?: string;
+        };
+        CatalogApp: {
+            /** @description e.g. "linear" */
+            id: string;
+            name: string;
+            description: string;
+            /** @description The app's MCP server */
+            url: string;
+        };
+        StartSignInRequest: {
+            /** @description The MCP server (new connections) */
+            url?: string;
+            name?: string;
+            agentIds?: string[];
+            /** @description A connect card to answer */
+            messageId?: string;
+            /** @description A connection to reconnect */
+            connectorId?: string;
+        };
+        StartSignInResponse: {
+            authorizeUrl: string;
+            /** @description The user will land on an error page whose address they paste back */
+            pasteBack: boolean;
+        };
+        CompleteSignInRequest: {
+            /** @description The address of the page the user landed on */
+            callbackUrl: string;
+        };
+        SignInResult: {
+            connector: components["schemas"]["Connector"];
+            /** @description The chat whose connect card this answered */
+            chatId: string | null;
         };
         Credentials: {
             username: string;
@@ -743,6 +838,11 @@ export interface components {
              *     the user can copy it there
              */
             webhookSecret: string | null;
+            /**
+             * @description Connected by signing in (MCP OAuth); expired means it needs Reconnect
+             * @enum {string|null}
+             */
+            signIn: "ok" | "expired" | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -939,6 +1039,8 @@ export interface components {
             };
             /** @description Agents that get access once it's connected */
             agentIds: string[];
+            /** @description The server uses sign-in, so the card offers Sign in instead of key fields */
+            signIn: boolean;
             /** @description The connection, once the user connected it */
             accountId: string | null;
         };
@@ -1761,6 +1863,107 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    listConnectorCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogApp"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    startSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSignInRequest"];
+            };
+        };
+        responses: {
+            /** @description Where to send the user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartSignInResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The connect card was already answered */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description barn couldn't reach the server */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    completeSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteSignInRequest"];
+            };
+        };
+        responses: {
+            /** @description The connection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            /** @description barn couldn't reach the server */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     deleteConnector: {

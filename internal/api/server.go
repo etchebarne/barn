@@ -80,6 +80,14 @@ func (s *Server) Handler() http.Handler {
 		}
 		s.Connectors.ServeWebhook(w, r)
 	})
+	// Where services send the browser back after signing in (see signin.go).
+	mux.HandleFunc("GET /oauth/callback", func(w http.ResponseWriter, r *http.Request) {
+		if s.Connectors == nil {
+			http.NotFound(w, r)
+			return
+		}
+		s.oauthCallback(w, r)
+	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})

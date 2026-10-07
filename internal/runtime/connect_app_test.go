@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/etchebarne/barn/internal/connectors"
+	"github.com/etchebarne/barn/internal/connectors/oauthtest"
 	"github.com/etchebarne/barn/internal/model"
 	"github.com/etchebarne/barn/internal/secrets"
 	"github.com/etchebarne/barn/internal/store"
@@ -146,5 +147,25 @@ func TestConnectAppValidates(t *testing.T) {
 		if ok || !strings.Contains(out, tc.want) {
 			t.Errorf("%s: got %s, want %q", tc.args, out, tc.want)
 		}
+	}
+}
+
+// Proposing an MCP server that uses sign-in gives a card with a Sign in button.
+func TestConnectAppDetectsSignIn(t *testing.T) {
+	ctx := context.Background()
+	srv := oauthtest.New(t, false)
+	f := setup(t)
+	box, _ := secrets.Open(t.TempDir())
+	f.rt.Connectors = connectors.NewManager(f.store, box)
+	l := &loop{m: f.rt, agentID: f.agent.ID}
+	if out, ok := l.connectApp(ctx, f.agent, []byte(`{"type":"mcp","name":"Linear","config":{"url":"`+srv.URL+`/mcp"}}`)); !ok {
+		t.Fatal(out)
+	}
+	last, _ := f.store.LastMessage(ctx, f.chatID)
+	if last.Prompt == nil || last.Prompt.Connection == nil || !last.Prompt.Connection.SignIn {
+		t.Fatalf("card = %+v", last.Prompt)
+	}
+	if tool := connectAppTool(); !strings.Contains(tool.Function.Description, "https://mcp.linear.app/mcp") {
+		t.Fatal("the tool should list the sign-in catalog")
 	}
 }

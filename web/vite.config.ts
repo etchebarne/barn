@@ -32,6 +32,8 @@ export default defineConfig({
       "/api": { target: BACKEND, ws: true },
       // Webhook URLs are built from the request's host, so they point here in dev.
       "/hooks": { target: BACKEND },
+      // Services send the browser back here after a sign-in.
+      "/oauth": { target: BACKEND },
     },
   },
   test: {

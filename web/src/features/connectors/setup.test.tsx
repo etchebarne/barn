@@ -74,6 +74,7 @@ const connector: Connector = {
   agentIds: [],
   webhookUrl: "https://barn.example/hooks/github/k1",
   webhookSecret: "whsec_7f3a9c1e5b",
+  signIn: null,
   createdAt: "2026-10-01T00:00:00Z",
 }
 

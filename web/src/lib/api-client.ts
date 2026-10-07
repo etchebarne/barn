@@ -21,11 +21,14 @@ export const CSRF_HEADER = "X-Barn-CSRF"
 /** Error carrying the server's `{ message }` body and HTTP status. */
 export class ApiError extends Error {
   readonly status: number
+  /** Machine-readable reason from the server's error body, e.g. "sign_in_required". */
+  readonly code: string | undefined
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = "ApiError"
     this.status = status
+    this.code = code
   }
 }
 
@@ -58,6 +61,13 @@ export const api = createClient<paths>({
 })
 api.use(authMiddleware)
 
+function errorCode(error: unknown): string | undefined {
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    return error.code
+  }
+  return undefined
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   if (
     error &&
@@ -79,7 +89,11 @@ export async function unwrap<T>(
 ): Promise<T> {
   const { data, error, response } = await promise
   if (!response.ok) {
-    throw new ApiError(response.status, errorMessage(error, `Request failed (${response.status})`))
+    throw new ApiError(
+      response.status,
+      errorMessage(error, `Request failed (${response.status})`),
+      errorCode(error),
+    )
   }
   // 204 responses have no body; callers expecting data only use endpoints that return it.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion

@@ -63,6 +63,7 @@ describe("ConnectorFields", () => {
       agentIds: [],
       webhookUrl: null,
       webhookSecret: null,
+      signIn: null,
       createdAt: "2026-10-01T00:00:00Z",
     })
     expect(screen.getByText("Saved")).toBeVisible()
