@@ -27,6 +27,8 @@ type NewAgent struct {
 	Welcome string
 	// SandboxWith is an agent whose sandbox the new agent shares (empty: its own).
 	SandboxWith string
+	// Connections are connector accounts (ids or names) the new agent gets access to.
+	Connections []string
 }
 
 // ModelError is a user-facing reason a model can't be used.
@@ -70,6 +72,10 @@ func (m *Manager) CreateAgent(ctx context.Context, n NewAgent) (store.Agent, str
 	if err := m.CheckModel(ctx, n.Model); err != nil {
 		return store.Agent{}, "", err
 	}
+	accounts, err := m.resolveAccounts(ctx, n.Connections)
+	if err != nil {
+		return store.Agent{}, "", err
+	}
 
 	instructions := strings.TrimSpace(n.Instructions)
 	if n.Job != "" {
@@ -86,6 +92,12 @@ func (m *Manager) CreateAgent(ctx context.Context, n NewAgent) (store.Agent, str
 	})
 	if err != nil {
 		return agent, "", err
+	}
+	// Before the welcome, so the agent knows its apps from its first turn.
+	for _, a := range accounts {
+		if err := m.store.AddGrant(ctx, a.ID, agent.ID); err != nil {
+			return agent, chatID, err
+		}
 	}
 	if n.SandboxWith != "" {
 		if err := m.store.ShareSandbox(ctx, agent.ID, n.SandboxWith); err != nil {
@@ -127,4 +139,32 @@ func (m *Manager) CreateAgent(ctx context.Context, n NewAgent) (store.Agent, str
 		return agent, chatID, err
 	}
 	return agent, chatID, nil
+}
+
+// resolveAccounts finds connector accounts by id or name (any case).
+func (m *Manager) resolveAccounts(ctx context.Context, refs []string) ([]store.ConnectorAccount, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	all, err := m.store.Accounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []store.ConnectorAccount
+	for _, ref := range refs {
+		ref = strings.TrimSpace(ref)
+		i := slices.IndexFunc(all, func(a store.ConnectorAccount) bool { return a.ID == ref || strings.EqualFold(a.Name, ref) })
+		if i < 0 {
+			names := make([]string, len(all))
+			for j, a := range all {
+				names[j] = a.Name
+			}
+			if len(names) == 0 {
+				return nil, &ModelError{"there are no connections yet; the user adds them in Settings → Connectors"}
+			}
+			return nil, &ModelError{fmt.Sprintf("no connection %q (connections: %s)", ref, strings.Join(names, ", "))}
+		}
+		out = append(out, all[i])
+	}
+	return out, nil
 }

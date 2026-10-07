@@ -190,9 +190,10 @@ var (
 			"properties": {
 				"name": {"type": "string", "description": "Short, human name for the agent, e.g. \"Claude Sessions\"."},
 				"job": {"type": "string", "description": "One sentence: the job this agent owns."},
-				"instructions": {"type": "string", "description": "Detailed instructions for the agent: what it does, how, for whom, and any preferences the user mentioned."},
+				"instructions": {"type": "string", "description": "Detailed instructions: what it does, how, for whom, and the preferences the user mentioned. Stick to what the user told you: don't invent rules, protocols, message formats, schedules or processes they didn't ask for (suggest those to the user first), and don't describe setup like which apps are connected (the agent sees that itself)."},
 				"model": {"type": "string", "description": "Model id (from list_models)."},
-				"sandbox_with": {"type": "string", "description": "Optional agent_id: share that agent's computer instead of getting a new one (for agents that work on the same files)."}
+				"sandbox_with": {"type": "string", "description": "Optional agent_id: share that agent's computer instead of getting a new one (for agents that work on the same files)."},
+				"connections": {"type": "array", "items": {"type": "string"}, "description": "Connections (by name or account_id, from \"All connections\" in your instructions) the agent needs for its job; it gets access right away."}
 			},
 			"required": ["name", "job", "instructions", "model"],
 			"additionalProperties": false
@@ -525,17 +526,19 @@ func (l *loop) askUser(ctx context.Context, agent store.Agent, raw []byte) (stri
 
 func (l *loop) createAgent(ctx context.Context, creator store.Agent, raw []byte) (string, bool) {
 	var args struct {
-		Name         string `json:"name"`
-		Job          string `json:"job"`
-		Instructions string `json:"instructions"`
-		Model        string `json:"model"`
-		SandboxWith  string `json:"sandbox_with"`
+		Name         string   `json:"name"`
+		Job          string   `json:"job"`
+		Instructions string   `json:"instructions"`
+		Model        string   `json:"model"`
+		SandboxWith  string   `json:"sandbox_with"`
+		Connections  []string `json:"connections"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return toolError("invalid arguments: %v", err), false
 	}
 	created, chatID, err := l.m.CreateAgent(ctx, NewAgent{
 		SandboxWith:  args.SandboxWith,
+		Connections:  args.Connections,
 		Name:         args.Name,
 		Job:          args.Job,
 		Instructions: args.Instructions,

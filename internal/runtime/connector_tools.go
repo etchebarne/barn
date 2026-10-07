@@ -129,6 +129,51 @@ func (l *loop) writeConnectedApps(ctx context.Context, b *strings.Builder, agent
 	return nil
 }
 
+// writeAllConnections tells admin agents (who set up other agents) every connection the user
+// has and who uses it, so they can give a new agent access and never claim an app is missing.
+func (l *loop) writeAllConnections(ctx context.Context, b *strings.Builder, agent store.Agent) error {
+	if !agent.IsAdmin {
+		return nil
+	}
+	b.WriteString("# All connections\n")
+	accounts, err := l.m.store.Accounts(ctx)
+	if err != nil {
+		return err
+	}
+	if len(accounts) == 0 {
+		b.WriteString("None yet. The user adds apps in Settings → Connectors.\n\n")
+		return nil
+	}
+	b.WriteString("Every app the user has connected. When creating an agent, give it the ones its job needs " +
+		"(create_agent connections). To change an existing agent's access, the user uses Settings → Connectors.\n")
+	agents, _ := l.m.store.ListAgents(ctx)
+	names := map[string]string{}
+	for _, a := range agents {
+		names[a.ID] = a.Name
+	}
+	for _, a := range accounts {
+		typ := a.Type
+		if t, ok := connectors.TypeByName(a.Type); ok {
+			typ = t.DisplayName()
+		}
+		fmt.Fprintf(b, "- %s (%s, account_id %s): ", a.Name, typ, a.ID)
+		ids, _ := l.m.store.Grants(ctx, a.ID)
+		var users []string
+		for _, id := range ids {
+			if n, ok := names[id]; ok {
+				users = append(users, n)
+			}
+		}
+		if len(users) == 0 {
+			b.WriteString("no agent uses it yet\n")
+		} else {
+			b.WriteString("used by " + strings.Join(users, ", ") + "\n")
+		}
+	}
+	b.WriteString("\n")
+	return nil
+}
+
 // DeliverSignal wakes agents whose signal tasks match an incoming event.
 func (m *Manager) DeliverSignal(ctx context.Context, sig store.Signal, fields map[string]string) {
 	tasks, err := m.store.SignalTasks(ctx, sig.AccountID)

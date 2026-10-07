@@ -77,6 +77,9 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	if err := l.writeConnectedApps(ctx, &b, agent); err != nil {
 		return "", err
 	}
+	if err := l.writeAllConnections(ctx, &b, agent); err != nil {
+		return "", err
+	}
 
 	memories, err := l.m.store.Memories(ctx, agent.ID)
 	if err != nil {

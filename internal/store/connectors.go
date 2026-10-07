@@ -104,6 +104,12 @@ func (s *Store) queryAccounts(ctx context.Context, q string, args ...any) ([]Con
 	return out, rows.Err()
 }
 
+// AddGrant gives an agent access to an account (keeping existing access).
+func (s *Store) AddGrant(ctx context.Context, accountID, agentID string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO grants (agent_id, account_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, agentID, accountID)
+	return err
+}
+
 // SetGrants replaces which agents may use an account.
 func (s *Store) SetGrants(ctx context.Context, accountID string, agentIDs []string) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
