@@ -270,6 +270,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/sandbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The agent's computer (Docker sandbox) */
+        get: operations["getSandbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sandbox/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Restart the agent's computer. Running processes stop; files in /home/agent stay. */
+        post: operations["restartSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/retry": {
         parameters: {
             query?: never;
@@ -441,6 +479,16 @@ export interface components {
             text: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        Sandbox: {
+            /**
+             * @description unavailable: Docker isn't set up on the server; none: not created yet (created on
+             *     first use)
+             * @enum {string}
+             */
+            status: "unavailable" | "none" | "stopped" | "running";
+            /** @description Other agents using the same computer */
+            sharedWith: string[];
         };
         UpdateAgentRequest: {
             /** @description Model id from GET /models */
@@ -1093,6 +1141,55 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    getSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sandbox state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    restartSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sandbox state after the restart */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     retryAgent: {
