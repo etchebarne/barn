@@ -123,6 +123,8 @@ export function MessageRow({
     )
   }
 
+  // Rows clip what overflows them (content-visibility), so reacted bubbles reserve room for the
+  // reactions badge hanging below them: 3/4 of its height plus its ring.
   const reacted = message.reactions.length > 0
   const mentions = mentionTargets(message.mentions, agents)
   const time = (
@@ -135,7 +137,7 @@ export function MessageRow({
     return (
       <Message align="end">
         <MessageContent>
-          <Bubble variant="default" align="end" className={cn(reacted && "mb-3.5")}>
+          <Bubble variant="default" align="end" className={cn(reacted && "mb-6")}>
             <BubbleContent className="whitespace-pre-wrap">
               <MentionText text={message.body} mentions={mentions} />
             </BubbleContent>
@@ -183,7 +185,7 @@ export function MessageRow({
               message.prompt.preview || message.prompt.connection
                 ? "max-w-[min(100%,36rem)]"
                 : "max-w-[min(85%,26rem)]",
-              reacted && "mb-3.5",
+              reacted && "mb-6",
             )}
           >
             {/* p-2: the prompt card's row radii are derived from this padding. */}
@@ -193,7 +195,7 @@ export function MessageRow({
             <MessageReactions message={message} agents={agents} align="end" />
           </Bubble>
         ) : (
-          <Bubble variant="muted" className={cn(reacted && "mb-3.5")}>
+          <Bubble variant="muted" className={cn(reacted && "mb-6")}>
             <BubbleContent>
               <Markdown mentions={mentions}>{message.body}</Markdown>
             </BubbleContent>
