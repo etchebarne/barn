@@ -183,7 +183,8 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID str
 		internalError(w, err)
 		return
 	}
-	u := store.AgentUpdate{Name: req.Name, Instructions: req.Instructions, Model: req.Model, Language: req.Language, Notifications: req.Notifications}
+	u := store.AgentUpdate{Name: req.Name, Instructions: req.Instructions, Personality: req.Personality, Model: req.Model,
+		Language: req.Language, Notifications: req.Notifications}
 	if req.TrustMode != nil {
 		mode := string(*req.TrustMode)
 		u.TrustMode = &mode

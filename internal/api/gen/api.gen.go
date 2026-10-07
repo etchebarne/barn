@@ -462,11 +462,14 @@ type Agent struct {
 	IsAdmin      bool   `json:"isAdmin"`
 
 	// Language Reply language, or "auto"
-	Language      string         `json:"language"`
-	Model         string         `json:"model"`
-	Name          string         `json:"name"`
-	Notifications bool           `json:"notifications"`
-	TrustMode     AgentTrustMode `json:"trustMode"`
+	Language      string `json:"language"`
+	Model         string `json:"model"`
+	Name          string `json:"name"`
+	Notifications bool   `json:"notifications"`
+
+	// Personality How the agent comes across (tone, voice, manner); empty for the default
+	Personality string         `json:"personality"`
+	TrustMode   AgentTrustMode `json:"trustMode"`
 }
 
 // AgentTrustMode defines model for Agent.TrustMode.
@@ -1080,6 +1083,9 @@ type UpdateAgentRequest struct {
 
 	// Notifications Push this agent's messages to the user's devices
 	Notifications *bool `json:"notifications,omitempty"`
+
+	// Personality Empty clears it
+	Personality *string `json:"personality,omitempty"`
 
 	// TrustMode trusted skips approvals for gated actions
 	TrustMode *UpdateAgentRequestTrustMode `json:"trustMode,omitempty"`

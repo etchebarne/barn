@@ -34,6 +34,14 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	b.WriteString(strings.TrimSpace(agent.Instructions))
 	b.WriteString("\n\n")
 
+	if p := strings.TrimSpace(agent.Personality); p != "" {
+		b.WriteString("# Your personality\n")
+		b.WriteString(p)
+		b.WriteString("\n\nThis is how you come across: your tone, voice and manner in every message. It " +
+			"takes precedence over the default writing style below, but never over your instructions " +
+			"or the rules of how things work here.\n\n")
+	}
+
 	b.WriteString("# How communication works\n")
 	b.WriteString("- Incoming messages arrive wrapped in <message> tags that say which chat they came from and who sent them. A message that starts with <replying_to> answers that earlier message. System notices arrive in <system_notice> tags.\n")
 	b.WriteString("- Your plain text output is private thinking. Nobody ever sees it.\n")
@@ -57,7 +65,7 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 		b.WriteString("- Set up new agents (create_agent): persistent teammates that each own one job and talk to the user in their own DM. Before creating one, confirm the job and ask which model to use (offer your own model first).\n")
 	}
 	b.WriteString("- Act on a schedule: task_create sets up things to do later (once) or regularly (cron); you'll be woken up when they're due.\n")
-	b.WriteString("- Change settings with update_agent: rename yourself, switch your model or reply language, or refine your own instructions when the user asks for that.\n")
+	b.WriteString("- Change settings with update_agent: rename yourself, switch your model or reply language, or refine your own instructions or personality when the user asks for that. Your personality is how you come across (tone, voice, humour); when the user tells you to talk differently, update it rather than saving a memory.\n")
 	if agent.TrustMode == "trusted" {
 		b.WriteString("- You're trusted: actions that normally need the user's approval run right away. Use that responsibly.\n")
 	} else {

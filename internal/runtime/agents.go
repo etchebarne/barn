@@ -14,11 +14,15 @@ import (
 	"github.com/etchebarne/openbot/internal/view"
 )
 
+// MaxPersonality is the longest personality an agent can have, in characters.
+const MaxPersonality = 2000
+
 // NewAgent describes an agent to create.
 type NewAgent struct {
 	Name         string
 	Job          string // one sentence; empty for the starter agent
 	Instructions string
+	Personality  string // how it comes across; may be empty
 	Model        string
 	IsAdmin      bool
 	// CreatedBy is the agent that created this one (nil when created by the system).
@@ -69,6 +73,10 @@ func (m *Manager) CreateAgent(ctx context.Context, n NewAgent) (store.Agent, str
 	if strings.TrimSpace(n.Instructions) == "" {
 		return store.Agent{}, "", &ModelError{"instructions are required"}
 	}
+	n.Personality = strings.TrimSpace(n.Personality)
+	if utf8.RuneCountInString(n.Personality) > MaxPersonality {
+		return store.Agent{}, "", &ModelError{fmt.Sprintf("personality must be at most %d characters", MaxPersonality)}
+	}
 	if err := m.CheckModel(ctx, n.Model); err != nil {
 		return store.Agent{}, "", err
 	}
@@ -84,6 +92,7 @@ func (m *Manager) CreateAgent(ctx context.Context, n NewAgent) (store.Agent, str
 	agent, chatID, err := m.store.CreateAgentWithDM(ctx, store.Agent{
 		Name:          n.Name,
 		Instructions:  instructions,
+		Personality:   n.Personality,
 		Model:         n.Model,
 		Language:      "auto",
 		Notifications: true,

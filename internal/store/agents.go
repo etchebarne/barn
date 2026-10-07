@@ -12,6 +12,7 @@ type Agent struct {
 	ID            string
 	Name          string
 	Instructions  string
+	Personality   string
 	Model         string
 	Language      string
 	Notifications bool
@@ -21,12 +22,12 @@ type Agent struct {
 	SandboxID     *string
 }
 
-const agentColumns = `id, name, instructions, model, language, notifications, trust_mode, is_admin, created_at, sandbox_id`
+const agentColumns = `id, name, instructions, model, language, notifications, trust_mode, is_admin, created_at, sandbox_id, personality`
 
 func scanAgent(row interface{ Scan(...any) error }) (Agent, error) {
 	var a Agent
 	err := row.Scan(&a.ID, &a.Name, &a.Instructions, &a.Model, &a.Language,
-		&a.Notifications, &a.TrustMode, &a.IsAdmin, &a.CreatedAt, &a.SandboxID)
+		&a.Notifications, &a.TrustMode, &a.IsAdmin, &a.CreatedAt, &a.SandboxID, &a.Personality)
 	return a, err
 }
 
@@ -64,9 +65,9 @@ func (s *Store) CreateAgentWithDM(ctx context.Context, a Agent) (Agent, string, 
 	chatID := ids.New()
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO agents (`+agentColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO agents (`+agentColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			a.ID, a.Name, a.Instructions, a.Model, a.Language, a.Notifications,
-			a.TrustMode, a.IsAdmin, a.CreatedAt, a.SandboxID); err != nil {
+			a.TrustMode, a.IsAdmin, a.CreatedAt, a.SandboxID, a.Personality); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
@@ -90,6 +91,7 @@ func (s *Store) SetAgentAdmin(ctx context.Context, id string, admin bool) error 
 type AgentUpdate struct {
 	Name          *string
 	Instructions  *string
+	Personality   *string
 	Model         *string
 	Language      *string
 	TrustMode     *string
@@ -116,7 +118,7 @@ func (s *Store) UpdateAgent(ctx context.Context, id string, u AgentUpdate) error
 		for _, f := range []struct {
 			col string
 			v   *string
-		}{{"name", u.Name}, {"instructions", u.Instructions}, {"model", u.Model}, {"language", u.Language}, {"trust_mode", u.TrustMode}} {
+		}{{"name", u.Name}, {"instructions", u.Instructions}, {"personality", u.Personality}, {"model", u.Model}, {"language", u.Language}, {"trust_mode", u.TrustMode}} {
 			if err := set(f.col, f.v); err != nil {
 				return err
 			}

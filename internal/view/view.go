@@ -185,6 +185,7 @@ func Agent(a store.Agent, activity gen.AgentActivity) gen.Agent {
 		Id:            a.ID,
 		Name:          a.Name,
 		Instructions:  a.Instructions,
+		Personality:   a.Personality,
 		Model:         a.Model,
 		Language:      a.Language,
 		Notifications: a.Notifications,

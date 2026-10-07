@@ -132,14 +132,16 @@ var (
 		`{"type": "object", "properties": {}, "additionalProperties": false}`)
 
 	updateAgentTool = function(toolUpdateAgent,
-		"Change an agent's settings: rename it, rewrite its instructions, or switch its model or "+
-			"reply language. Leave agent_id out to change yourself. Only set the fields that change.",
+		"Change an agent's settings: rename it, rewrite its instructions or personality, or switch "+
+			"its model or reply language. Leave agent_id out to change yourself. Only set the fields "+
+			"that change, and only what the user asked for.",
 		`{
 			"type": "object",
 			"properties": {
 				"agent_id": {"type": "string", "description": "The agent to change; defaults to you."},
 				"name": {"type": "string"},
 				"instructions": {"type": "string", "description": "The full new instructions (they replace the old ones)."},
+				"personality": {"type": "string", "description": "The full new personality (replaces the old one; empty for none): how the agent comes across, e.g. tone, voice, humour, emoji use. Not what it does (that's instructions) or facts (that's memory)."},
 				"model": {"type": "string", "description": "Model id (from list_models)."},
 				"language": {"type": "string", "description": "\"auto\" or a language name, e.g. \"Spanish\"."},
 				"sandbox_with": {"type": "string", "description": "Admins only: an agent_id whose computer this agent should share from now on."}
@@ -194,6 +196,7 @@ var (
 				"name": {"type": "string", "description": "Short, human name for the agent, e.g. \"Claude Sessions\"."},
 				"job": {"type": "string", "description": "One sentence: the job this agent owns."},
 				"instructions": {"type": "string", "description": "Detailed instructions: what it does, how, for whom, and the preferences the user mentioned. Stick to what the user told you: don't invent rules, protocols, message formats, schedules or processes they didn't ask for (suggest those to the user first), and don't describe setup like which apps are connected (the agent sees that itself)."},
+				"personality": {"type": "string", "description": "Optional: how it comes across (tone, voice, humour, emoji use), in a sentence or two, when the user described one. Leave it out otherwise."},
 				"model": {"type": "string", "description": "Model id (from list_models)."},
 				"sandbox_with": {"type": "string", "description": "Optional agent_id: share that agent's computer instead of getting a new one (for agents that work on the same files)."},
 				"connections": {"type": "array", "items": {"type": "string"}, "description": "Connections (by name or account_id, from \"All connections\" in your instructions) the agent needs for its job; it gets access right away."}
@@ -561,6 +564,7 @@ func (l *loop) createAgent(ctx context.Context, creator store.Agent, raw []byte)
 		Name         string   `json:"name"`
 		Job          string   `json:"job"`
 		Instructions string   `json:"instructions"`
+		Personality  string   `json:"personality"`
 		Model        string   `json:"model"`
 		SandboxWith  string   `json:"sandbox_with"`
 		Connections  []string `json:"connections"`
@@ -574,6 +578,7 @@ func (l *loop) createAgent(ctx context.Context, creator store.Agent, raw []byte)
 		Name:         args.Name,
 		Job:          args.Job,
 		Instructions: args.Instructions,
+		Personality:  args.Personality,
 		Model:        args.Model,
 		CreatedBy:    &creator,
 	})
@@ -592,6 +597,7 @@ func (l *loop) updateAgent(ctx context.Context, agent store.Agent, raw []byte) (
 		AgentID      string  `json:"agent_id"`
 		Name         *string `json:"name"`
 		Instructions *string `json:"instructions"`
+		Personality  *string `json:"personality"`
 		Model        *string `json:"model"`
 		Language     *string `json:"language"`
 		SandboxWith  string  `json:"sandbox_with"`
@@ -610,7 +616,8 @@ func (l *loop) updateAgent(ctx context.Context, agent store.Agent, raw []byte) (
 		target = args.AgentID
 	}
 	updated, err := l.m.UpdateAgent(ctx, target, store.AgentUpdate{
-		Name: args.Name, Instructions: args.Instructions, Model: args.Model, Language: args.Language,
+		Name: args.Name, Instructions: args.Instructions, Personality: args.Personality, Model: args.Model,
+		Language: args.Language,
 	})
 	if err != nil {
 		return toolError("%v", err), false

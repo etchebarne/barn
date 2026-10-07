@@ -186,6 +186,36 @@ func TestAgentRepliesViaSendMessage(t *testing.T) {
 	}
 }
 
+func TestPersonality(t *testing.T) {
+	f := setup(t)
+	system := func() string {
+		f.llm.mu.Lock()
+		defer f.llm.mu.Unlock()
+		return f.llm.requests[len(f.llm.requests)-1].Messages[0].Text()
+	}
+	f.userSays(t, "hi")
+	f.waitIdle(t)
+	if first := system(); strings.Contains(first, "# Your personality") {
+		t.Fatalf("no personality yet, but the prompt has a section:\n%s", first)
+	}
+
+	// The agent changes its own personality when asked; it lands in its own section.
+	l := &loop{m: f.rt, agentID: f.agent.ID}
+	out, ok := l.updateAgent(context.Background(), f.agent, []byte(`{"personality":"  Dry wit, all lowercase.  "}`))
+	if !ok {
+		t.Fatalf("update_agent failed: %s", out)
+	}
+	f.userSays(t, "again")
+	f.waitIdle(t)
+	last := system()
+	if !strings.Contains(last, "# Your personality\nDry wit, all lowercase.\n") {
+		t.Fatalf("personality missing from the prompt:\n%s", last)
+	}
+	if _, ok := l.updateAgent(context.Background(), f.agent, []byte(`{"personality":"`+strings.Repeat("x", MaxPersonality+1)+`"}`)); ok {
+		t.Fatal("an overlong personality was accepted")
+	}
+}
+
 func TestPlainTextIsPrivateAndNudged(t *testing.T) {
 	var f fixture
 	f = setup(t,

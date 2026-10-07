@@ -25,6 +25,7 @@ import { MemoriesSection } from "./memories-section"
 import {
   DangerZone,
   InstructionsSection,
+  PersonalitySection,
   LanguageSection,
   NameSection,
   NotificationsSection,
@@ -135,6 +136,7 @@ export function AgentDetailsSheet() {
                 <NameSection agent={shown} />
                 <ModelField agent={shown} inputRef={modelInputRef} />
                 <InstructionsSection agent={shown} />
+                <PersonalitySection agent={shown} />
                 <LanguageSection agent={shown} />
                 <NotificationsSection agent={shown} />
                 <TrustSection agent={shown} />

@@ -244,6 +244,15 @@ func TestUpdateAgentModel(t *testing.T) {
 	if got.Model != "model-b" {
 		t.Fatalf("stored model = %q", got.Model)
 	}
+
+	// Personality: set (trimmed), shown, cleared.
+	resp, body = c.do("PATCH", "/api/agents/"+agent.ID, `{"personality":" Calm and dry. "}`, true)
+	if resp.StatusCode != http.StatusOK || body["personality"] != "Calm and dry." {
+		t.Fatalf("personality: %d %v", resp.StatusCode, body)
+	}
+	if _, body = c.do("PATCH", "/api/agents/"+agent.ID, `{"personality":""}`, true); body["personality"] != "" {
+		t.Fatalf("clearing personality: %v", body)
+	}
 }
 
 func TestOnboardingRejectsBlockedModel(t *testing.T) {

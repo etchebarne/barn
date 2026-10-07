@@ -42,6 +42,7 @@ export function makeAgent(overrides: Partial<Agent> = {}): Agent {
     id: "agent-1",
     name: "openbot",
     instructions: "",
+    personality: "",
     model: "kimi-k2.6",
     language: "auto",
     notifications: true,

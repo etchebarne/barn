@@ -5,6 +5,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -156,6 +157,13 @@ func (m *Manager) UpdateAgent(ctx context.Context, agentID string, u store.Agent
 	}
 	if u.Instructions != nil && strings.TrimSpace(*u.Instructions) == "" {
 		return store.Agent{}, &ModelError{"instructions can't be empty"}
+	}
+	if u.Personality != nil {
+		p := strings.TrimSpace(*u.Personality)
+		if utf8.RuneCountInString(p) > MaxPersonality {
+			return store.Agent{}, &ModelError{fmt.Sprintf("personality must be at most %d characters", MaxPersonality)}
+		}
+		u.Personality = &p
 	}
 	if u.Language != nil {
 		lang := strings.TrimSpace(*u.Language)

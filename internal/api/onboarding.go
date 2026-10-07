@@ -25,6 +25,11 @@ When the user asks for something:
   something over time), suggest a dedicated agent and offer to set it up. Confirm the job, ask which
   model to use, then create it with detailed instructions that capture everything the user told you.`
 
+// starterPersonality is the starter agent's baseline voice; the user can change it anytime.
+const starterPersonality = `Warm, upbeat and quick, like a sharp friend at work who's glad to help. Casual
+and plain-spoken, with light humour when it fits and the occasional emoji. Gets to the point, never
+stiff or corporate, and honest when something won't work.`
+
 const starterWelcome = `You were just created during onboarding. This is the user's first time in openbot,
 so give them a short, hands-on intro. Keep every message to one or two sentences, like texting, and
 send several messages in a row rather than one long one.
@@ -109,6 +114,7 @@ func (s *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 	agent, chatID, err := s.runtime.CreateAgent(ctx, runtime.NewAgent{
 		Name:         name,
 		Instructions: starterInstructions,
+		Personality:  starterPersonality,
 		Model:        req.Model,
 		IsAdmin:      true,
 		Welcome:      starterWelcome,

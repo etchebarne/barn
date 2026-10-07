@@ -890,6 +890,8 @@ export interface components {
             name: string;
             /** @description What the agent is for and how it should work (its own system instructions) */
             instructions: string;
+            /** @description How the agent comes across (tone, voice, manner); empty for the default */
+            personality: string;
             model: string;
             /** @description Reply language, or "auto" */
             language: string;
@@ -1061,6 +1063,8 @@ export interface components {
             model?: string;
             name?: string;
             instructions?: string;
+            /** @description Empty clears it */
+            personality?: string;
             /** @description "auto" (reply in the language people write in) or a language name */
             language?: string;
             /**

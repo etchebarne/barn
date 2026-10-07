@@ -288,26 +288,24 @@ function SectionHeader({
         ref={dragHandle?.ref}
         {...(dragHandle?.props ?? {})}
         className={cn(
-          // Same grid as chat rows: an 8 (2rem) icon column where avatars sit, then the label
-          // where chat names start, and actions on the same right edge as the rows' ⋯.
-          "group/section flex h-8 items-center gap-3 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          // The chevron starts on the avatars' left edge with the label right after it; actions
+          // sit on the same right edge as the rows' ⋯.
+          "group/section flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           dropTarget && "bg-sidebar-accent ring-1 ring-primary/40",
         )}
       >
-        <span className="flex w-8 shrink-0 justify-center">
-          <button
-            type="button"
-            aria-expanded={!section.collapsed}
-            aria-label={`${section.collapsed ? "Expand" : "Collapse"} ${section.name}`}
-            className="flex size-6 items-center justify-center rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-            onClick={onToggle}
-          >
-            <ChevronRightIcon
-              aria-hidden="true"
-              className={cn("size-3.5", !section.collapsed && "rotate-90")}
-            />
-          </button>
-        </span>
+        <button
+          type="button"
+          aria-expanded={!section.collapsed}
+          aria-label={`${section.collapsed ? "Expand" : "Collapse"} ${section.name}`}
+          className="flex size-4 shrink-0 items-center justify-center rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          onClick={onToggle}
+        >
+          <ChevronRightIcon
+            aria-hidden="true"
+            className={cn("size-3.5", !section.collapsed && "rotate-90")}
+          />
+        </button>
         {renaming ? (
           <InlineName
             initial={section.name}
@@ -691,7 +689,7 @@ export function NewCategory() {
   }
   if (naming) {
     return (
-      <div className="py-1 pr-2 pl-[3.25rem]">
+      <div className="py-1 pr-2 pl-[1.875rem]">
         <InlineName
           initial=""
           label="New category name"
@@ -707,10 +705,10 @@ export function NewCategory() {
   return (
     <button
       type="button"
-      className="flex h-8 w-full items-center gap-3 rounded-md px-2 text-xs text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       onClick={() => setNaming(true)}
     >
-      <span className="flex w-8 shrink-0 justify-center" aria-hidden="true">
+      <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
         <PlusIcon className="size-3.5" />
       </span>
       New category

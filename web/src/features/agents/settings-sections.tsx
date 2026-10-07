@@ -144,21 +144,34 @@ export function NameSection({ agent }: { agent: Agent }) {
   )
 }
 
-/** Instructions: a growing textarea with an explicit Save (enabled once edited). */
-export function InstructionsSection({ agent }: { agent: Agent }) {
+/** A growing textarea for one of an agent's long texts, with an explicit Save once edited. */
+function LongTextSection({
+  agent,
+  field,
+  label,
+  placeholder,
+  description,
+}: {
+  agent: Agent
+  field: "instructions" | "personality"
+  label: string
+  placeholder: string
+  description: string
+}) {
   const update = useUpdateAgent(agent.id)
   const [draft, setDraft] = useState<string | null>(null)
-  const value = draft ?? agent.instructions
-  const dirty = draft !== null && draft !== agent.instructions
+  const value = draft ?? agent[field]
+  const dirty = draft !== null && draft !== agent[field]
+  const id = `agent-${field}`
 
   function save() {
     if (!dirty) return
     update.mutate(
-      { instructions: draft },
+      { [field]: draft },
       {
         onSuccess: (updated) => {
           setDraft(null)
-          toast.success(`Saved ${updated.name}'s instructions`)
+          toast.success(`Saved ${updated.name}'s ${label.toLowerCase()}`)
         },
       },
     )
@@ -166,11 +179,11 @@ export function InstructionsSection({ agent }: { agent: Agent }) {
 
   return (
     <Field data-invalid={!!update.error || undefined}>
-      <FieldLabel htmlFor="agent-instructions">Instructions</FieldLabel>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Textarea
-        id="agent-instructions"
+        id={id}
         value={value}
-        placeholder="What this agent is for and how it should work"
+        placeholder={placeholder}
         className="max-h-72 min-h-24 overscroll-contain"
         aria-invalid={!!update.error || undefined}
         onChange={(e) => {
@@ -181,7 +194,7 @@ export function InstructionsSection({ agent }: { agent: Agent }) {
       {update.error ? (
         <FieldError>{update.error.message}</FieldError>
       ) : (
-        <FieldDescription>Its own system instructions, used on every turn.</FieldDescription>
+        <FieldDescription>{description}</FieldDescription>
       )}
       {dirty && (
         <div className="flex justify-end gap-2">
@@ -203,6 +216,32 @@ export function InstructionsSection({ agent }: { agent: Agent }) {
         </div>
       )}
     </Field>
+  )
+}
+
+/** Instructions: what the agent does. */
+export function InstructionsSection({ agent }: { agent: Agent }) {
+  return (
+    <LongTextSection
+      agent={agent}
+      field="instructions"
+      label="Instructions"
+      placeholder="What this agent is for and how it should work"
+      description="Its own system instructions, used on every turn."
+    />
+  )
+}
+
+/** Personality: how the agent comes across, apart from what it does and what it remembers. */
+export function PersonalitySection({ agent }: { agent: Agent }) {
+  return (
+    <LongTextSection
+      agent={agent}
+      field="personality"
+      label="Personality"
+      placeholder="Warm and playful, lots of emoji. Or: dry, terse, all lowercase."
+      description="How it comes across: tone, voice, humour. It can change this itself when you ask it to talk differently."
+    />
   )
 }
 

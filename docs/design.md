@@ -26,7 +26,7 @@ Status: draft, pre-implementation.
 
 | Concept | Description |
 |---|---|
-| **Agent** | A persistent mind: name, purpose/instructions, model, language, notification preference, trust mode. Owns its tasks, memories, and sandbox assignment. |
+| **Agent** | A persistent mind: name, purpose/instructions, personality (how it comes across, apart from what it does and what it remembers; the agent edits it when asked to talk differently), model, language, notification preference, trust mode. Owns its tasks, memories, and sandbox assignment. |
 | **Chat** | Either a **DM** (user ↔ one agent) or a **group** (user + chosen agents). Single-threaded forever; never "new session". |
 | **Message** | Something posted in a chat by the user, an agent, or the system. |
 | **Event** | Anything that wakes an agent: a message it can see, a task firing, a connector signal, an approval answer, a tool result from a parked action. |
@@ -99,7 +99,7 @@ top of the message, so "yes, this one" is unambiguous even in a busy group.
 ### 4.3 Context assembly and compaction
 Each model call is built from:
 
-1. **System prompt**: identity, purpose/instructions, language, trust mode, current time,
+1. **System prompt**: identity, purpose/instructions, personality, language, trust mode, current time,
    chat roster, its tasks, granted connectors, sandbox info, and all its memories
    (memories are expected to stay small; add retrieval later if needed).
 2. **Summary** of older history (from previous compactions).
@@ -400,7 +400,7 @@ settings(key, value, updated_at)                    -- secrets encrypted (see §
 passkeys(id, user_id, credential, created_at)
 sessions(id, user_id, expires_at, ...)
 
-agents(id, name, instructions, model, utility_model, language, notifications,
+agents(id, name, instructions, personality, model, utility_model, language, notifications,
        trust_mode, is_admin, sandbox_id, created_at, archived_at)
 sandboxes(id, name, image, container_id, volume, limits_json, created_at)
 

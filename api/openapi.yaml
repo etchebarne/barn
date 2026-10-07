@@ -1148,13 +1148,16 @@ components:
 
     Agent:
       type: object
-      required: [id, name, instructions, model, language, notifications, trustMode, isAdmin, activity, createdAt]
+      required: [id, name, instructions, personality, model, language, notifications, trustMode, isAdmin, activity, createdAt]
       properties:
         id: { type: string }
         name: { type: string }
         instructions:
           type: string
           description: What the agent is for and how it should work (its own system instructions)
+        personality:
+          type: string
+          description: How the agent comes across (tone, voice, manner); empty for the default
         model: { type: string }
         language: { type: string, description: 'Reply language, or "auto"' }
         notifications: { type: boolean }
@@ -1410,6 +1413,10 @@ components:
           description: Model id from GET /models
         name: { type: string, minLength: 1, maxLength: 64 }
         instructions: { type: string, minLength: 1, maxLength: 20000 }
+        personality:
+          type: string
+          maxLength: 2000
+          description: Empty clears it
         language:
           type: string
           maxLength: 40
