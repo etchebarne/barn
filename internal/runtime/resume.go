@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -45,7 +46,11 @@ func (m *Manager) resumeIfInterrupted(ctx context.Context, agentID string) error
 		}
 	}
 	logger(agentID).Info("resuming a turn interrupted by a restart")
-	return m.Retry(ctx, agentID)
+	// Events already waiting start the next turn, which carries on from the same context.
+	if err := m.Retry(ctx, agentID); !errors.Is(err, ErrBusy) {
+		return err
+	}
+	return nil
 }
 
 // turnState reports whether the context ends mid-turn, and which tool calls of the last
