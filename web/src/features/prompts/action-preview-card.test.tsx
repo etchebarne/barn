@@ -121,4 +121,54 @@ describe("ActionPreviewCard", () => {
       "true",
     )
   })
+
+  it("offers a quieter Always allow when there's a third option", async () => {
+    const threeOptions = prompt({
+      options: [{ label: "Approve" }, { label: "Decline" }, { label: "Always allow" }],
+    })
+    const { onAnswer } = renderCard({ prompt: threeOptions })
+    const always = screen.getByRole("button", { name: "Always allow" })
+    expect(screen.getByRole("button", { name: "Send message" })).toBeVisible()
+    await userEvent.click(always)
+    expect(onAnswer).toHaveBeenCalledWith({ selected: [2] })
+  })
+
+  it("has no Always allow with only two options", () => {
+    renderCard()
+    expect(screen.queryByRole("button", { name: "Always allow" })).not.toBeInTheDocument()
+  })
+
+  it("shows Always allowed once answered with the third option", () => {
+    renderCard({
+      prompt: prompt({
+        options: [{ label: "Approve" }, { label: "Decline" }, { label: "Always allow" }],
+        status: "answered",
+        answer: { selected: [2] },
+      }),
+    })
+    expect(screen.getByText("Always allowed")).toBeVisible()
+    expect(screen.queryByRole("button", { name: "Always allow" })).not.toBeInTheDocument()
+  })
+
+  it("renders an agent's standing-approval proposal as a normal two-option card", async () => {
+    const proposal: ActionPreview = {
+      appType: null,
+      appName: null,
+      title: "Always allow",
+      verb: "Always allow",
+      note: "barn won't ask before doing this again. Remove it any time in barn's settings.",
+      fields: [
+        { key: "action", label: "Action", value: "Slack message · Work Slack" },
+        { key: "only_when", label: "Only when", value: "Channel is #bot-ception" },
+      ],
+      body: null,
+    }
+    const { onAnswer } = renderCard({ prompt: prompt({ preview: proposal }), preview: proposal })
+    expect(screen.getAllByRole("term").map((t) => t.textContent)).toEqual(["Action", "Only when"])
+    expect(screen.getByText("Channel is #bot-ception")).toBeVisible()
+    const buttons = screen.getAllByRole("button", { name: "Always allow" })
+    expect(buttons).toHaveLength(1)
+    await userEvent.click(buttons[0])
+    expect(onAnswer).toHaveBeenCalledWith({ selected: [0] })
+  })
 })

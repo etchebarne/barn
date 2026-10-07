@@ -7,6 +7,7 @@ import {
   HashIcon,
   HouseIcon,
   NotebookTextIcon,
+  ShieldCheckIcon,
   type LucideIcon,
   PlugIcon,
   ServerIcon,
@@ -29,6 +30,7 @@ const ICONS: Record<string, LucideIcon> = {
   stripe: CreditCardIcon,
   // barn's own actions (e.g. archiving an agent).
   barn: HouseIcon,
+  "always-allow": ShieldCheckIcon,
 }
 
 /** The one icon per connector type, used everywhere (list, picker, detail, agent sheet). */

@@ -63,4 +63,13 @@ describe("PromptCard approvals", () => {
     expect(screen.getByRole("button", { name: "Archive" })).toBeVisible()
     expect(screen.queryByText("Archive Tracker?")).not.toBeInTheDocument()
   })
+
+  it("offers Always allow on the plain card too when there's a third option", async () => {
+    await renderPrompt({
+      ...approval,
+      options: [{ label: "Approve" }, { label: "Decline" }, { label: "Always allow" }],
+      preview: null,
+    })
+    expect(screen.getByRole("button", { name: "Always allow" })).toBeVisible()
+  })
 })

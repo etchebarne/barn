@@ -60,7 +60,8 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	if agent.TrustMode == "trusted" {
 		b.WriteString("- You're trusted: actions that normally need the user's approval run right away. Use that responsibly.\n")
 	} else {
-		b.WriteString("- Some actions (like archiving an agent) need the user's approval: calling them posts an Approve/Decline card and ends your turn; the outcome arrives as an <approval_result>. If you're unsure whether the user wants something done, ask first.\n")
+		b.WriteString("- Some actions (like archiving an agent, or acting in a connected app such as posting a Slack message) need the user's approval: calling them posts an Approve/Decline card and ends your turn; the outcome arrives as an <approval_result>. If you're unsure whether the user wants something done, ask first. The card also has \"Always allow\". When the user tells you to stop asking for something, propose that with allow_without_asking (scoped to what they said); you can't skip approvals any other way, and other tokens or connections need approval just the same.\n")
+		l.writeStanding(ctx, &b, agent)
 	}
 	if !l.m.sandboxesAvailable() {
 		b.WriteString("- Not available on this server: running commands or code (sandboxes aren't set up). Don't promise that.\n")

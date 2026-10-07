@@ -113,6 +113,10 @@ describe("previewStatus", () => {
       label: "Declined",
       tone: "muted",
     })
+    expect(previewStatus({ ...base, status: "answered", answer: { selected: [2] } })).toEqual({
+      label: "Always allowed",
+      tone: "done",
+    })
     expect(previewStatus({ ...base, status: "dismissed" })).toEqual({
       label: "Dismissed",
       tone: "muted",

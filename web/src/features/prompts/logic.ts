@@ -88,13 +88,26 @@ export function acceptsLetterKeys(prompt: Prompt, isLatest: boolean): boolean {
 /** Approval options are always ["Approve", "Decline"]. */
 export const APPROVE_INDEX = 0
 export const DECLINE_INDEX = 1
+/** Approves and stops asking for this action from this agent ("standing approval"). */
+export const ALWAYS_ALLOW_INDEX = 2
 
 export function approvalAnswer(approve: boolean): PromptAnswer {
   return { selected: [approve ? APPROVE_INDEX : DECLINE_INDEX] }
 }
 
+export function alwaysAllowAnswer(): PromptAnswer {
+  return { selected: [ALWAYS_ALLOW_INDEX] }
+}
+
+/** Newer approvals offer a third option, "Always allow". */
+export function offersAlwaysAllow(prompt: Prompt): boolean {
+  return prompt.kind === "approval" && prompt.options.length > ALWAYS_ALLOW_INDEX
+}
+
 /** How an answered approval came out, or null while pending/dismissed. */
-export function approvalOutcome(prompt: Prompt): "approved" | "declined" | null {
+export function approvalOutcome(prompt: Prompt): "approved" | "always" | "declined" | null {
   if (prompt.kind !== "approval" || prompt.status !== "answered") return null
-  return prompt.answer?.selected?.includes(APPROVE_INDEX) ? "approved" : "declined"
+  const selected = prompt.answer?.selected ?? []
+  if (selected.includes(ALWAYS_ALLOW_INDEX)) return "always"
+  return selected.includes(APPROVE_INDEX) ? "approved" : "declined"
 }

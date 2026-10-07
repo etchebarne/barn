@@ -276,6 +276,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Actions the user always allows this agent to take without asking. */
+        get: operations["listStandingApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/approvals/{approvalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                approvalId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Take a standing approval back, so the agent asks again. */
+        delete: operations["revokeStandingApproval"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/sandbox": {
         parameters: {
             query?: never;
@@ -658,6 +697,13 @@ export interface components {
              */
             code?: string;
         };
+        StandingApproval: {
+            id: string;
+            /** @description What is allowed, e.g. "Slack message as you · Slack, when Channel is #alerts" */
+            label: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
         CatalogApp: {
             /** @description e.g. "linear" */
             id: string;
@@ -996,7 +1042,8 @@ export interface components {
         Prompt: {
             /**
              * @description single = pick one; multi = pick any number; text = free-text answer; approval = the
-             *     agent wants to do something that needs the user's OK (options: Approve, Decline);
+             *     agent wants to do something that needs the user's OK (options: Approve, Decline, and
+             *     sometimes a third, "Always allow", which approves and stops asking for that action);
              *     connect = the agent proposes connecting an app (see connection; options: Connect,
              *     Decline; connect with POST /messages/{messageId}/connect)
              * @enum {string}
@@ -1654,6 +1701,53 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listStandingApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The standing approvals, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandingApproval"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    revokeStandingApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                approvalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     getSandbox: {

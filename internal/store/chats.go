@@ -107,6 +107,14 @@ type PendingAction struct {
 	AgentID string          `json:"agentId"`
 	Tool    string          `json:"tool"`
 	Args    json.RawMessage `json:"args"`
+	// Rule is what "Always allow" (option 2) saves, for actions that can be always allowed.
+	Rule *StandingRule `json:"rule,omitempty"`
+}
+
+// StandingRule identifies an action for a standing approval (see ApprovalRule).
+type StandingRule struct {
+	Action string `json:"action"`
+	Label  string `json:"label"`
 }
 
 type PromptAnswer struct {

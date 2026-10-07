@@ -18,18 +18,21 @@ const EventApproval = "approval"
 
 // gatedTools need the user's approval unless the agent is trusted.
 var gatedTools = map[string]bool{
-	toolArchiveAgent: true,
+	toolArchiveAgent:       true,
+	toolAllowWithoutAsking: true,
 }
 
-func (l *loop) needsApproval(ctx context.Context, agent store.Agent, tool string) bool {
+func (l *loop) needsApproval(ctx context.Context, agent store.Agent, call model.ToolCall) bool {
 	if agent.TrustMode == "trusted" {
 		return false
 	}
-	if gatedTools[tool] {
-		return true
+	tool := call.Function.Name
+	gated := gatedTools[tool]
+	if !gated {
+		t, ok := l.connectorTool(ctx, agent, tool)
+		gated = ok && t.Tool.External
 	}
-	t, ok := l.connectorTool(ctx, agent, tool)
-	return ok && t.Tool.External
+	return gated && !l.alwaysAllowed(ctx, agent, call)
 }
 
 // requestApproval posts an Approve / Decline prompt in the agent's DM instead of running a
@@ -47,11 +50,18 @@ func (l *loop) requestApproval(ctx context.Context, agent store.Agent, call mode
 	if err != nil {
 		return toolError("couldn't find your DM to ask for approval"), false
 	}
+	action := &store.PendingAction{AgentID: agent.ID, Tool: call.Function.Name, Args: args}
+	options := []store.PromptOption{{Label: "Approve"}, {Label: "Decline"}}
+	// Option 2 approves this and stops asking for the same action.
+	if key, label, ok := l.actionKey(ctx, agent, call.Function.Name); ok {
+		action.Rule = &store.StandingRule{Action: key, Label: label}
+		options = append(options, store.PromptOption{Label: "Always allow"})
+	}
 	msg, err := l.m.store.InsertPrompt(ctx, dm, agent.ID, store.Prompt{
 		Kind:     "approval",
 		Question: question,
-		Options:  []store.PromptOption{{Label: "Approve"}, {Label: "Decline"}},
-		Action:   &store.PendingAction{AgentID: agent.ID, Tool: call.Function.Name, Args: args},
+		Options:  options,
+		Action:   action,
 		Preview:  preview,
 	})
 	if err != nil {
@@ -69,6 +79,8 @@ func (l *loop) requestApproval(ctx context.Context, agent store.Agent, call mode
 // preview the card shows.
 func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool string, args json.RawMessage) (string, *store.ActionPreview, error) {
 	switch tool {
+	case toolAllowWithoutAsking:
+		return l.describeAllow(ctx, agent, args)
 	case toolArchiveAgent:
 		var a struct {
 			AgentID string `json:"agent_id"`
@@ -199,8 +211,18 @@ func (m *Manager) ResolveApproval(ctx context.Context, msg store.Message) error 
 	if p == nil || p.Kind != "approval" || p.Action == nil || p.Answer == nil {
 		return nil
 	}
-	approved := len(p.Answer.Selected) == 1 && p.Answer.Selected[0] == 0
+	choice := -1
+	if len(p.Answer.Selected) == 1 {
+		choice = p.Answer.Selected[0]
+	}
+	approved := choice == 0 || choice == 2
 	outcome := map[string]any{"approved": approved}
+	if choice == 2 && p.Action.Rule != nil {
+		if err := m.store.AllowAction(ctx, p.Action.AgentID, p.Action.Rule.Action, nil, p.Action.Rule.Label); err != nil {
+			return err
+		}
+		outcome["always_allowed"] = p.Action.Rule.Label + " (you won't need approval for this again)"
+	}
 	if approved {
 		agent, err := m.store.GetAgent(ctx, p.Action.AgentID)
 		if err != nil {

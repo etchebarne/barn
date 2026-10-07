@@ -69,7 +69,10 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 		if n, _ := res.RowsAffected(); n == 0 {
 			return ErrNotFound
 		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM tasks WHERE kind = 'signal' AND json_extract(spec, '$.accountId') = ?`, id)
+		if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE kind = 'signal' AND json_extract(spec, '$.accountId') = ?`, id); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM approval_rules WHERE action LIKE 'connector:' || ? || ':%'`, id)
 		return err
 	})
 }

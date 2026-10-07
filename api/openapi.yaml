@@ -330,6 +330,46 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /agents/{agentId}/approvals:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listStandingApprovals
+      tags: [agents]
+      description: Actions the user always allows this agent to take without asking.
+      responses:
+        "200":
+          description: The standing approvals, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StandingApproval" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/approvals/{approvalId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: approvalId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: revokeStandingApproval
+      tags: [agents]
+      description: Take a standing approval back, so the agent asks again.
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /agents/{agentId}/sandbox:
     parameters:
       - name: agentId
@@ -830,6 +870,16 @@ components:
           description: |
             Machine-readable reason where clients react to it: sign_in_required (an MCP server
             wants a sign-in instead of a key), reconnect (a sign-in expired)
+
+    StandingApproval:
+      type: object
+      required: [id, label, createdAt]
+      properties:
+        id: { type: string }
+        label:
+          type: string
+          description: 'What is allowed, e.g. "Slack message as you · Slack, when Channel is #alerts"'
+        createdAt: { type: string, format: date-time }
 
     CatalogApp:
       type: object
@@ -1354,7 +1404,8 @@ components:
           enum: [single, multi, text, approval, connect]
           description: |
             single = pick one; multi = pick any number; text = free-text answer; approval = the
-            agent wants to do something that needs the user's OK (options: Approve, Decline);
+            agent wants to do something that needs the user's OK (options: Approve, Decline, and
+            sometimes a third, "Always allow", which approves and stops asking for that action);
             connect = the agent proposes connecting an app (see connection; options: Connect,
             Decline; connect with POST /messages/{messageId}/connect)
         question: { type: string }

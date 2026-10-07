@@ -1,6 +1,6 @@
 import type { Schemas } from "@/lib/api-client"
 
-import { APPROVE_INDEX, type Prompt } from "./logic"
+import { approvalOutcome, type Prompt } from "./logic"
 
 export type ActionPreview = Schemas["ActionPreview"]
 export type PreviewField = Schemas["PreviewField"]
@@ -113,7 +113,14 @@ export type StatusChip = { label: string; tone: "warning" | "done" | "muted" }
 export function previewStatus(prompt: Prompt): StatusChip {
   if (prompt.status === "pending") return { label: "Needs approval", tone: "warning" }
   if (prompt.status === "dismissed") return { label: "Dismissed", tone: "muted" }
-  return prompt.answer?.selected?.includes(APPROVE_INDEX)
+  const outcome = approvalOutcome(prompt)
+  if (outcome === "always") return { label: "Always allowed", tone: "done" }
+  return outcome === "approved"
     ? { label: "Approved", tone: "done" }
     : { label: "Declined", tone: "muted" }
+}
+
+/** A card proposing a standing approval itself (the agent asking "may I always…?"). */
+export function isStandingApprovalProposal(preview: ActionPreview): boolean {
+  return preview.appType === null && preview.title === "Always allow"
 }

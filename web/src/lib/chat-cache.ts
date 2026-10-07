@@ -199,6 +199,16 @@ export function applyUpdatedMessageToChats(chats: Chat[], message: Message): Cha
 
 /** Applies an edited message (e.g. an answered prompt) to every cache that shows it. */
 export function updateMessageInCache(queryClient: QueryClient, message: Message) {
+  // An answered approval may have added a standing approval ("Always allow").
+  if (
+    message.prompt?.kind === "approval" &&
+    message.prompt.status === "answered" &&
+    message.author.agentId
+  ) {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.standingApprovals(message.author.agentId),
+    })
+  }
   queryClient.setQueryData<MessagesData>(queryKeys.messages(message.chatId), (data) =>
     data ? replaceMessage(data, message) : data,
   )

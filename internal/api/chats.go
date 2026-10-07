@@ -657,3 +657,31 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, agentID str
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (s *Server) ListStandingApprovals(w http.ResponseWriter, r *http.Request, agentID string) {
+	if _, err := s.store.GetAgent(r.Context(), agentID); err != nil {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	rules, err := s.store.ApprovalRules(r.Context(), agentID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	out := make([]gen.StandingApproval, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, gen.StandingApproval{Id: rule.ID, Label: rule.Label, CreatedAt: store.Time(rule.CreatedAt)})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) RevokeStandingApproval(w http.ResponseWriter, r *http.Request, agentID, approvalID string) {
+	switch err := s.store.RevokeApproval(r.Context(), agentID, approvalID); {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

@@ -164,3 +164,34 @@ export function useDeleteTask(agentId: string) {
       queryClient.setQueryData<Task[]>(key, (tasks) => tasks?.filter((t) => t.id !== taskId)),
   })
 }
+
+export type StandingApproval = Schemas["StandingApproval"]
+
+/** What the agent may do without asking ("Always allow"). */
+export function useStandingApprovals(agentId: string) {
+  return useQuery({
+    queryKey: queryKeys.standingApprovals(agentId),
+    queryFn: () =>
+      unwrap(api.GET("/agents/{agentId}/approvals", { params: { path: { agentId } } })),
+    // Approvals change from chat; refresh whenever the sheet opens.
+    staleTime: 0,
+    refetchOnMount: "always",
+  })
+}
+
+export function useRemoveStandingApproval(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.standingApprovals(agentId)
+  return useMutation({
+    mutationFn: (approvalId: string) =>
+      unwrap(
+        api.DELETE("/agents/{agentId}/approvals/{approvalId}", {
+          params: { path: { agentId, approvalId } },
+        }),
+      ),
+    onSuccess: (_data, approvalId) =>
+      queryClient.setQueryData<StandingApproval[]>(key, (list) =>
+        list?.filter((a) => a.id !== approvalId),
+      ),
+  })
+}

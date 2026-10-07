@@ -5,10 +5,17 @@ import { useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { ConnectorIcon } from "@/features/connectors"
 
-import { approvalAnswer, type Prompt, type PromptAnswer } from "./logic"
+import {
+  alwaysAllowAnswer,
+  approvalAnswer,
+  offersAlwaysAllow,
+  type Prompt,
+  type PromptAnswer,
+} from "./logic"
 import {
   bodyText,
   isLongText,
+  isStandingApprovalProposal,
   previewStatus,
   toPreviewNode,
   type ActionPreview,
@@ -166,7 +173,10 @@ export function ActionPreviewCard({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center gap-2.5 px-1.5 pt-1">
-        <ConnectorIcon type={preview.appType ?? "barn"} className="size-7" />
+        <ConnectorIcon
+          type={preview.appType ?? (isStandingApprovalProposal(preview) ? "always-allow" : "barn")}
+          className="size-7"
+        />
         <p className="min-w-0 flex-1 truncate text-sm">
           <span className="font-medium">{preview.title}</span>
           {preview.appName && <span className="text-muted-foreground"> · {preview.appName}</span>}
@@ -222,6 +232,18 @@ export function ActionPreviewCard({
           >
             Decline
           </Button>
+          {offersAlwaysAllow(prompt) && (
+            // Quieter than the main choices: it changes future behaviour, not just this action.
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto text-muted-foreground"
+              disabled={disabled}
+              onClick={() => onAnswer(alwaysAllowAnswer())}
+            >
+              Always allow
+            </Button>
+          )}
         </div>
       )}
     </div>

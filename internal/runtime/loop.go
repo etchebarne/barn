@@ -132,7 +132,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			l.m.setActivity(agent.ID, view.Working(l.activity(ctx, agent, call)))
 			var result string
 			var ok bool
-			if l.needsApproval(ctx, agent, call.Function.Name) {
+			if l.needsApproval(ctx, agent, call) {
 				// Waiting for approval ends the turn like asking a question does.
 				result, ok = l.requestApproval(ctx, agent, call)
 				asked = asked || ok

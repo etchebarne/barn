@@ -26,6 +26,7 @@ import {
   NotificationsSection,
   TrustSection,
 } from "./settings-sections"
+import { StandingApprovalsSection } from "./standing-approvals-section"
 import { TasksSection } from "./tasks-section"
 
 /** Model setting: changes apply as soon as a model is picked. */
@@ -121,6 +122,7 @@ export function AgentDetailsSheet() {
                 <NotificationsSection agent={shown} />
                 <TrustSection agent={shown} />
               </FieldGroup>
+              <StandingApprovalsSection agent={shown} />
               <MemoriesSection agent={shown} />
               <TasksSection agent={shown} />
               <AgentConnections agentId={shown.id} agentName={shown.name} onNavigate={close} />

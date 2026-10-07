@@ -21,8 +21,10 @@ import { DECLINE_CONNECT } from "./connect"
 import { ConnectCard } from "./connect-card"
 import {
   acceptsLetterKeys,
+  alwaysAllowAnswer,
   approvalAnswer,
   approvalOutcome,
+  offersAlwaysAllow,
   buildAnswer,
   chatToOpen,
   letterIndex,
@@ -284,12 +286,25 @@ function PendingCard({
 function ApprovalActions({
   onAnswer,
   disabled,
+  alwaysAllow,
 }: {
   onAnswer: (answer: PromptAnswer) => void
   disabled: boolean
+  alwaysAllow: boolean
 }) {
   return (
-    <div className="flex justify-end gap-2 px-1.5 pb-1">
+    <div className="flex flex-wrap justify-end gap-2 px-1.5 pb-1">
+      {alwaysAllow && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mr-auto text-muted-foreground"
+          disabled={disabled}
+          onClick={() => onAnswer(alwaysAllowAnswer())}
+        >
+          Always allow
+        </Button>
+      )}
       <Button
         size="sm"
         variant="outline"
@@ -310,10 +325,10 @@ function ApprovalOutcome({ prompt }: { prompt: Prompt }) {
   if (!outcome) return null
   return (
     <p className="flex items-center gap-1.5 px-1.5 pb-1 text-xs font-medium text-muted-foreground">
-      {outcome === "approved" ? (
+      {outcome === "approved" || outcome === "always" ? (
         <>
           <CheckIcon className="size-3.5" aria-hidden="true" />
-          Approved
+          {outcome === "always" ? "Always allowed" : "Approved"}
         </>
       ) : (
         <>
@@ -465,7 +480,11 @@ export function PromptCard({
         )}
       </div>
       {prompt.kind === "approval" && prompt.status === "pending" && (
-        <ApprovalActions onAnswer={onAnswer} disabled={busy} />
+        <ApprovalActions
+          onAnswer={onAnswer}
+          disabled={busy}
+          alwaysAllow={offersAlwaysAllow(prompt)}
+        />
       )}
       {prompt.kind === "approval" && <ApprovalOutcome prompt={prompt} />}
       {prompt.kind !== "approval" && prompt.status === "pending" && (

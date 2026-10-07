@@ -761,7 +761,8 @@ type Prompt struct {
 	Connection *PromptConnection `json:"connection,omitempty"`
 
 	// Kind single = pick one; multi = pick any number; text = free-text answer; approval = the
-	// agent wants to do something that needs the user's OK (options: Approve, Decline);
+	// agent wants to do something that needs the user's OK (options: Approve, Decline, and
+	// sometimes a third, "Always allow", which approves and stops asking for that action);
 	// connect = the agent proposes connecting an app (see connection; options: Connect,
 	// Decline; connect with POST /messages/{messageId}/connect)
 	Kind    PromptKind     `json:"kind"`
@@ -774,7 +775,8 @@ type Prompt struct {
 }
 
 // PromptKind single = pick one; multi = pick any number; text = free-text answer; approval = the
-// agent wants to do something that needs the user's OK (options: Approve, Decline);
+// agent wants to do something that needs the user's OK (options: Approve, Decline, and
+// sometimes a third, "Always allow", which approves and stops asking for that action);
 // connect = the agent proposes connecting an app (see connection; options: Connect,
 // Decline; connect with POST /messages/{messageId}/connect)
 type PromptKind string
@@ -905,6 +907,15 @@ type SignInResult struct {
 	// ChatId The chat whose connect card this answered
 	ChatId    *string   `json:"chatId"`
 	Connector Connector `json:"connector"`
+}
+
+// StandingApproval defines model for StandingApproval.
+type StandingApproval struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Id        string    `json:"id"`
+
+	// Label What is allowed, e.g. "Slack message as you · Slack, when Channel is #alerts"
+	Label string `json:"label"`
 }
 
 // StartSignInRequest defines model for StartSignInRequest.
@@ -1525,6 +1536,12 @@ type ServerInterface interface {
 	// (PATCH /agents/{agentId})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (GET /agents/{agentId}/approvals)
+	ListStandingApprovals(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (DELETE /agents/{agentId}/approvals/{approvalId})
+	RevokeStandingApproval(w http.ResponseWriter, r *http.Request, agentId string, approvalId string)
+
 	// (POST /agents/{agentId}/archive)
 	ArchiveAgent(w http.ResponseWriter, r *http.Request, agentId string)
 
@@ -1706,6 +1723,67 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListStandingApprovals operation middleware
+func (siw *ServerInterfaceWrapper) ListStandingApprovals(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStandingApprovals(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeStandingApproval operation middleware
+func (siw *ServerInterfaceWrapper) RevokeStandingApproval(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "approvalId" -------------
+	var approvalId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "approvalId", r.PathValue("approvalId"), &approvalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "approvalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeStandingApproval(w, r, agentId, approvalId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2639,6 +2717,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/memories", wrapper.ListMemories)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/memories/{memoryId}", wrapper.DeleteMemory)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/archive", wrapper.ArchiveAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/approvals", wrapper.ListStandingApprovals)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/approvals/{approvalId}", wrapper.RevokeStandingApproval)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox", wrapper.GetSandbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/sandbox/restart", wrapper.RestartSandbox)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.ListTasks)

@@ -201,7 +201,7 @@ var (
 
 // toolsFor returns the tools an agent may use.
 func toolsFor(agent store.Agent, sandboxes bool) []model.Tool {
-	tools := []model.Tool{sendMessageTool, reactTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool}
+	tools := []model.Tool{sendMessageTool, reactTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool, allowWithoutAskingTool}
 	tools = append(tools, taskTools()...)
 	if sandboxes {
 		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool)
@@ -248,6 +248,8 @@ func toolLabel(name string) string {
 		return "updating a group"
 	case toolConnectApp:
 		return "setting up an app"
+	case toolAllowWithoutAsking:
+		return "asking to stop asking"
 	default:
 		return "using " + name
 	}
@@ -266,6 +268,8 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 		return toolError("unknown tool %q", call.Function.Name), false
 	}
 	switch call.Function.Name {
+	case toolAllowWithoutAsking:
+		return l.allowWithoutAsking(ctx, agent, args)
 	case toolSendMessage:
 		return l.sendMessage(ctx, agent, args)
 	case toolReact:
