@@ -231,9 +231,14 @@ Slack, Linear, GitHub, Render, plus generic MCP (stdio or HTTP) for everything e
 
 ## 9. Models
 
-- OpenCode Go exposes OpenAI-compatible (`/v1/chat/completions`) and Anthropic-compatible
-  endpoints. `barnd` uses the OpenAI-compatible API with tool calling, through a small in-house
-  client (`internal/model`) that preserves provider extensions such as `reasoning_content`.
+- OpenCode Go serves each model through one of three APIs: `/v1/chat/completions` (Kimi, GLM,
+  DeepSeek, …), `/v1/responses` (GPT, Grok, Muse Spark) and the Anthropic-style `/v1/messages`
+  (MiniMax, Qwen). `barnd` keeps conversations in the chat-completions shape and translates per
+  protocol in a small in-house client (`internal/model`). The protocol is guessed from the model
+  id; if the provider says the model doesn't support it, the client falls back to the others and
+  remembers the one that worked. Provider extensions such as `reasoning_content` are preserved.
+- Every request sends `x-opencode-session` (the agent's id, since each agent is one continuous
+  conversation) and identifies as `barn/<version>`, as OpenCode Go requires.
 - The API key is entered during onboarding (or replaced in Settings), verified with a one-token
   request, and stored in the `settings` table encrypted with AES-GCM. The encryption key lives in
   `data/secret.key` (0600), separate from the database, so a leaked DB backup alone doesn't leak it.

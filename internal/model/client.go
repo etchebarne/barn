@@ -111,6 +111,9 @@ type Client struct {
 	modelsMu  sync.Mutex
 	models    []string
 	modelsExp time.Time
+
+	protoMu sync.Mutex
+	proto   map[string]*protocol // model id -> protocol that worked
 }
 
 // New creates a client. userAgent identifies barn to the provider, e.g. "barn/0.1.0".
@@ -120,10 +123,11 @@ func New(baseURL, userAgent string, key KeyFunc) *Client {
 		userAgent: userAgent,
 		key:       key,
 		http:      &http.Client{Timeout: 5 * time.Minute},
+		proto:     map[string]*protocol{},
 	}
 }
 
-// Chat sends a non-streaming chat completion request.
+// Chat sends a non-streaming request in whichever API format the model speaks.
 func (c *Client) Chat(ctx context.Context, req Request) (Response, error) {
 	key, err := c.key(ctx)
 	if err != nil {
@@ -132,22 +136,43 @@ func (c *Client) Chat(ctx context.Context, req Request) (Response, error) {
 	return c.chat(ctx, key, req)
 }
 
+// chat sends req using the model's known or guessed protocol. If the provider says the model
+// doesn't support it, the other protocols are tried and the one that works is remembered.
 func (c *Client) chat(ctx context.Context, key string, req Request) (Response, error) {
-	var out struct {
-		Choices []struct {
-			Message      Message `json:"message"`
-			FinishReason string  `json:"finish_reason"`
-		} `json:"choices"`
-		Usage Usage `json:"usage"`
+	first := c.protocolFor(req.Model)
+	resp, err := first.send(ctx, c, key, req)
+	if !errors.Is(err, errWrongProtocol) {
+		return resp, err
 	}
-	if err := c.do(ctx, key, req.Session, http.MethodPost, "/chat/completions", req, &out); err != nil {
-		return Response{}, err
+	for _, p := range protocols {
+		if p == first {
+			continue
+		}
+		resp, err = p.send(ctx, c, key, req)
+		if errors.Is(err, errWrongProtocol) {
+			continue
+		}
+		if err == nil || !errors.Is(err, ErrInvalidKey) {
+			c.rememberProtocol(req.Model, p)
+		}
+		return resp, err
 	}
-	if len(out.Choices) == 0 {
-		return Response{}, errors.New("provider returned no choices")
+	return Response{}, fmt.Errorf("%s: no supported API format (tried chat completions, responses, and messages)", req.Model)
+}
+
+func (c *Client) protocolFor(model string) *protocol {
+	c.protoMu.Lock()
+	defer c.protoMu.Unlock()
+	if p, ok := c.proto[model]; ok {
+		return p
 	}
-	ch := out.Choices[0]
-	return Response{Message: ch.Message, FinishReason: ch.FinishReason, Usage: out.Usage}, nil
+	return guessProtocol(model)
+}
+
+func (c *Client) rememberProtocol(model string, p *protocol) {
+	c.protoMu.Lock()
+	defer c.protoMu.Unlock()
+	c.proto[model] = p
 }
 
 // VerifyKey checks a key by sending a minimal request with it. Returns ErrInvalidKey if the
@@ -202,7 +227,7 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	if err := c.do(ctx, "", "", http.MethodGet, "/models", nil, &out); err != nil {
+	if err := c.do(ctx, "", "", http.MethodGet, "/models", nil, nil, &out); err != nil {
 		return nil, err
 	}
 	models := make([]string, 0, len(out.Data))
@@ -213,7 +238,7 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 	return models, nil
 }
 
-func (c *Client) do(ctx context.Context, key, session, method, path string, body, out any) error {
+func (c *Client) do(ctx context.Context, key, session, method, path string, header http.Header, body, out any) error {
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -236,6 +261,9 @@ func (c *Client) do(ctx context.Context, key, session, method, path string, body
 	if session != "" {
 		req.Header.Set("x-opencode-session", session)
 	}
+	for k, v := range header {
+		req.Header[k] = v
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
@@ -245,17 +273,22 @@ func (c *Client) do(ctx context.Context, key, session, method, path string, body
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return ErrInvalidKey
+	if resp.StatusCode/100 == 2 {
+		return json.Unmarshal(raw, out)
 	}
-	if resp.StatusCode/100 != 2 {
-		msg := errorMessage(raw)
-		if strings.Contains(msg, "trains on request data") {
-			return fmt.Errorf("%w (%s)", ErrTrainsOnData, msg)
-		}
+	msg := errorMessage(raw)
+	switch {
+	// Checked before the status code: OpenCode answers a model sent to the wrong API with a
+	// 400 or a 401, depending on the endpoint.
+	case strings.Contains(msg, "does not support this protocol"), strings.Contains(msg, "is not supported for format"):
+		return errWrongProtocol
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return ErrInvalidKey
+	case strings.Contains(msg, "trains on request data"):
+		return fmt.Errorf("%w (%s)", ErrTrainsOnData, msg)
+	default:
 		return &APIError{Status: resp.StatusCode, Message: msg}
 	}
-	return json.Unmarshal(raw, out)
 }
 
 func errorMessage(raw []byte) string {
