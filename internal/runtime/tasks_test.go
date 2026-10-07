@@ -127,14 +127,15 @@ func TestPauseAndResumeTask(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	task, _ := f.store.CreateTask(ctx, store.Task{AgentID: f.agent.ID, Name: "Daily", Purpose: "p", Kind: "cron", Cron: "0 9 * * *", Enabled: true})
-	paused, err := f.rt.SetTaskEnabled(ctx, task.ID, false)
+	off, on := false, true
+	paused, err := f.rt.SaveTask(ctx, task.AgentID, task.ID, TaskChange{Enabled: &off})
 	if err != nil || paused.Enabled {
 		t.Fatalf("pause: %+v %v", paused, err)
 	}
 	if due, _ := f.store.DueTasks(ctx, time.Now().Add(48*time.Hour).UnixMilli()); len(due) != 0 {
 		t.Fatal("paused tasks are never due")
 	}
-	resumed, err := f.rt.SetTaskEnabled(ctx, task.ID, true)
+	resumed, err := f.rt.SaveTask(ctx, task.AgentID, task.ID, TaskChange{Enabled: &on})
 	if err != nil || !resumed.Enabled || resumed.NextFireAt == nil {
 		t.Fatalf("resume should compute the next run: %+v %v", resumed, err)
 	}

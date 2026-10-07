@@ -86,6 +86,39 @@ export function useDeleteMemory(agentId: string) {
   })
 }
 
+/** Saves a memory written by the user; it's added to the list from the response. */
+export function useCreateMemory(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.memories(agentId)
+  return useMutation({
+    mutationFn: (text: string) =>
+      unwrap(
+        api.POST("/agents/{agentId}/memories", { params: { path: { agentId } }, body: { text } }),
+      ),
+    onSuccess: (memory) =>
+      queryClient.setQueryData<Memory[]>(key, (list) => (list ? [...list, memory] : [memory])),
+  })
+}
+
+/** Rewrites a memory's text. */
+export function useUpdateMemory(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.memories(agentId)
+  return useMutation({
+    mutationFn: ({ memoryId, text }: { memoryId: string; text: string }) =>
+      unwrap(
+        api.PATCH("/agents/{agentId}/memories/{memoryId}", {
+          params: { path: { agentId, memoryId } },
+          body: { text },
+        }),
+      ),
+    onSuccess: (memory) =>
+      queryClient.setQueryData<Memory[]>(key, (list) =>
+        list?.map((m) => (m.id === memory.id ? memory : m)),
+      ),
+  })
+}
+
 /**
  * Deletes an agent for good. The cache, toast, closing the sheet and leaving its DM happen
  * here (not in the caller) so they still run if the sheet unmounts because the WebSocket's
@@ -138,6 +171,35 @@ export function useSetTaskEnabled(agentId: string) {
     onError: (_error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(key, context.previous)
     },
+  })
+}
+
+export type CreateTaskBody = Schemas["CreateTaskRequest"]
+export type UpdateTaskBody = Schemas["UpdateTaskRequest"]
+
+/** Creates a task; the server validates the schedule (400 with a readable message). */
+export function useCreateTask(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.tasks(agentId)
+  return useMutation({
+    mutationFn: (body: CreateTaskBody) =>
+      unwrap(api.POST("/agents/{agentId}/tasks", { params: { path: { agentId } }, body })),
+    onSuccess: (task) =>
+      queryClient.setQueryData<Task[]>(key, (tasks) => (tasks ? [...tasks, task] : [task])),
+  })
+}
+
+/** Edits a task's name, purpose or schedule (`cron` or `at` switches its kind). */
+export function useUpdateTask(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.tasks(agentId)
+  return useMutation({
+    mutationFn: ({ taskId, body }: { taskId: string; body: UpdateTaskBody }) =>
+      unwrap(api.PATCH("/tasks/{taskId}", { params: { path: { taskId } }, body })),
+    onSuccess: (task) =>
+      queryClient.setQueryData<Task[]>(key, (tasks) =>
+        tasks?.map((t) => (t.id === task.id ? task : t)),
+      ),
   })
 }
 

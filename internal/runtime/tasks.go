@@ -218,7 +218,6 @@ func (m *Manager) fireDueTasks(ctx context.Context) {
 // ---- tools ----
 
 func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, raw []byte) (string, bool) {
-	loc := l.m.location(ctx)
 	var a struct {
 		TaskID   string          `json:"task_id"`
 		Name     *string         `json:"name"`
@@ -231,21 +230,8 @@ func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, 
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return toolError("invalid arguments: %v", err), false
 	}
-
-	var t store.Task
-	switch name {
-	case toolTaskCreate:
-		existing, err := l.m.store.Tasks(ctx, agent.ID)
-		if err != nil {
-			return toolError("%v", err), false
-		}
-		if len(existing) >= maxTasksPerAgent {
-			return toolError("you already have %d tasks; delete some first", len(existing)), false
-		}
-		t = store.Task{AgentID: agent.ID, Enabled: true}
-	case toolTaskDelete, toolTaskUpdate:
-		var err error
-		t, err = l.m.store.GetTask(ctx, a.TaskID)
+	if name != toolTaskCreate {
+		t, err := l.m.store.GetTask(ctx, a.TaskID)
 		if err != nil || t.AgentID != agent.ID {
 			return toolError("you have no task %q", a.TaskID), false
 		}
@@ -257,75 +243,130 @@ func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, 
 			return toolOK(map[string]string{"deleted": t.Name}), true
 		}
 	}
-
-	if a.Name != nil {
-		t.Name = strings.TrimSpace(*a.Name)
-	}
-	if a.Purpose != nil {
-		t.Purpose = strings.TrimSpace(*a.Purpose)
-	}
-	if t.Name == "" || utf8.RuneCountInString(t.Name) > 80 {
-		return toolError("name must be 1–80 characters"), false
-	}
-	if t.Purpose == "" {
-		return toolError("purpose is required"), false
-	}
-	schedules := 0
-	for _, set := range []bool{a.Cron != nil, a.At != nil, len(a.OnSignal) > 0 && string(a.OnSignal) != "null"} {
-		if set {
-			schedules++
-		}
-	}
-	if schedules > 1 {
-		return toolError("give only one of cron, at or on_signal"), false
-	}
-	switch {
-	case len(a.OnSignal) > 0 && string(a.OnSignal) != "null":
+	c := TaskChange{Name: a.Name, Purpose: a.Purpose, Cron: a.Cron, At: a.At, Enabled: a.Enabled}
+	if len(a.OnSignal) > 0 && string(a.OnSignal) != "null" {
 		accountID, typ, match, err := l.resolveSignal(ctx, agent, a.OnSignal)
 		if err != nil {
 			return toolError("%v", err), false
 		}
-		t.Kind, t.Cron, t.At = "signal", "", 0
-		t.SignalAccountID, t.SignalType, t.SignalMatch = accountID, typ, match
-	case a.Cron != nil:
-		t.Kind, t.Cron, t.At = "cron", strings.TrimSpace(*a.Cron), 0
-	case a.At != nil:
-		at, err := parseAt(*a.At, loc)
-		if err != nil {
-			return toolError("%v", err), false
-		}
-		if !at.After(time.Now()) {
-			return toolError("%s is in the past (now it's %s)", at.In(loc).Format(time.RFC3339), time.Now().In(loc).Format(time.RFC3339)), false
-		}
-		t.Kind, t.At, t.Cron = "once", at.UnixMilli(), ""
-		if a.Enabled == nil {
-			t.Enabled = true
-		}
-	case name == toolTaskCreate:
-		return toolError("give a schedule: cron (repeating), at (once) or on_signal (events)"), false
+		c.Signal = &TaskSignal{AccountID: accountID, Type: typ, Match: match}
 	}
-	if a.Enabled != nil {
-		t.Enabled = *a.Enabled
+	taskID := ""
+	if name != toolTaskCreate {
+		taskID = a.TaskID
 	}
-	next, err := nextFire(t, time.Now(), loc)
+	t, err := l.m.SaveTask(ctx, agent.ID, taskID, c)
 	if err != nil {
 		return toolError("%v", err), false
 	}
-	t.NextFireAt = next
-
-	if name == toolTaskCreate {
-		if t, err = l.m.store.CreateTask(ctx, t); err != nil {
-			return toolError("%v", err), false
-		}
-	} else if err := l.m.store.SaveTask(ctx, t); err != nil {
-		return toolError("%v", err), false
-	}
-	l.m.pokeScheduler()
+	loc := l.m.location(ctx)
 	out := map[string]any{"task_id": t.ID, "name": t.Name, "schedule": describeSchedule(t, loc), "enabled": t.Enabled}
 	if t.NextFireAt != nil && t.Enabled {
 		out["next_run"] = time.UnixMilli(*t.NextFireAt).In(loc).Format("Mon 2 Jan 2006 15:04 MST")
 	}
 	return toolOK(out), true
+}
+
+// TaskChange is a new task, or a change to one: fields left nil stay as they are. At most one
+// of Cron, At and Signal.
+type TaskChange struct {
+	Name, Purpose *string
+	Cron          *string // repeating, 5 fields in the user's time zone
+	At            *string // once: local "2026-10-09 15:30" or RFC 3339
+	Signal        *TaskSignal
+	Enabled       *bool
+}
+
+// TaskSignal runs a task on a connected app's events.
+type TaskSignal struct {
+	AccountID, Type string
+	Match           map[string]string
+}
+
+// SaveTask creates a task for an agent (taskID "") or changes one of its tasks, by the agent or
+// the user. Problems with the change are *ModelError.
+func (m *Manager) SaveTask(ctx context.Context, agentID, taskID string, c TaskChange) (store.Task, error) {
+	loc := m.location(ctx)
+	var t store.Task
+	if taskID == "" {
+		existing, err := m.store.Tasks(ctx, agentID)
+		if err != nil {
+			return t, err
+		}
+		if len(existing) >= maxTasksPerAgent {
+			return t, &ModelError{fmt.Sprintf("there are already %d tasks; delete some first", len(existing))}
+		}
+		t = store.Task{AgentID: agentID, Enabled: true}
+	} else {
+		var err error
+		if t, err = m.store.GetTask(ctx, taskID); err != nil {
+			return t, err
+		}
+		if t.AgentID != agentID {
+			return t, store.ErrNotFound
+		}
+	}
+
+	if c.Name != nil {
+		t.Name = strings.TrimSpace(*c.Name)
+	}
+	if c.Purpose != nil {
+		t.Purpose = strings.TrimSpace(*c.Purpose)
+	}
+	if t.Name == "" || utf8.RuneCountInString(t.Name) > 80 {
+		return t, &ModelError{"name must be 1–80 characters"}
+	}
+	if t.Purpose == "" {
+		return t, &ModelError{"purpose is required"}
+	}
+	schedules := 0
+	for _, set := range []bool{c.Cron != nil, c.At != nil, c.Signal != nil} {
+		if set {
+			schedules++
+		}
+	}
+	if schedules > 1 {
+		return t, &ModelError{"give only one of cron, at or on_signal"}
+	}
+	switch {
+	case c.Signal != nil:
+		t.Kind, t.Cron, t.At = "signal", "", 0
+		t.SignalAccountID, t.SignalType, t.SignalMatch = c.Signal.AccountID, c.Signal.Type, c.Signal.Match
+	case c.Cron != nil:
+		t.Kind, t.Cron, t.At = "cron", strings.TrimSpace(*c.Cron), 0
+	case c.At != nil:
+		at, err := parseAt(*c.At, loc)
+		if err != nil {
+			return t, &ModelError{err.Error()}
+		}
+		if !at.After(time.Now()) {
+			return t, &ModelError{fmt.Sprintf("%s is in the past (now it's %s)", at.In(loc).Format(time.RFC3339), time.Now().In(loc).Format(time.RFC3339))}
+		}
+		t.Kind, t.At, t.Cron = "once", at.UnixMilli(), ""
+		if c.Enabled == nil {
+			t.Enabled = true
+		}
+	case taskID == "":
+		return t, &ModelError{"give a schedule: cron (repeating), at (once) or on_signal (events)"}
+	}
+	if c.Enabled != nil {
+		t.Enabled = *c.Enabled
+	}
+	next, err := nextFire(t, time.Now(), loc)
+	if err != nil {
+		return t, &ModelError{err.Error()}
+	}
+	t.NextFireAt = next
+
+	if taskID == "" {
+		if t, err = m.store.CreateTask(ctx, t); err != nil {
+			return t, err
+		}
+	} else if err := m.store.SaveTask(ctx, t); err != nil {
+		return t, err
+	}
+	m.pokeScheduler()
+	return t, nil
 }
 
 func taskTools() []model.Tool { return []model.Tool{taskCreateTool, taskUpdateTool, taskDeleteTool} }
@@ -384,25 +425,6 @@ func (l *loop) renderTask(ctx context.Context, payload json.RawMessage) (string,
 	return fmt.Sprintf("<task_fired task_id=%q name=%q at=%q>\n%s%s\n\nDo this now. If there's something "+
 		"to tell the user, message them (usually in your DM); if not, end your turn quietly.\n</task_fired>",
 		t.ID, t.Name, time.UnixMilli(p.ScheduledFor).In(loc).Format(time.RFC3339), t.Purpose, event), nil
-}
-
-// SetTaskEnabled pauses or resumes a task (resuming recomputes its next run).
-func (m *Manager) SetTaskEnabled(ctx context.Context, taskID string, enabled bool) (store.Task, error) {
-	t, err := m.store.GetTask(ctx, taskID)
-	if err != nil {
-		return t, err
-	}
-	t.Enabled = enabled
-	if enabled {
-		if t.NextFireAt, err = nextFire(t, time.Now(), m.location(ctx)); err != nil {
-			return t, err
-		}
-	}
-	if err := m.store.SaveTask(ctx, t); err != nil {
-		return t, err
-	}
-	m.pokeScheduler()
-	return t, nil
 }
 
 func describeMatch(match map[string]string) string {

@@ -45,7 +45,7 @@ describe("TaskList", () => {
   it("explains how to create tasks when there are none", () => {
     renderList([])
     expect(
-      screen.getByText(/No tasks yet\. Ask openbot to do something on a schedule/),
+      screen.getByText(/No tasks yet\. Create one, or ask openbot to do something on a schedule/),
     ).toBeVisible()
   })
 

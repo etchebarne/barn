@@ -678,6 +678,19 @@ type CreateSidebarCategoryRequest struct {
 	Name string `json:"name"`
 }
 
+// CreateTaskRequest defines model for CreateTaskRequest.
+type CreateTaskRequest struct {
+	// At Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
+	At *string `json:"at,omitempty"`
+
+	// Cron Repeat on this 5-field cron schedule, in the user's time zone
+	Cron *string `json:"cron,omitempty"`
+	Name string  `json:"name"`
+
+	// Purpose What the agent does when it runs
+	Purpose string `json:"purpose"`
+}
+
 // Credentials defines model for Credentials.
 type Credentials struct {
 	Password string `json:"password"`
@@ -702,6 +715,11 @@ type Memory struct {
 	CreatedAt time.Time `json:"createdAt"`
 	Id        string    `json:"id"`
 	Text      string    `json:"text"`
+}
+
+// MemoryRequest defines model for MemoryRequest.
+type MemoryRequest struct {
+	Text string `json:"text"`
 }
 
 // Message defines model for Message.
@@ -1115,7 +1133,14 @@ type UpdateSidebarCategoryRequest struct {
 
 // UpdateTaskRequest defines model for UpdateTaskRequest.
 type UpdateTaskRequest struct {
-	Enabled bool `json:"enabled"`
+	// At Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
+	At *string `json:"at,omitempty"`
+
+	// Cron Repeat on this 5-field cron schedule, in the user's time zone
+	Cron    *string `json:"cron,omitempty"`
+	Enabled *bool   `json:"enabled,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	Purpose *string `json:"purpose,omitempty"`
 }
 
 // User defines model for User.
@@ -1245,6 +1270,15 @@ type ListMessagesParams struct {
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody = UpdateAgentRequest
+
+// CreateMemoryJSONRequestBody defines body for CreateMemory for application/json ContentType.
+type CreateMemoryJSONRequestBody = MemoryRequest
+
+// UpdateMemoryJSONRequestBody defines body for UpdateMemory for application/json ContentType.
+type UpdateMemoryJSONRequestBody = MemoryRequest
+
+// CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
+type CreateTaskJSONRequestBody = CreateTaskRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = Credentials
@@ -1719,8 +1753,14 @@ type ServerInterface interface {
 	// (GET /agents/{agentId}/memories)
 	ListMemories(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (POST /agents/{agentId}/memories)
+	CreateMemory(w http.ResponseWriter, r *http.Request, agentId string)
+
 	// (DELETE /agents/{agentId}/memories/{memoryId})
 	DeleteMemory(w http.ResponseWriter, r *http.Request, agentId string, memoryId string)
+
+	// (PATCH /agents/{agentId}/memories/{memoryId})
+	UpdateMemory(w http.ResponseWriter, r *http.Request, agentId string, memoryId string)
 
 	// (POST /agents/{agentId}/retry)
 	RetryAgent(w http.ResponseWriter, r *http.Request, agentId string)
@@ -1733,6 +1773,9 @@ type ServerInterface interface {
 
 	// (GET /agents/{agentId}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (POST /agents/{agentId}/tasks)
+	CreateTask(w http.ResponseWriter, r *http.Request, agentId string)
 
 	// (GET /attachments/{attachmentId})
 	GetAttachment(w http.ResponseWriter, r *http.Request, attachmentId string, params GetAttachmentParams)
@@ -2014,6 +2057,32 @@ func (siw *ServerInterfaceWrapper) ListMemories(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// CreateMemory operation middleware
+func (siw *ServerInterfaceWrapper) CreateMemory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMemory(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteMemory operation middleware
 func (siw *ServerInterfaceWrapper) DeleteMemory(w http.ResponseWriter, r *http.Request) {
 
@@ -2040,6 +2109,41 @@ func (siw *ServerInterfaceWrapper) DeleteMemory(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteMemory(w, r, agentId, memoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMemory operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMemory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "memoryId" -------------
+	var memoryId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "memoryId", r.PathValue("memoryId"), &memoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "memoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMemory(w, r, agentId, memoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2144,6 +2248,32 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListTasks(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTask operation middleware
+func (siw *ServerInterfaceWrapper) CreateTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTask(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3080,12 +3210,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}", wrapper.DeleteAgent)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/memories", wrapper.ListMemories)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/memories", wrapper.CreateMemory)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/memories/{memoryId}", wrapper.DeleteMemory)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{agentId}/memories/{memoryId}", wrapper.UpdateMemory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/approvals", wrapper.ListStandingApprovals)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/approvals/{approvalId}", wrapper.RevokeStandingApproval)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox", wrapper.GetSandbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/sandbox/restart", wrapper.RestartSandbox)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.ListTasks)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.CreateTask)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/tasks/{taskId}", wrapper.DeleteTask)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/tasks/{taskId}", wrapper.UpdateTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)

@@ -358,7 +358,8 @@ export interface paths {
         /** @description The durable memories an agent saved, oldest first. */
         get: operations["listMemories"];
         put?: never;
-        post?: never;
+        /** @description Add a memory for the agent, as if it had saved it. */
+        post: operations["createMemory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -381,7 +382,8 @@ export interface paths {
         delete: operations["deleteMemory"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Rewrite a memory. */
+        patch: operations["updateMemory"];
         trace?: never;
     };
     "/agents/{agentId}/approvals": {
@@ -473,7 +475,8 @@ export interface paths {
         /** @description The agent's scheduled tasks, oldest first. */
         get: operations["listTasks"];
         put?: never;
-        post?: never;
+        /** @description Schedule a task for the agent, as if it had made it. Give cron or at. */
+        post: operations["createTask"];
         delete?: never;
         options?: never;
         head?: never;
@@ -495,7 +498,10 @@ export interface paths {
         delete: operations["deleteTask"];
         options?: never;
         head?: never;
-        /** @description Pause or resume a task. */
+        /**
+         * @description Change a task: pause or resume it, rename it, change what it does or its schedule (cron
+         *     or at; a signal task keeps its trigger). Only the fields given change.
+         */
         patch: operations["updateTask"];
         trace?: never;
     };
@@ -1030,7 +1036,25 @@ export interface components {
             agentIds?: string[];
         };
         UpdateTaskRequest: {
-            enabled: boolean;
+            enabled?: boolean;
+            name?: string;
+            purpose?: string;
+            /** @description Repeat on this 5-field cron schedule, in the user's time zone */
+            cron?: string;
+            /** @description Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time */
+            at?: string;
+        };
+        CreateTaskRequest: {
+            name: string;
+            /** @description What the agent does when it runs */
+            purpose: string;
+            /** @description Repeat on this 5-field cron schedule, in the user's time zone */
+            cron?: string;
+            /** @description Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time */
+            at?: string;
+        };
+        MemoryRequest: {
+            text: string;
         };
         PushConfig: {
             publicKey: string;
@@ -2049,6 +2073,35 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    createMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryRequest"];
+            };
+        };
+        responses: {
+            /** @description The new memory */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     deleteMemory: {
         parameters: {
             query?: never;
@@ -2068,6 +2121,36 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated memory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
@@ -2192,6 +2275,35 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    createTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description The new task */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     deleteTask: {
         parameters: {
             query?: never;
@@ -2238,6 +2350,7 @@ export interface operations {
                     "application/json": components["schemas"]["Task"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };

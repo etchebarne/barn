@@ -25,7 +25,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
 import { ChevronRightIcon, EllipsisIcon, EraserIcon, FolderInputIcon, PlusIcon } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type MouseEvent, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -284,52 +284,90 @@ function InlineName({
   )
 }
 
-/** A section's header: name, collapse, unread sum when collapsed, and Rename/Delete. */
+/** Moving further than this between press and release is a drag, not a click. */
+const CLICK_SLOP = 6
+
+type DragHandle = {
+  ref: (el: HTMLElement | null) => void
+  /** dnd-kit's pointer and touch listeners. */
+  listeners: Record<string, unknown>
+}
+
+/**
+ * A section's header: name, collapse, unread sum when collapsed, and Rename/Delete/Move. The
+ * whole row toggles on click (not only the chevron); a drag, the ⋯ menu and the rename field
+ * don't. For keyboards the chevron and name are one button with `aria-expanded`.
+ */
 function SectionHeader({
   section,
   dropTarget,
   dragHandle,
+  canMoveUp = false,
+  canMoveDown = false,
   onToggle,
   onRename,
   onDelete,
+  onMove,
 }: {
   section: Section
   dropTarget: boolean
-  dragHandle: { ref: (el: HTMLElement | null) => void; props: Record<string, unknown> } | null
+  dragHandle: DragHandle | null
+  canMoveUp?: boolean
+  canMoveDown?: boolean
   onToggle: () => void
   onRename: (name: string) => void
   onDelete: () => void
+  onMove?: (direction: -1 | 1) => void
 }) {
   const [renaming, setRenaming] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const pressedAt = useRef<{ x: number; y: number } | null>(null)
   const unread = section.collapsed ? sectionUnread(section) : 0
   const isCategory = section.categoryId !== null
+
+  function onToggleClick(event: MouseEvent<HTMLButtonElement>) {
+    const pressed = pressedAt.current
+    pressedAt.current = null
+    if (pressed && Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > CLICK_SLOP) {
+      return // That was a drag.
+    }
+    onToggle()
+  }
 
   return (
     <div className="flex flex-col gap-1">
       <div
         ref={dragHandle?.ref}
-        {...(dragHandle?.props ?? {})}
+        {...dragHandle?.listeners}
         className={cn(
           // The chevron starts on the avatars' left edge with the label right after it; actions
           // sit on the same right edge as the rows' ⋯.
-          "group/section flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          "group/section relative flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground select-none hover:text-foreground",
           dropTarget && "bg-sidebar-accent ring-1 ring-primary/40",
         )}
       >
+        {/* Its ::after stretches over the whole row, so the row toggles wherever it's clicked;
+            the ⋯ menu and the rename field sit above it. */}
         <button
           type="button"
           aria-expanded={!section.collapsed}
-          aria-label={`${section.collapsed ? "Expand" : "Collapse"} ${section.name}`}
-          className="flex size-4 shrink-0 items-center justify-center rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          onClick={onToggle}
+          className={cn(
+            "flex min-w-0 cursor-pointer items-center gap-1.5 text-left outline-none after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-sidebar-ring",
+            !renaming && "flex-1 after:absolute after:inset-0",
+          )}
+          onPointerDown={(event) => {
+            pressedAt.current = { x: event.clientX, y: event.clientY }
+          }}
+          onClick={onToggleClick}
         >
           <ChevronRightIcon
             aria-hidden="true"
-            className={cn("size-3.5", !section.collapsed && "rotate-90")}
+            className={cn("size-3.5 shrink-0", !section.collapsed && "rotate-90")}
           />
+          {!renaming && <span className="min-w-0 flex-1 truncate">{section.name}</span>}
+          {renaming && <span className="sr-only">{section.name}</span>}
         </button>
-        {renaming ? (
+        {renaming && (
           <InlineName
             initial={section.name}
             label="Category name"
@@ -339,8 +377,6 @@ function SectionHeader({
             }}
             onCancel={() => setRenaming(false)}
           />
-        ) : (
-          <span className="min-w-0 flex-1 truncate">{section.name}</span>
         )}
         {unread > 0 && !renaming && (
           <span
@@ -358,7 +394,7 @@ function SectionHeader({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={`${section.name} options`}
-                  className="opacity-100 group-focus-within/section:opacity-100 group-hover/section:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
+                  className="relative z-10 opacity-100 group-focus-within/section:opacity-100 group-hover/section:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
                 />
               }
             >
@@ -366,6 +402,13 @@ function SectionHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem onClick={() => setRenaming(true)}>Rename</DropdownMenuItem>
+              {/* Reordering without dragging (the header's keys toggle it instead). */}
+              {canMoveUp && (
+                <DropdownMenuItem onClick={() => onMove?.(-1)}>Move up</DropdownMenuItem>
+              )}
+              {canMoveDown && (
+                <DropdownMenuItem onClick={() => onMove?.(1)}>Move down</DropdownMenuItem>
+              )}
               <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
                 Delete
               </DropdownMenuItem>
@@ -402,15 +445,9 @@ function SectionHeader({
 }
 
 function CategoryHeader(props: Omit<Parameters<typeof SectionHeader>[0], "dragHandle">) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: props.section.key, data: { type: "category" } })
+  const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.section.key, data: { type: "category" } })
+  const { onKeyDown: _keys, ...withoutKeys } = listeners ?? {}
   return (
     <div
       ref={setNodeRef}
@@ -419,10 +456,9 @@ function CategoryHeader(props: Omit<Parameters<typeof SectionHeader>[0], "dragHa
     >
       <SectionHeader
         {...props}
-        dragHandle={{
-          ref: setActivatorNodeRef,
-          props: { ...attributes, ...listeners, "aria-roledescription": "sortable category" },
-        }}
+        // Pointer dragging only: Enter and Space on the header toggle it, and the ⋯ menu has
+        // Move up/down for keyboards.
+        dragHandle={{ ref: setActivatorNodeRef, listeners: withoutKeys }}
       />
     </div>
   )
@@ -637,7 +673,7 @@ export function SidebarSections({
         announcements,
         screenReaderInstructions: {
           draggable:
-            "To pick up a chat or category, press Space. Use the arrow keys to move it, Space to drop it, or Escape to cancel.",
+            "To pick up a chat, press Space. Use the arrow keys to move it, Space to drop it, or Escape to cancel.",
         },
       }}
       onDragStart={onDragStart}
@@ -663,6 +699,16 @@ export function SidebarSections({
                 onRename: (name: string) =>
                   section.categoryId && update.mutate({ id: section.categoryId, name }),
                 onDelete: () => section.categoryId && remove.mutate(section.categoryId),
+                canMoveUp: categoryKeys.indexOf(section.key) > 0,
+                canMoveDown:
+                  categoryKeys.indexOf(section.key) !== -1 &&
+                  categoryKeys.indexOf(section.key) < categoryKeys.length - 1,
+                onMove: (direction: -1 | 1) => {
+                  const from = categoryKeys.indexOf(section.key)
+                  const to = from + direction
+                  if (from === -1 || to < 0 || to >= categoryKeys.length) return
+                  save.mutate(layoutPayload(moveCategory(categoryOrder, from, to), sections, []))
+                },
               }
               return (
                 <section

@@ -448,6 +448,24 @@ paths:
                 items: { $ref: "#/components/schemas/Memory" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createMemory
+      tags: [agents]
+      description: Add a memory for the agent, as if it had saved it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryRequest" }
+      responses:
+        "201":
+          description: The new memory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 
   /agents/{agentId}/memories/{memoryId}:
     parameters:
@@ -459,6 +477,24 @@ paths:
         in: path
         required: true
         schema: { type: string }
+    patch:
+      operationId: updateMemory
+      tags: [agents]
+      description: Rewrite a memory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryRequest" }
+      responses:
+        "200":
+          description: The updated memory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteMemory
       tags: [agents]
@@ -566,6 +602,24 @@ paths:
                 items: { $ref: "#/components/schemas/Task" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createTask
+      tags: [agents]
+      description: Schedule a task for the agent, as if it had made it. Give cron or at.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaskRequest" }
+      responses:
+        "201":
+          description: The new task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 
   /tasks/{taskId}:
     parameters:
@@ -576,7 +630,9 @@ paths:
     patch:
       operationId: updateTask
       tags: [agents]
-      description: Pause or resume a task.
+      description: |
+        Change a task: pause or resume it, rename it, change what it does or its schedule (cron
+        or at; a signal task keeps its trigger). Only the fields given change.
       requestBody:
         required: true
         content:
@@ -588,6 +644,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Task" }
+        "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     delete:
@@ -1350,9 +1407,39 @@ components:
 
     UpdateTaskRequest:
       type: object
-      required: [enabled]
       properties:
         enabled: { type: boolean }
+        name: { type: string, minLength: 1, maxLength: 80 }
+        purpose: { type: string, minLength: 1, maxLength: 4000 }
+        cron:
+          type: string
+          description: Repeat on this 5-field cron schedule, in the user's time zone
+        at:
+          type: string
+          description: Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
+
+    CreateTaskRequest:
+      type: object
+      required: [name, purpose]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: What the agent does when it runs
+        cron:
+          type: string
+          description: Repeat on this 5-field cron schedule, in the user's time zone
+        at:
+          type: string
+          description: Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
+
+    MemoryRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 500 }
 
     PushConfig:
       type: object

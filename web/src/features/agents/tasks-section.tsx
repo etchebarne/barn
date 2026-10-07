@@ -1,6 +1,6 @@
 import { cn } from "cn"
-import { Trash2Icon } from "lucide-react"
-import { useState } from "react"
+import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -9,18 +9,21 @@ import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Agent } from "@/lib/api-client"
 
-import { useDeleteTask, useSetTaskEnabled, useTasks } from "./api"
+import { useCreateTask, useDeleteTask, useSetTaskEnabled, useTasks, useUpdateTask } from "./api"
 import { describeSchedule, formatDateTime, nextRunLabel, type Task } from "./schedule"
+import { TaskForm } from "./task-form"
 
 function TaskItem({
   task,
   now,
   onToggle,
+  onEdit,
   onDelete,
 }: {
   task: Task
   now: Date
   onToggle: (enabled: boolean) => void
+  onEdit: (() => void) | undefined
   onDelete: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -81,15 +84,28 @@ function TaskItem({
             </Button>
           </>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Delete task ${task.name}`}
-            className="text-muted-foreground opacity-100 hover:text-destructive sm:opacity-0 sm:group-focus-within/task:opacity-100 sm:group-hover/task:opacity-100"
-            onClick={() => setConfirmingDelete(true)}
-          >
-            <Trash2Icon />
-          </Button>
+          <div className="flex opacity-100 sm:opacity-0 sm:group-focus-within/task:opacity-100 sm:group-hover/task:opacity-100">
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Edit task ${task.name}`}
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onEdit}
+              >
+                <PencilIcon />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Delete task ${task.name}`}
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => setConfirmingDelete(true)}
+            >
+              <Trash2Icon />
+            </Button>
+          </div>
         )}
         <Switch
           id={switchId}
@@ -108,13 +124,20 @@ export function TaskList({
   tasks,
   now: nowProp,
   onToggle,
+  onEdit,
   onDelete,
+  editingId = null,
+  editor = null,
 }: {
   agentName: string
   tasks: Task[]
   now?: Date
   onToggle: (task: Task, enabled: boolean) => void
+  onEdit?: (task: Task) => void
   onDelete: (task: Task) => void
+  /** The task being edited is shown as `editor` in its place. */
+  editingId?: string | null
+  editor?: ReactNode
 }) {
   // Relative times are computed once per opening of the sheet.
   const [openedAt] = useState(() => new Date())
@@ -122,41 +145,70 @@ export function TaskList({
   if (tasks.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No tasks yet. Ask {agentName} to do something on a schedule, like "every weekday at 10, give
-        me a quick catch-up".
+        No tasks yet. Create one, or ask {agentName} to do something on a schedule, like "every
+        weekday at 10, give me a quick catch-up".
       </p>
     )
   }
   return (
     <ul className="flex flex-col gap-1" aria-label="Tasks">
-      {tasks.map((task) => (
-        <TaskItem
-          key={task.id}
-          task={task}
-          now={now}
-          onToggle={(enabled) => onToggle(task, enabled)}
-          onDelete={() => onDelete(task)}
-        />
-      ))}
+      {tasks.map((task) =>
+        task.id === editingId ? (
+          <li key={task.id}>{editor}</li>
+        ) : (
+          <TaskItem
+            key={task.id}
+            task={task}
+            now={now}
+            onToggle={(enabled) => onToggle(task, enabled)}
+            onEdit={onEdit && (() => onEdit(task))}
+            onDelete={() => onDelete(task)}
+          />
+        ),
+      )}
     </ul>
   )
 }
 
-/** What the agent does on its own schedule; pause, resume or delete each task. */
+/** "Next: in 3 hours" or the schedule in words, for the saved toast. */
+function savedDescription(task: Task): string {
+  return nextRunLabel(task) ?? describeSchedule(task)
+}
+
+/** What the agent does on its own schedule: create, edit, pause, resume or delete tasks. */
 export function TasksSection({ agent }: { agent: Agent }) {
   const { data: tasks, isPending, error } = useTasks(agent.id)
   const setEnabled = useSetTaskEnabled(agent.id)
+  const create = useCreateTask(agent.id)
+  const update = useUpdateTask(agent.id)
   const remove = useDeleteTask(agent.id)
+  // "new", a task id, or nothing.
+  const [editing, setEditing] = useState<string | null>(null)
+  const editingTask = tasks?.find((t) => t.id === editing)
+
+  function startEditing(id: string) {
+    create.reset()
+    update.reset()
+    setEditing(id)
+  }
 
   return (
     <section className="flex flex-col gap-2" aria-labelledby="agent-tasks">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h3 id="agent-tasks" className="text-sm font-medium">
           Tasks
         </h3>
-        {tasks && tasks.length > 0 ? (
-          <span className="text-xs text-muted-foreground tabular-nums">{tasks.length}</span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {tasks && tasks.length > 0 ? (
+            <span className="text-xs text-muted-foreground tabular-nums">{tasks.length}</span>
+          ) : null}
+          {tasks && editing !== "new" && (
+            <Button variant="ghost" size="xs" onClick={() => startEditing("new")}>
+              <PlusIcon />
+              New task
+            </Button>
+          )}
+        </div>
       </div>
       {isPending ? (
         <div className="flex flex-col gap-2">
@@ -165,25 +217,71 @@ export function TasksSection({ agent }: { agent: Agent }) {
       ) : error && !tasks ? (
         <p className="text-sm text-destructive">Couldn't load tasks: {error.message}</p>
       ) : (
-        <TaskList
-          agentName={agent.name}
-          tasks={tasks ?? []}
-          onToggle={(task, enabled) =>
-            setEnabled.mutate(
-              { taskId: task.id, enabled },
-              {
-                onSuccess: () => toast.success(`${enabled ? "Resumed" : "Paused"} ${task.name}`),
-                onError: (e) => toast.error(`Couldn't update ${task.name}: ${e.message}`),
-              },
-            )
-          }
-          onDelete={(task) =>
-            remove.mutate(task.id, {
-              onSuccess: () => toast.success(`Deleted ${task.name}`),
-              onError: (e) => toast.error(`Couldn't delete ${task.name}: ${e.message}`),
-            })
-          }
-        />
+        <>
+          {editing === "new" && (
+            <TaskForm
+              pending={create.isPending}
+              error={create.error?.message}
+              onCancel={() => setEditing(null)}
+              onSubmit={(body) =>
+                create.mutate(body, {
+                  onSuccess: (task) => {
+                    setEditing(null)
+                    toast.success(`Created ${task.name}`, { description: savedDescription(task) })
+                  },
+                })
+              }
+            />
+          )}
+          {(editing !== "new" || (tasks ?? []).length > 0) && (
+            <TaskList
+              agentName={agent.name}
+              tasks={tasks ?? []}
+              editingId={editingTask ? editingTask.id : null}
+              editor={
+                editingTask && (
+                  <TaskForm
+                    key={editingTask.id}
+                    task={editingTask}
+                    pending={update.isPending}
+                    error={update.error?.message}
+                    onCancel={() => setEditing(null)}
+                    onSubmit={(body) =>
+                      update.mutate(
+                        { taskId: editingTask.id, body },
+                        {
+                          onSuccess: (task) => {
+                            setEditing(null)
+                            toast.success(`Saved ${task.name}`, {
+                              description: savedDescription(task),
+                            })
+                          },
+                        },
+                      )
+                    }
+                  />
+                )
+              }
+              onEdit={(task) => startEditing(task.id)}
+              onToggle={(task, enabled) =>
+                setEnabled.mutate(
+                  { taskId: task.id, enabled },
+                  {
+                    onSuccess: () =>
+                      toast.success(`${enabled ? "Resumed" : "Paused"} ${task.name}`),
+                    onError: (e) => toast.error(`Couldn't update ${task.name}: ${e.message}`),
+                  },
+                )
+              }
+              onDelete={(task) =>
+                remove.mutate(task.id, {
+                  onSuccess: () => toast.success(`Deleted ${task.name}`),
+                  onError: (e) => toast.error(`Couldn't delete ${task.name}: ${e.message}`),
+                })
+              }
+            />
+          )}
+        </>
       )}
     </section>
   )

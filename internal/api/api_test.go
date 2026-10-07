@@ -872,3 +872,59 @@ func TestClearChatHistory(t *testing.T) {
 		t.Fatalf("unknown chat: %d", resp.StatusCode)
 	}
 }
+
+func TestEditMemoriesAndTasks(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	a, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	base := "/api/agents/" + a.ID
+
+	// Memories: add, rewrite, validate.
+	resp, mem := c.do("POST", base+"/memories", `{"text":"  Prefers short replies. "}`, true)
+	if resp.StatusCode != http.StatusCreated || mem["text"] != "Prefers short replies." {
+		t.Fatalf("add memory: %d %v", resp.StatusCode, mem)
+	}
+	resp, mem = c.do("PATCH", base+"/memories/"+mem["id"].(string), `{"text":"Prefers very short replies."}`, true)
+	if resp.StatusCode != http.StatusOK || mem["text"] != "Prefers very short replies." {
+		t.Fatalf("edit memory: %d %v", resp.StatusCode, mem)
+	}
+	if resp, _ := c.do("PATCH", base+"/memories/"+mem["id"].(string), `{"text":"   "}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("empty memory: %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("PATCH", base+"/memories/nope", `{"text":"x"}`, true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown memory: %d", resp.StatusCode)
+	}
+	if got, _ := st.Memories(ctx, a.ID); len(got) != 1 || got[0].Text != "Prefers very short replies." {
+		t.Fatalf("stored: %+v", got)
+	}
+
+	// Tasks: create, validate, edit, pause.
+	resp, task := c.do("POST", base+"/tasks", `{"name":"Check-in","purpose":"Ask how it's going","cron":"0 9 * * 1-5"}`, true)
+	if resp.StatusCode != http.StatusCreated || task["kind"] != "cron" || task["nextFireAt"] == nil || task["enabled"] != true {
+		t.Fatalf("create task: %d %v", resp.StatusCode, task)
+	}
+	for _, bad := range []string{
+		`{"name":"x","purpose":"y"}`,
+		`{"name":"x","purpose":"y","cron":"nope"}`,
+		`{"name":"x","purpose":"y","at":"2001-01-01 10:00"}`,
+		`{"name":"x","purpose":"y","cron":"0 9 * * *","at":"2099-01-01 10:00"}`,
+	} {
+		if resp, body := c.do("POST", base+"/tasks", bad, true); resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("%s: %d %v", bad, resp.StatusCode, body)
+		}
+	}
+	id := task["id"].(string)
+	resp, task = c.do("PATCH", "/api/tasks/"+id, `{"name":"Morning check-in","at":"2099-01-01 08:00"}`, true)
+	if resp.StatusCode != http.StatusOK || task["name"] != "Morning check-in" || task["kind"] != "once" || task["purpose"] != "Ask how it's going" {
+		t.Fatalf("edit task: %d %v", resp.StatusCode, task)
+	}
+	if resp, task = c.do("PATCH", "/api/tasks/"+id, `{"enabled":false}`, true); resp.StatusCode != http.StatusOK || task["enabled"] != false {
+		t.Fatalf("pause: %d %v", resp.StatusCode, task)
+	}
+	if resp, _ := c.do("PATCH", "/api/tasks/nope", `{"enabled":true}`, true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown task: %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("POST", "/api/agents/nope/tasks", `{"name":"x","purpose":"y","cron":"0 9 * * *"}`, true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown agent: %d", resp.StatusCode)
+	}
+}

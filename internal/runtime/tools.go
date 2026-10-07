@@ -423,7 +423,8 @@ func (l *loop) sendMessage(ctx context.Context, agent store.Agent, raw []byte) (
 	return toolOK(map[string]string{"message_id": msg.ID}), true
 }
 
-const maxMemoryLength = 500
+// MaxMemoryLength is the longest a memory can be, in characters.
+const MaxMemoryLength = 500
 
 func (l *loop) remember(ctx context.Context, agent store.Agent, raw []byte) (string, bool) {
 	var args struct {
@@ -434,8 +435,8 @@ func (l *loop) remember(ctx context.Context, agent store.Agent, raw []byte) (str
 		return toolError("invalid arguments: %v", err), false
 	}
 	text := strings.TrimSpace(args.Text)
-	if text == "" || utf8.RuneCountInString(text) > maxMemoryLength {
-		return toolError("a memory must be 1–%d characters", maxMemoryLength), false
+	if text == "" || utf8.RuneCountInString(text) > MaxMemoryLength {
+		return toolError("a memory must be 1–%d characters", MaxMemoryLength), false
 	}
 	var source *string
 	if args.ChatID != "" {

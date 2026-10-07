@@ -42,6 +42,21 @@ func (s *Store) Memories(ctx context.Context, agentID string) ([]Memory, error) 
 	return out, rows.Err()
 }
 
+// UpdateMemory rewrites one of an agent's memories.
+func (s *Store) UpdateMemory(ctx context.Context, agentID, memoryID, text string) (Memory, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE memories SET text = ? WHERE id = ? AND agent_id = ?`, text, memoryID, agentID)
+	if err != nil {
+		return Memory{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Memory{}, ErrNotFound
+	}
+	var m Memory
+	err = s.db.QueryRowContext(ctx, `SELECT id, agent_id, text, source_chat_id, created_at FROM memories WHERE id = ?`, memoryID).
+		Scan(&m.ID, &m.AgentID, &m.Text, &m.SourceChatID, &m.CreatedAt)
+	return m, err
+}
+
 // DeleteMemory removes one of an agent's memories.
 func (s *Store) DeleteMemory(ctx context.Context, agentID, memoryID string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM memories WHERE id = ? AND agent_id = ?`, memoryID, agentID)

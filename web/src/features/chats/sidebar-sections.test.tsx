@@ -182,7 +182,7 @@ describe("sidebar sections", () => {
   it("collapses a category and shows its unread total on the header", async () => {
     const calls = captureRequests()
     await renderSidebar()
-    await userEvent.click(screen.getByRole("button", { name: "Collapse casino" }))
+    await userEvent.click(screen.getByRole("button", { name: "casino", expanded: true }))
     expect(calls).toContainEqual({
       method: "PATCH",
       path: "/sidebar/categories/{categoryId}",
@@ -190,9 +190,53 @@ describe("sidebar sections", () => {
     })
     expect(screen.queryByText("Claude Sessions")).not.toBeInTheDocument()
     expect(screen.getByLabelText("5 unread in casino")).toHaveTextContent("5")
-    expect(screen.getByRole("button", { name: "Expand casino" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "casino" })).toHaveAttribute("aria-expanded", "false")
+  })
+
+  it("toggles from anywhere on the header, but not from its ⋯ menu", async () => {
+    const calls = captureRequests()
+    await renderSidebar()
+    // The name itself (not only the chevron).
+    await userEvent.click(
+      within(screen.getByRole("button", { name: "casino" })).getByText("casino"),
+    )
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([
+      { method: "PATCH", path: "/sidebar/categories/{categoryId}", body: { collapsed: true } },
+    ])
+
+    await userEvent.click(screen.getByRole("button", { name: "casino options" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Rename" }))
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1)
+    // Typing a new name doesn't toggle either.
+    await userEvent.click(screen.getByRole("textbox", { name: "Category name" }))
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1)
+  })
+
+  it("toggles Unassigned with Enter on its header, kept on this device", async () => {
+    await renderSidebar()
+    const header = screen.getByRole("button", { name: "Unassigned", expanded: true })
+    header.focus()
+    await userEvent.keyboard("{Enter}")
+    expect(screen.getByRole("button", { name: "Unassigned" })).toHaveAttribute(
       "aria-expanded",
       "false",
+    )
+    expect(screen.queryByText("Grok Bot")).not.toBeInTheDocument()
+    await userEvent.keyboard(" ")
+    expect(await screen.findByText("Grok Bot")).toBeInTheDocument()
+  })
+
+  it("moves a category with Move down in its menu", async () => {
+    const calls = captureRequests()
+    await renderSidebar([casino, { id: "work", name: "work", collapsed: false }])
+    await userEvent.click(screen.getByRole("button", { name: "casino options" }))
+    expect(screen.queryByRole("menuitem", { name: "Move up" })).not.toBeInTheDocument()
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Move down" }))
+    expect(calls).toContainEqual(
+      expect.objectContaining({
+        method: "PUT",
+        body: expect.objectContaining({ categoryOrder: ["work", "casino"] }),
+      }),
     )
   })
 

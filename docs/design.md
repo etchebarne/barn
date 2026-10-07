@@ -125,9 +125,9 @@ agents in no groups. Saved memories, personality, settings and tasks are kept.
 | `react(message_id, emoji)` | React instead of replying when a message doesn't need words. |
 | `ask_user(chat_id, kind, question, options?)` | Clickable question (single / multi / text). Ends the turn; the answer arrives as an event. |
 | `connect_app(type, name?, config?, agent_ids?, reason?)` | Propose a connection; the user adds secrets on the card. Ends the turn. |
-| `memory_save`, `memory_forget` | Durable memories, always shown in the agent's instructions. |
+| `memory_save`, `memory_forget` | Durable memories, always shown in the agent's instructions. The user can add, edit and delete them too, in the agent's settings. |
 | `update_agent`, `list_agents`, `list_models` | Change own settings (admins: any agent's); find teammates and models. |
-| `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events). |
+| `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events). The user can create and edit `at`/`cron` tasks in the agent's settings (same validation). |
 | `run_command`, `read_file`, `write_file`, `list_files` | The agent's sandbox (when Docker is available). |
 | `<account>__<tool>` | Tools of connector accounts the agent was granted. |
 | `create_agent`, `delete_agent`, `create_group`, `update_group` | Admin agents only (the starter agent is admin). |

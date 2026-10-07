@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -453,6 +454,54 @@ func (s *Server) ListMemories(w http.ResponseWriter, r *http.Request, agentID st
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (s *Server) CreateMemory(w http.ResponseWriter, r *http.Request, agentID string) {
+	var req gen.MemoryRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	text, ok := memoryText(w, req.Text)
+	if !ok || !s.agentExists(w, r, agentID) {
+		return
+	}
+	m, err := s.store.AddMemory(r.Context(), agentID, text, nil)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, gen.Memory{Id: m.ID, Text: m.Text, CreatedAt: store.Time(m.CreatedAt)})
+}
+
+func (s *Server) UpdateMemory(w http.ResponseWriter, r *http.Request, agentID, memoryID string) {
+	var req gen.MemoryRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	text, ok := memoryText(w, req.Text)
+	if !ok {
+		return
+	}
+	m, err := s.store.UpdateMemory(r.Context(), agentID, memoryID, text)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "memory not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, gen.Memory{Id: m.ID, Text: m.Text, CreatedAt: store.Time(m.CreatedAt)})
+}
+
+// memoryText validates a memory's text, writing a 400 if it's not usable.
+func memoryText(w http.ResponseWriter, text string) (string, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" || utf8.RuneCountInString(text) > runtime.MaxMemoryLength {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("a memory must be 1–%d characters", runtime.MaxMemoryLength))
+		return "", false
+	}
+	return text, true
+}
+
 func (s *Server) DeleteMemory(w http.ResponseWriter, r *http.Request, agentID, memoryID string) {
 	err := s.store.DeleteMemory(r.Context(), agentID, memoryID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -569,17 +618,44 @@ func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, agentID strin
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (s *Server) CreateTask(w http.ResponseWriter, r *http.Request, agentID string) {
+	var req gen.CreateTaskRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	if !s.agentExists(w, r, agentID) {
+		return
+	}
+	t, err := s.runtime.SaveTask(r.Context(), agentID, "", runtime.TaskChange{
+		Name: &req.Name, Purpose: &req.Purpose, Cron: req.Cron, At: req.At,
+	})
+	s.writeTask(w, r, t, err, http.StatusCreated)
+}
+
 func (s *Server) UpdateTask(w http.ResponseWriter, r *http.Request, taskID string) {
 	var req gen.UpdateTaskRequest
 	if !decode(w, r, &req) {
 		return
 	}
-	t, err := s.runtime.SetTaskEnabled(r.Context(), taskID, req.Enabled)
-	if errors.Is(err, store.ErrNotFound) {
+	t, err := s.store.GetTask(r.Context(), taskID)
+	if err == nil {
+		t, err = s.runtime.SaveTask(r.Context(), t.AgentID, taskID, runtime.TaskChange{
+			Name: req.Name, Purpose: req.Purpose, Cron: req.Cron, At: req.At, Enabled: req.Enabled,
+		})
+	}
+	s.writeTask(w, r, t, err, http.StatusOK)
+}
+
+func (s *Server) writeTask(w http.ResponseWriter, r *http.Request, t store.Task, err error, status int) {
+	var me *runtime.ModelError
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "task not found")
 		return
-	}
-	if err != nil {
+	case errors.As(err, &me):
+		writeError(w, http.StatusBadRequest, me.Message)
+		return
+	case err != nil:
 		internalError(w, err)
 		return
 	}
@@ -588,7 +664,19 @@ func (s *Server) UpdateTask(w http.ResponseWriter, r *http.Request, taskID strin
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, taskView(t, names))
+	writeJSON(w, status, taskView(t, names))
+}
+
+// agentExists writes a 404 when the agent doesn't exist.
+func (s *Server) agentExists(w http.ResponseWriter, r *http.Request, agentID string) bool {
+	if _, err := s.store.GetAgent(r.Context(), agentID); errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return false
+	} else if err != nil {
+		internalError(w, err)
+		return false
+	}
+	return true
 }
 
 func (s *Server) DeleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
