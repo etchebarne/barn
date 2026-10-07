@@ -3,6 +3,7 @@ import { toast } from "sonner"
 
 import { api, unwrap, type Chat } from "@/lib/api-client"
 import { queryKeys } from "@/lib/query-keys"
+import { sidebarWriteSettled, sidebarWriteStarted } from "@/lib/sidebar-sync"
 
 import {
   applyLayoutToChats,
@@ -24,6 +25,8 @@ export function useCreateCategory() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (name: string) => unwrap(api.POST("/sidebar/categories", { body: { name } })),
+    onMutate: () => sidebarWriteStarted(queryClient),
+    onSettled: () => sidebarWriteSettled(queryClient),
     onSuccess: (category) =>
       queryClient.setQueryData<SidebarCategory[]>(queryKeys.sidebarCategories, (list) => [
         ...(list ?? []),
@@ -45,7 +48,8 @@ export function useUpdateCategory() {
           body,
         }),
       ),
-    onMutate: ({ id, ...change }) => {
+    onMutate: async ({ id, ...change }) => {
+      await sidebarWriteStarted(queryClient)
       const previous = queryClient.getQueryData<SidebarCategory[]>(key)
       queryClient.setQueryData<SidebarCategory[]>(key, (list) =>
         list?.map((c) => (c.id === id ? Object.assign({}, c, change) : c)),
@@ -56,6 +60,7 @@ export function useUpdateCategory() {
       if (context?.previous) queryClient.setQueryData(key, context.previous)
       toast.error(`Couldn't update the category: ${error.message}`)
     },
+    onSettled: () => sidebarWriteSettled(queryClient),
   })
 }
 
@@ -67,7 +72,8 @@ export function useDeleteCategory() {
       unwrap(
         api.DELETE("/sidebar/categories/{categoryId}", { params: { path: { categoryId: id } } }),
       ),
-    onMutate: (id) => {
+    onMutate: async (id) => {
+      await sidebarWriteStarted(queryClient)
       const categories = queryClient.getQueryData<SidebarCategory[]>(queryKeys.sidebarCategories)
       const chats = queryClient.getQueryData<Chat[]>(queryKeys.chats)
       queryClient.setQueryData<SidebarCategory[]>(queryKeys.sidebarCategories, (list) =>
@@ -86,7 +92,7 @@ export function useDeleteCategory() {
       if (context?.chats) queryClient.setQueryData(queryKeys.chats, context.chats)
       toast.error(`Couldn't delete the category: ${error.message}`)
     },
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.chats, exact: true }),
+    onSettled: () => sidebarWriteSettled(queryClient),
   })
 }
 
@@ -95,7 +101,8 @@ export function useSaveLayout() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (layout: SidebarLayout) => unwrap(api.PUT("/sidebar/layout", { body: layout })),
-    onMutate: (layout) => {
+    onMutate: async (layout) => {
+      await sidebarWriteStarted(queryClient)
       const categories = queryClient.getQueryData<SidebarCategory[]>(queryKeys.sidebarCategories)
       const chats = queryClient.getQueryData<Chat[]>(queryKeys.chats)
       queryClient.setQueryData<SidebarCategory[]>(queryKeys.sidebarCategories, (list) =>
@@ -112,5 +119,6 @@ export function useSaveLayout() {
       if (context?.chats) queryClient.setQueryData(queryKeys.chats, context.chats)
       toast.error(`Couldn't save the sidebar: ${error.message}`)
     },
+    onSettled: () => sidebarWriteSettled(queryClient),
   })
 }

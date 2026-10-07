@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { useMatchRoute } from "@tanstack/react-router"
+import { cn } from "cn"
 
 import {
   Sidebar,
@@ -11,7 +12,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuSkeleton,
-  useSidebar,
 } from "@/components/ui/sidebar"
 import { useAgentsById } from "@/features/agents"
 import { AccountMenu } from "@/features/auth"
@@ -33,23 +33,28 @@ function ConnectionNotice() {
   )
 }
 
-/** Left sidebar: search on top, chats in the user's categories and order, account at the bottom. */
-export function ChatSidebar() {
+/**
+ * The chat list: search on top, chats in the user's categories and order, account at the
+ * bottom. The desktop sidebar and the mobile home screen both show it.
+ */
+function ChatListContent({ mobile }: { mobile: boolean }) {
   const { data: chats, isPending, error } = useQuery(chatsQueryOptions)
   const { data: categories, isPending: categoriesPending } = useCategories()
   const agents = useAgentsById()
   const matchRoute = useMatchRoute()
-  const { isMobile, setOpenMobile } = useSidebar()
-  const closeOnMobile = () => {
-    if (isMobile) setOpenMobile(false)
-  }
 
   return (
-    <Sidebar collapsible={isMobile ? "offcanvas" : "none"} className="h-svh border-r">
-      {/* Top and bottom use the same button shape so the sidebar's edges balance. */}
-      <SidebarHeader className="h-14 justify-center border-b px-2">
-        {/* On mobile the sidebar is a sheet: close it first so the palette never stacks on it. */}
-        <SearchButton onOpen={closeOnMobile} />
+    <>
+      {/* Top and bottom use the same button shape so the list's edges balance. */}
+      <SidebarHeader
+        className={cn(
+          "justify-center border-b px-2",
+          mobile
+            ? "h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]"
+            : "h-14",
+        )}
+      >
+        <SearchButton />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -72,22 +77,45 @@ export function ChatSidebar() {
                 chats={chats}
                 categories={categories}
                 agents={agents}
-                isActive={(chatId) => !!matchRoute({ to: "/chats/$chatId", params: { chatId } })}
-                onNavigate={closeOnMobile}
+                // On mobile the list is its own screen; no row is "current" there.
+                isActive={(chatId) =>
+                  !mobile && !!matchRoute({ to: "/chats/$chatId", params: { chatId } })
+                }
+                onNavigate={() => {}}
               />
             )}
             {chats && categories && (
-              <div className="mt-2">
+              <div className="mt-3">
                 <NewCategory />
               </div>
             )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t">
+      <SidebarFooter
+        className={cn("border-t", mobile && "pb-[max(0.5rem,env(safe-area-inset-bottom))]")}
+      >
         <ConnectionNotice />
-        <AccountMenu onNavigate={closeOnMobile} />
+        <AccountMenu />
       </SidebarFooter>
+    </>
+  )
+}
+
+/** Desktop: the chat list as a fixed left sidebar. */
+export function ChatSidebar() {
+  return (
+    <Sidebar collapsible="none" className="h-svh border-r">
+      <ChatListContent mobile={false} />
     </Sidebar>
+  )
+}
+
+/** Mobile: the chat list as the home screen. */
+export function MobileChatList() {
+  return (
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      <ChatListContent mobile />
+    </div>
   )
 }

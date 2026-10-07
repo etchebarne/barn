@@ -1,7 +1,10 @@
+import { cn } from "cn"
+import { ChevronLeftIcon } from "lucide-react"
 import { useRef, useState, type Ref } from "react"
 import { toast } from "sonner"
 
 import { ModelPicker } from "@/components/model-picker"
+import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   Sheet,
@@ -12,6 +15,7 @@ import {
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { AgentConnections } from "@/features/connectors"
+import { useIsMobile } from "@/hooks/use-mobile"
 import type { Agent } from "@/lib/api-client"
 
 import { AgentAvatar } from "./agent-avatar"
@@ -82,6 +86,7 @@ function ModelField({ agent, inputRef }: { agent: Agent; inputRef?: Ref<HTMLInpu
  * `openAgentDetails`). Mounted once. One section per setting.
  */
 export function AgentDetailsSheet() {
+  const mobile = useIsMobile()
   const agentId = useAgentDetailsStore((s) => s.agentId)
   const focus = useAgentDetailsStore((s) => s.focus)
   const close = useAgentDetailsStore((s) => s.close)
@@ -101,10 +106,22 @@ export function AgentDetailsSheet() {
       {shown && (
         <SheetContent
           side="right"
-          className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+          // On phones it's a full screen pushed from the right, with a back button.
+          className="gap-0 data-[side=right]:w-full max-md:shadow-none max-md:data-ending-style:translate-x-full max-md:data-starting-style:translate-x-full data-[side=right]:sm:max-w-md"
+          showCloseButton={!mobile}
           initialFocus={focus === "model" ? modelInputRef : undefined}
         >
-          <SheetHeader className="flex-row items-center gap-3 border-b pr-12">
+          <SheetHeader
+            className={cn(
+              "flex-row items-center gap-3 border-b",
+              mobile ? "pt-[max(1rem,env(safe-area-inset-top))] pl-2" : "pr-12",
+            )}
+          >
+            {mobile && (
+              <Button variant="ghost" size="icon" aria-label="Back" onClick={close}>
+                <ChevronLeftIcon className="size-5" />
+              </Button>
+            )}
             <AgentAvatar id={shown.id} name={shown.name} size="lg" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <SheetTitle className="truncate">{shown.name}</SheetTitle>

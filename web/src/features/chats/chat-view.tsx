@@ -69,7 +69,11 @@ function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
               aria-label={`${agent.name}: agent details`}
               onClick={() => openAgentDetails(agent.id)}
             >
-              <AgentAvatar id={agent.id} name={agent.name} />
+              <AgentAvatar
+                id={agent.id}
+                name={agent.name}
+                active={agent.activity.state === "working"}
+              />
               <HeaderTitle title={chat.name} status={status} inButton />
             </Button>
           </>

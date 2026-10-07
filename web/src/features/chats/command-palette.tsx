@@ -204,7 +204,7 @@ export function SearchButton({ onOpen }: { onOpen?: () => void }) {
     >
       <SearchIcon className="size-4 shrink-0" aria-hidden="true" />
       <span className="flex-1 text-left">Search…</span>
-      <kbd className="rounded border bg-muted px-1.5 font-sans text-[11px] text-muted-foreground">
+      <kbd className="rounded border bg-muted px-1.5 font-sans text-[11px] text-muted-foreground [@media(hover:none)]:hidden">
         {paletteShortcutLabel()}
       </kbd>
     </button>

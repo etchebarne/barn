@@ -1,8 +1,6 @@
-import Avatar from "boring-avatars"
 import { cn } from "cn"
-import type * as React from "react"
 
-import { duskPalette } from "./palette"
+import { Aura } from "./aura"
 
 export function initials(name: string): string {
   const words = name
@@ -20,45 +18,22 @@ const pixels: Record<Size, number> = { sm: 24, default: 32, lg: 40 }
 
 const frame: Record<Size, string> = { sm: "size-6", default: "size-8", lg: "size-10" }
 
-/** An agent's aura: boring-avatars' marble style in the agent's own Dusk palette. */
-function Aura({
-  seed,
-  className,
-  style,
-}: {
-  seed: string
-  className?: string
-  style?: React.CSSProperties
-}) {
-  return (
-    <Avatar
-      name={seed}
-      variant="marble"
-      colors={duskPalette(seed)}
-      size="100%"
-      className={className}
-      // Inline size: menus and buttons size every descendant svg as an icon (16px) with
-      // selectors that outrank utility classes.
-      style={{ width: "100%", height: "100%", display: "block", ...style }}
-      role="presentation"
-      aria-hidden="true"
-    />
-  )
-}
-
 /**
  * The one avatar used for agents everywhere (sidebar, headers, messages), seeded by the agent's
- * id so it survives renames. Falls back to initials when the id isn't known yet.
+ * id so it survives renames. Falls back to initials when the id isn't known yet. The aura drifts
+ * slowly on its own; `active` (the agent is working) makes it a little livelier.
  */
 export function AgentAvatar({
   id,
   name,
   size = "default",
+  active = false,
   className,
 }: {
   id?: string
   name: string
   size?: Size
+  active?: boolean
   className?: string
 }) {
   return (
@@ -72,7 +47,7 @@ export function AgentAvatar({
         className,
       )}
     >
-      {id ? <Aura seed={id} /> : initials(name)}
+      {id ? <Aura seed={id} active={active} /> : initials(name)}
     </span>
   )
 }

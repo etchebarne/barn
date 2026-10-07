@@ -13,6 +13,7 @@ import {
   upsertChat,
 } from "../chat-cache"
 import { queryKeys } from "../query-keys"
+import { sidebarChangedRemotely } from "../sidebar-sync"
 
 export type ApplyResult = {
   /** Chats that no longer exist (e.g. an archived agent's DM); leave them if open. */
@@ -25,9 +26,9 @@ const NOTHING_REMOVED: ApplyResult = { removedChatIds: [] }
 export function applyWsEvent(queryClient: QueryClient, event: WsEvent): ApplyResult {
   switch (event.type) {
     case "sidebar.updated":
-      // Categories or the layout changed (here or on another device): refetch both.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sidebarCategories })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.chats, exact: true })
+      // Categories or the layout changed (here or on another device): refetch both, unless
+      // our own sidebar writes are still pending (see sidebar-sync).
+      sidebarChangedRemotely(queryClient)
       return NOTHING_REMOVED
     case "agent.deleted":
       return { removedChatIds: removeDeletedAgent(queryClient, event.agentId, event.chatId) }

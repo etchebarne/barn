@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { AgentAvatar, GroupAvatar } from "@/features/agents"
 import type { Agent, Chat } from "@/lib/api-client"
+import { readStorage, writeStorage } from "@/lib/storage"
 
 import { usePaletteStore } from "./palette-store"
 import { chatPreview, dmAgent } from "./preview"
@@ -89,7 +90,15 @@ function UnreadBadge({ count }: { count: number }) {
 }
 
 function ChatAvatar({ chat, agent }: { chat: Chat; agent: Agent | undefined }) {
-  if (chat.kind === "dm") return <AgentAvatar id={agent?.id} name={agent?.name ?? chat.name} />
+  if (chat.kind === "dm") {
+    return (
+      <AgentAvatar
+        id={agent?.id}
+        name={agent?.name ?? chat.name}
+        active={agent?.activity.state === "working"}
+      />
+    )
+  }
   return <GroupAvatar memberIds={chat.members.map((m) => m.agentId)} />
 }
 
@@ -134,7 +143,7 @@ function MoveToMenu({
             variant="ghost"
             size="icon-xs"
             aria-label={`More for ${chat.name}`}
-            className="absolute top-1/2 right-1 -translate-y-1/2 opacity-100 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
+            className="absolute top-1/2 right-2 -translate-y-1/2 opacity-100 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
           />
         }
       >
@@ -279,16 +288,18 @@ function SectionHeader({
         ref={dragHandle?.ref}
         {...(dragHandle?.props ?? {})}
         className={cn(
-          "group/section flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          // Same grid as chat rows: an 8 (2rem) icon column where avatars sit, then the label
+          // where chat names start, and actions on the same right edge as the rows' ⋯.
+          "group/section flex h-8 items-center gap-3 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           dropTarget && "bg-sidebar-accent ring-1 ring-primary/40",
         )}
       >
-        {isCategory ? (
+        <span className="flex w-8 shrink-0 justify-center">
           <button
             type="button"
             aria-expanded={!section.collapsed}
             aria-label={`${section.collapsed ? "Expand" : "Collapse"} ${section.name}`}
-            className="flex size-5 shrink-0 items-center justify-center rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="flex size-6 items-center justify-center rounded outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             onClick={onToggle}
           >
             <ChevronRightIcon
@@ -296,9 +307,7 @@ function SectionHeader({
               className={cn("size-3.5", !section.collapsed && "rotate-90")}
             />
           </button>
-        ) : (
-          <span className="size-5 shrink-0" aria-hidden="true" />
-        )}
+        </span>
         {renaming ? (
           <InlineName
             initial={section.name}
@@ -328,7 +337,7 @@ function SectionHeader({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={`${section.name} options`}
-                  className="size-5 opacity-100 group-focus-within/section:opacity-100 group-hover/section:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
+                  className="opacity-100 group-focus-within/section:opacity-100 group-hover/section:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
                 />
               }
             >
@@ -416,6 +425,8 @@ const collisionDetection: CollisionDetection = (args) =>
     ),
   })
 
+const UNASSIGNED_COLLAPSED_KEY = "sidebar:unassigned-collapsed"
+
 /** Where a dragged chat would land, for the drop indicator. */
 type DropTarget = { key: SectionKey; beforeChatId: string | null } | null
 
@@ -444,7 +455,15 @@ export function SidebarSections({
   const [activeType, setActiveType] = useState<DragData["type"] | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget>(null)
 
-  const sections = buildSections(chats, categories)
+  // Unassigned has no server-side category, so its collapsed state is kept on this device.
+  const [unassignedCollapsed, setUnassignedCollapsed] = useState(
+    () => readStorage(UNASSIGNED_COLLAPSED_KEY) === "1",
+  )
+  const sections = buildSections(chats, categories).map((section) =>
+    section.key === UNASSIGNED
+      ? Object.assign({}, section, { collapsed: unassignedCollapsed })
+      : section,
+  )
   const hasCategories = categories.length > 0
   const shown = visibleSections(sections, activeType === "chat")
   const categoryOrder = categories.map((c) => c.id)
@@ -612,9 +631,14 @@ export function SidebarSections({
               const headerProps = {
                 section,
                 dropTarget: dropTarget?.key === section.key && dropTarget.beforeChatId === null,
-                onToggle: () =>
-                  section.categoryId &&
-                  update.mutate({ id: section.categoryId, collapsed: !section.collapsed }),
+                onToggle: () => {
+                  if (section.categoryId) {
+                    update.mutate({ id: section.categoryId, collapsed: !section.collapsed })
+                  } else {
+                    writeStorage(UNASSIGNED_COLLAPSED_KEY, unassignedCollapsed ? "0" : "1")
+                    setUnassignedCollapsed(!unassignedCollapsed)
+                  }
+                },
                 onRename: (name: string) =>
                   section.categoryId && update.mutate({ id: section.categoryId, name }),
                 onDelete: () => section.categoryId && remove.mutate(section.categoryId),
@@ -667,7 +691,7 @@ export function NewCategory() {
   }
   if (naming) {
     return (
-      <div className="px-2 py-1">
+      <div className="py-1 pr-2 pl-[3.25rem]">
         <InlineName
           initial=""
           label="New category name"
@@ -683,10 +707,12 @@ export function NewCategory() {
   return (
     <button
       type="button"
-      className="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      className="flex h-8 w-full items-center gap-3 rounded-md px-2 text-xs text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       onClick={() => setNaming(true)}
     >
-      <PlusIcon className="size-3.5" aria-hidden="true" />
+      <span className="flex w-8 shrink-0 justify-center" aria-hidden="true">
+        <PlusIcon className="size-3.5" />
+      </span>
       New category
     </button>
   )

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
 import { UserRoundXIcon } from "lucide-react"
-import type { ReactNode } from "react"
+import { useState, type MouseEvent, type ReactNode } from "react"
 
 import { CopyButton } from "@/components/copy-button"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
@@ -25,19 +25,56 @@ import type { PendingMessage } from "./pending-store"
 import { agentAuthorName } from "./preview"
 import { QuoteBlock, ReplyButton } from "./quote-block"
 
-/** Per-message actions, revealed on hover or keyboard focus (always shown on touch screens). */
-function MessageActions({ side, children }: { side: "start" | "end"; children: ReactNode }) {
+/**
+ * Per-message actions. With a mouse: beside the bubble, bottom-aligned, revealed on hover or
+ * keyboard focus. On touch screens: hidden until the message is tapped, then shown as a row
+ * under the bubble (clear of the reactions pill and the screen edge).
+ */
+function MessageActions({
+  side,
+  reacted,
+  children,
+}: {
+  side: "start" | "end"
+  reacted: boolean
+  children: ReactNode
+}) {
   return (
     <div
       className={cn(
-        "absolute bottom-0 flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground",
-        "opacity-0 group-focus-within/message:opacity-100 group-hover/message:opacity-100 has-data-popup-open:opacity-100 [@media(hover:none)]:opacity-100",
+        "flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground",
+        // Pointer devices.
+        "absolute bottom-0 opacity-0 group-focus-within/message:opacity-100 group-hover/message:opacity-100 has-data-popup-open:opacity-100",
         side === "start" ? "left-full pl-1" : "right-full flex-row-reverse pr-1",
+        // Touch: in flow under the bubble, only for the tapped message.
+        "[@media(hover:none)]:static [@media(hover:none)]:hidden [@media(hover:none)]:pr-0 [@media(hover:none)]:pl-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:group-data-[revealed=true]/message:flex",
+        // Below the reactions pill when there is one (it hangs off the bubble's bottom edge).
+        reacted ? "[@media(hover:none)]:pt-6" : "[@media(hover:none)]:pt-1",
       )}
     >
       {children}
     </div>
   )
+}
+
+/** On touch screens, tapping a message (not its links or buttons) shows or hides its actions. */
+function useTapToReveal() {
+  const [revealed, setRevealed] = useState(false)
+  return {
+    revealed,
+    "data-revealed": revealed,
+    onClick: (event: MouseEvent<HTMLElement>) => {
+      if (!window.matchMedia?.("(hover: none)").matches) return
+      const target = event.target
+      if (
+        target instanceof Element &&
+        target.closest("a, button, input, textarea, [role=button]")
+      ) {
+        return
+      }
+      setRevealed((value) => !value)
+    },
+  }
 }
 
 /** "Created scout": a centered note linking to what happened (e.g. the new agent's DM). */
@@ -99,6 +136,7 @@ export function MessageRow({
   isLatest: boolean
 }) {
   const { message, startsRun, endsRun } = row
+  const { revealed, ...reveal } = useTapToReveal()
   const agent = message.author.agentId ? agents.get(message.author.agentId) : undefined
 
   const failure = messageFailure(message)
@@ -139,14 +177,14 @@ export function MessageRow({
 
   if (message.author.kind === "user") {
     return (
-      <Message align="end">
+      <Message align="end" {...reveal}>
         <MessageContent>
           {message.replyTo && <QuoteBlock quote={message.replyTo} agents={agents} align="end" />}
           {hasText && <MessageAttachments attachments={message.attachments} align="end" />}
           <Bubble
             variant={hasText ? "default" : "ghost"}
             align="end"
-            className={cn(reacted && "mb-6")}
+            className={cn(reacted && !revealed && "mb-6")}
           >
             {hasText ? (
               <BubbleContent className="whitespace-pre-wrap">
@@ -155,8 +193,8 @@ export function MessageRow({
             ) : (
               <MessageAttachments attachments={message.attachments} align="end" />
             )}
-            <MessageReactions message={message} agents={agents} align="start" />
-            <MessageActions side="end">
+            <MessageReactions message={message} agents={agents} align="start" lifted={revealed} />
+            <MessageActions side="end" reacted={reacted}>
               <ReplyButton message={message} />
               <ReactButton message={message} />
               {hasText && <CopyButton text={message.body} />}
@@ -170,8 +208,14 @@ export function MessageRow({
 
   const { name, deleted } = agentAuthorName(message.author.agentId, agents)
   return (
-    <Message align="start">
-      <MessageAvatar className="size-8 bg-transparent">
+    <Message align="start" {...reveal}>
+      {/* The avatar sits level with the bubble, not with the revealed actions row below it. */}
+      <MessageAvatar
+        className={cn(
+          "size-8 bg-transparent",
+          revealed && !message.prompt && (reacted ? "-translate-y-6" : "-translate-y-7"),
+        )}
+      >
         {endsRun ? (
           deleted ? (
             <span
@@ -213,7 +257,10 @@ export function MessageRow({
         ) : (
           <>
             {hasText && <MessageAttachments attachments={message.attachments} align="start" />}
-            <Bubble variant={hasText ? "muted" : "ghost"} className={cn(reacted && "mb-6")}>
+            <Bubble
+              variant={hasText ? "muted" : "ghost"}
+              className={cn(reacted && !revealed && "mb-6")}
+            >
               {hasText ? (
                 <BubbleContent>
                   <Markdown mentions={mentions}>{message.body}</Markdown>
@@ -221,8 +268,8 @@ export function MessageRow({
               ) : (
                 <MessageAttachments attachments={message.attachments} align="start" />
               )}
-              <MessageReactions message={message} agents={agents} align="end" />
-              <MessageActions side="start">
+              <MessageReactions message={message} agents={agents} align="end" lifted={revealed} />
+              <MessageActions side="start" reacted={reacted}>
                 {hasText && <CopyButton text={message.body} />}
                 <ReactButton message={message} />
                 <ReplyButton message={message} />

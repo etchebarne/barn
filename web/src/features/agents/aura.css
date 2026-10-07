@@ -1,0 +1,100 @@
+/*
+ * Agent auras: two pre-blurred marble blobs drifting slowly over the base color.
+ *
+ * Only `transform` and `opacity` animate, on HTML layers wrapping static SVG, so the blur is
+ * rasterized once and the compositor does the rest. The blob drift itself is seeded and started
+ * from aura.tsx (Web Animations); this file holds the layout and the "working" extras. Reduced
+ * motion gets the still picture.
+ */
+
+.aura {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-color: var(--aura-bg);
+  contain: layout paint style;
+}
+
+/* Holds the background too: the overlay blob blends against what's inside this group. */
+.aura-swirl {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  background-color: var(--aura-bg);
+  animation: aura-swirl 11s ease-in-out infinite paused;
+}
+
+.aura-layer {
+  position: absolute;
+  /* 150% of the frame, centered: room to drift without showing an edge. Matches BLEED. */
+  inset: -25%;
+}
+.aura-layer[data-blend="overlay"] {
+  mix-blend-mode: overlay;
+}
+
+.aura-sheen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  transition: opacity 600ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.aura-sheen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.7), transparent 65%);
+  animation: aura-breathe 3.6s ease-in-out infinite alternate paused;
+}
+
+.aura[data-active] .aura-swirl,
+.aura[data-active] .aura-sheen::before {
+  animation-play-state: running;
+}
+.aura[data-active] .aura-sheen {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aura-layer {
+    will-change: transform;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-swirl,
+  .aura-sheen::before {
+    animation: none;
+  }
+  .aura-sheen {
+    transition: none;
+  }
+}
+
+/* Working: the whole picture sways a little more. Starts and ends at rest. */
+@keyframes aura-swirl {
+  0%,
+  100% {
+    transform: none;
+  }
+  33% {
+    transform: rotate(22deg) scale(1.07);
+  }
+  66% {
+    transform: rotate(-14deg) scale(1.03);
+  }
+}
+
+@keyframes aura-breathe {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}

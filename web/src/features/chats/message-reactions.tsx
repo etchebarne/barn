@@ -33,15 +33,21 @@ export function MessageReactions({
   message,
   agents,
   align,
+  lifted = false,
 }: {
   message: Message
   agents: Map<string, Agent>
   align: "start" | "end"
+  /** Touch: the message's actions row (48px) is showing under the bubble; stay on the bubble. */
+  lifted?: boolean
 }) {
   const toggle = useToggleReaction(message)
   if (message.reactions.length === 0) return null
   return (
-    <BubbleReactions align={align} className="ring-background select-none has-[button]:p-0.5">
+    <BubbleReactions
+      align={align}
+      className={cn("ring-background select-none has-[button]:p-0.5", lifted && "bottom-12")}
+    >
       {message.reactions.map((reaction) => {
         const who = reactorNames(reaction, agents)
         const mine = userReacted(reaction)
