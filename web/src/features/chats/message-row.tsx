@@ -209,11 +209,12 @@ export function MessageRow({
   const { name, deleted } = agentAuthorName(message.author.agentId, agents)
   return (
     <Message align="start" {...reveal}>
-      {/* The avatar sits level with the bubble, not with the revealed actions row below it. */}
+      {/* The avatar sits level with the bubble, not with the room kept below it for the
+          reactions pill or the revealed actions row. */}
       <MessageAvatar
         className={cn(
           "size-8 bg-transparent",
-          revealed && !message.prompt && (reacted ? "-translate-y-6" : "-translate-y-7"),
+          reacted ? "-translate-y-6" : revealed && !message.prompt && "-translate-y-7",
         )}
       >
         {endsRun ? (
