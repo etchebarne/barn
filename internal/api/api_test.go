@@ -31,7 +31,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	}
 	set := settings.New(st, box)
 	b := bus.New()
-	llm := model.New("http://127.0.0.1:0", set.APIKey)
+	llm := model.New("http://127.0.0.1:0", "barn/test", set.APIKey)
 	rt := runtime.New(st, b, llm)
 	if err := rt.Start(ctx); err != nil {
 		t.Fatal(err)

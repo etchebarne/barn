@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/etchebarne/barn/internal/ids"
 )
 
 // Message is a chat message in OpenAI format. ReasoningContent is a provider extension some
@@ -56,6 +58,10 @@ type FunctionSpec struct {
 }
 
 type Request struct {
+	// Session identifies the conversation; sent as x-opencode-session so the provider can route
+	// and cache prompts. Keep it stable for the life of a conversation.
+	Session string `json:"-"`
+
 	Model     string    `json:"model"`
 	Messages  []Message `json:"messages"`
 	Tools     []Tool    `json:"tools,omitempty"`
@@ -93,20 +99,23 @@ var ErrNoKey = errors.New("no API key configured")
 type KeyFunc func(ctx context.Context) (string, error)
 
 type Client struct {
-	baseURL string
-	key     KeyFunc
-	http    *http.Client
+	baseURL   string
+	userAgent string
+	key       KeyFunc
+	http      *http.Client
 
 	modelsMu  sync.Mutex
 	models    []string
 	modelsExp time.Time
 }
 
-func New(baseURL string, key KeyFunc) *Client {
+// New creates a client. userAgent identifies barn to the provider, e.g. "barn/0.1.0".
+func New(baseURL, userAgent string, key KeyFunc) *Client {
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		key:     key,
-		http:    &http.Client{Timeout: 5 * time.Minute},
+		baseURL:   strings.TrimRight(baseURL, "/"),
+		userAgent: userAgent,
+		key:       key,
+		http:      &http.Client{Timeout: 5 * time.Minute},
 	}
 }
 
@@ -127,7 +136,7 @@ func (c *Client) chat(ctx context.Context, key string, req Request) (Response, e
 		} `json:"choices"`
 		Usage Usage `json:"usage"`
 	}
-	if err := c.do(ctx, key, http.MethodPost, "/chat/completions", req, &out); err != nil {
+	if err := c.do(ctx, key, req.Session, http.MethodPost, "/chat/completions", req, &out); err != nil {
 		return Response{}, err
 	}
 	if len(out.Choices) == 0 {
@@ -148,6 +157,7 @@ func (c *Client) VerifyKey(ctx context.Context, key string) error {
 		return errors.New("provider returned no models")
 	}
 	_, err = c.chat(ctx, key, Request{
+		Session:   "barn-verify-" + ids.New(),
 		Model:     pickCheapModel(models),
 		Messages:  []Message{Text("user", "ok")},
 		MaxTokens: 1,
@@ -176,7 +186,7 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	if err := c.do(ctx, "", http.MethodGet, "/models", nil, &out); err != nil {
+	if err := c.do(ctx, "", "", http.MethodGet, "/models", nil, &out); err != nil {
 		return nil, err
 	}
 	models := make([]string, 0, len(out.Data))
@@ -187,7 +197,7 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 	return models, nil
 }
 
-func (c *Client) do(ctx context.Context, key, method, path string, body, out any) error {
+func (c *Client) do(ctx context.Context, key, session, method, path string, body, out any) error {
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -203,8 +213,12 @@ func (c *Client) do(ctx context.Context, key, method, path string, body, out any
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("User-Agent", c.userAgent)
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	if session != "" {
+		req.Header.Set("x-opencode-session", session)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {

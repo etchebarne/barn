@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,7 +62,7 @@ func run() error {
 
 	set := settings.New(st, box)
 	b := bus.New()
-	llm := model.New(cfg.OpenCodeBaseURL, set.APIKey)
+	llm := model.New(cfg.OpenCodeBaseURL, "barn/"+strings.TrimPrefix(version, "v"), set.APIKey)
 	rt := runtime.New(st, b, llm)
 	srv := api.New(st, b, rt, llm, set, api.Options{
 		SecureCookies:  cfg.SecureCookies,
