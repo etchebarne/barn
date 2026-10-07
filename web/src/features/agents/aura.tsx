@@ -69,24 +69,25 @@ export function marble(seed: string, colors: string[]) {
 }
 
 /**
- * Three gentle wandering paths for a blob layer: a few degrees of turn, a little travel, a breath
- * of scale. Each segment eases in and out, so the blobs seem to float rather than move.
+ * Three wandering paths for a blob layer: a good turn, some travel, a breath of scale. Each
+ * segment eases in and out, so the blobs float rather than move. Layers are 150% of the frame,
+ * so even at the extremes (8% travel of the layer, 0.94 scale) no edge reaches the circle.
  */
 const DRIFTS: Keyframe[][] = [
   [
-    "rotate(-15deg) translate(-4%, 2.5%) scale(1.05)",
-    "rotate(9deg) translate(3%, -3%) scale(0.97)",
-    "rotate(21deg) translate(-1.5%, -5%) scale(1.09)",
+    "rotate(-38deg) translate(-7%, 4%) scale(1.08)",
+    "rotate(14deg) translate(6%, -6%) scale(0.95)",
+    "rotate(52deg) translate(-3%, -8%) scale(1.14)",
   ],
   [
-    "rotate(17deg) translate(4.5%, 1.5%) scale(1.08)",
-    "rotate(-6deg) translate(-2.5%, 4.5%) scale(1)",
-    "rotate(-22deg) translate(-4.5%, -2.5%) scale(1.06)",
+    "rotate(42deg) translate(8%, 3%) scale(1.12)",
+    "rotate(-12deg) translate(-5%, 8%) scale(0.96)",
+    "rotate(-50deg) translate(-8%, -4%) scale(1.1)",
   ],
   [
-    "rotate(-19deg) translate(2.5%, -4.5%) scale(0.98)",
-    "rotate(5deg) translate(-4.5%, 1%) scale(1.09)",
-    "rotate(16deg) translate(4%, 4%) scale(1.03)",
+    "rotate(-46deg) translate(5%, -8%) scale(0.94)",
+    "rotate(10deg) translate(-8%, 2%) scale(1.13)",
+    "rotate(40deg) translate(7%, 7%) scale(1.04)",
   ],
 ].map((frames) => frames.map((transform) => ({ transform, easing: "ease-in-out" })))
 
@@ -104,7 +105,7 @@ export function auraMotion(seed: string) {
     }
   }
   return {
-    blobs: [layer(17, 26), layer(21, 32)],
+    blobs: [layer(10, 15), layer(12, 18)],
     // No delay: the swirl sits paused at its resting frame until the agent first gets busy.
     swirl: `${(9 + rand.next() * 4).toFixed(1)}s`,
   }
