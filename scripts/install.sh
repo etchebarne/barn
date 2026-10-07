@@ -116,7 +116,9 @@ latest_version() {
   url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest") ||
     die "couldn't reach GitHub to find the latest release"
   local tag="${url##*/}"
-  [ -n "$tag" ] && [ "$tag" != latest ] || die "no releases published yet for $REPO"
+  if [ -z "$tag" ] || [ "$tag" = latest ]; then
+    die "no releases published yet for $REPO"
+  fi
   echo "$tag"
 }
 
@@ -255,7 +257,9 @@ main() {
   done
 
   [ "$(uname -s)" = Linux ] || die "barn's installer supports Linux only"
-  command -v systemctl >/dev/null && [ -d /run/systemd/system ] || die "systemd is required"
+  if ! command -v systemctl >/dev/null || [ ! -d /run/systemd/system ]; then
+    die "systemd is required"
+  fi
   local arch
   arch=$(detect_arch)
 
