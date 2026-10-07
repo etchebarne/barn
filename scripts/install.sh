@@ -208,8 +208,16 @@ EOF
 # joins the docker group (which is root-equivalent on the host).
 setup_docker() {
   if ! command -v docker >/dev/null; then
-    info "Installing Docker (agents' sandboxes)"
-    curl -fsSL https://get.docker.com | as_root sh >/dev/null
+    info "Installing Docker (agents' sandboxes); this takes a minute"
+    local log
+    log=$(mktemp)
+    # Docker's script is chatty (apt, needrestart); show its output only if it fails.
+    if ! curl -fsSL https://get.docker.com | as_root env NEEDRESTART_MODE=a sh >"$log" 2>&1; then
+      tail -n 20 "$log" >&2
+      rm -f "$log"
+      die "installing Docker failed (rerun with --no-docker to skip sandboxes)"
+    fi
+    rm -f "$log"
   fi
   as_root systemctl enable --now --quiet docker 2>/dev/null || true
   if ! id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -qx docker; then
