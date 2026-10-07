@@ -1,4 +1,5 @@
 import { cn } from "cn"
+import type * as React from "react"
 
 import { Aura } from "./aura"
 
@@ -72,7 +73,31 @@ export function GroupAvatar({
   // Each circle is 62% (two members) or 54% (three) of the frame, placed along the diagonal.
   const d = shown.length === 2 ? 0.62 : 0.54
   const px = pixels[size]
+  const diameter = px * d
   const step = shown.length === 2 ? 1 - d : (1 - d) / 2
+  const spots = shown.map((_, i) => ({
+    x: step * i * px,
+    y: (shown.length === 2 ? step * i : ([0, 0.46, 0.23][i] ?? 0)) * px,
+  }))
+  // A clear gap between overlapping circles: each one is cut out where the ones in front of it
+  // sit (plus the gap), so whatever is behind the avatar shows through.
+  const gap = size === "sm" ? 1.5 : 2
+  const cutout = (i: number) => {
+    const holes = spots.slice(i + 1).map((s) => {
+      const cx = s.x - spots[i]!.x + diameter / 2
+      const cy = s.y - spots[i]!.y + diameter / 2
+      const r = diameter / 2 + gap
+      return `radial-gradient(circle at ${cx}px ${cy}px, transparent ${r}px, #000 ${r + 0.5}px)`
+    })
+    if (holes.length === 0) return undefined
+    const mask = holes.join(", ")
+    return {
+      maskImage: mask,
+      WebkitMaskImage: mask,
+      maskComposite: "intersect",
+      WebkitMaskComposite: "source-in",
+    } satisfies React.CSSProperties
+  }
   return (
     <span
       aria-hidden="true"
@@ -81,12 +106,13 @@ export function GroupAvatar({
       {shown.map((id, i) => (
         <span
           key={id}
-          className="absolute overflow-hidden rounded-full ring-[1.5px] ring-background"
+          className="absolute overflow-hidden rounded-full"
           style={{
-            width: px * d,
-            height: px * d,
-            left: `${step * i * 100}%`,
-            top: shown.length === 2 ? `${step * i * 100}%` : `${[0, 46, 23][i]}%`,
+            width: diameter,
+            height: diameter,
+            left: spots[i]!.x,
+            top: spots[i]!.y,
+            ...cutout(i),
           }}
         >
           <Aura seed={id} />
