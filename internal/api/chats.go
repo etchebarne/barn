@@ -324,7 +324,7 @@ func (s *Server) AnswerPrompt(w http.ResponseWriter, r *http.Request, messageID 
 	out := view.Message(msg)
 	s.bus.Publish(view.MessageUpdated(out))
 	deliver := s.runtime.DeliverAnswer
-	if msg.Prompt.Kind == "approval" {
+	if msg.Prompt.Kind == "approval" || msg.Prompt.Kind == "connect" {
 		deliver = s.runtime.ResolveApproval
 	}
 	if err := deliver(ctx, msg); err != nil {
@@ -388,12 +388,16 @@ func validateAnswer(p store.Prompt, a store.PromptAnswer) error {
 		if len(a.Selected) != 1 || hasText {
 			return bad("approve or decline")
 		}
+	case "connect":
+		if len(a.Selected) != 1 || a.Selected[0] != 1 || hasText {
+			return bad("connect with POST /messages/{messageId}/connect; answer with option 1 to decline")
+		}
 	case "multi":
 		if len(a.Selected) == 0 && !hasText {
 			return bad("choose at least one option")
 		}
 	}
-	if hasText && p.Kind != "text" && (!p.AllowOther || p.Kind == "approval") {
+	if hasText && p.Kind != "text" && (!p.AllowOther || p.Kind == "approval" || p.Kind == "connect") {
 		return bad("this question doesn't take a typed answer")
 	}
 	return nil

@@ -21,6 +21,9 @@ import (
 // Registry is every connector type barn supports.
 var Registry = []Type{Webhook{}, GitHub{}, Linear{}, Slack{}, Render{}, MCP{}}
 
+// TypeByName finds a connector type in the Registry.
+func TypeByName(name string) (Type, bool) { return typeByName(name) }
+
 func typeByName(name string) (Type, bool) {
 	i := slices.IndexFunc(Registry, func(t Type) bool { return t.Name() == name })
 	if i < 0 {
@@ -221,11 +224,12 @@ func (m *Manager) ToolsFor(ctx context.Context, agentID string) ([]AgentTool, er
 			slog.Warn("connector tools", "account", a.ID, "err", err)
 			continue
 		}
-		prefix := Slug(a.Name)
-		if n := seen[prefix]; n > 0 {
-			prefix = fmt.Sprintf("%s%d", prefix, n+1)
+		base := Slug(a.Name)
+		prefix := base
+		if n := seen[base]; n > 0 {
+			prefix = fmt.Sprintf("%s%d", base, n+1)
 		}
-		seen[prefix]++
+		seen[base]++
 		for _, t := range tools {
 			out = append(out, AgentTool{Name: prefix + "__" + t.Name, AccountID: a.ID, Tool: t})
 		}

@@ -113,6 +113,7 @@ is compacted. Compaction may use a cheaper model.
 | `send_message(chat_id, text)` | Speak in a chat the agent belongs to. |
 | `react(message_id, emoji)` | React instead of replying when a message doesn't need words. |
 | `ask_user(chat_id, kind, question, options?)` | Clickable question (single / multi / text). Ends the turn; the answer arrives as an event. |
+| `connect_app(type, name?, config?, agent_ids?, reason?)` | Propose a connection; the user adds secrets on the card. Ends the turn. |
 | `memory_save`, `memory_forget` | Durable memories, always shown in the agent's instructions. |
 | `update_agent`, `list_agents`, `list_models` | Change own settings (admins: any agent's); find teammates and models. |
 | `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events). |
@@ -185,9 +186,14 @@ Messages in a group are visible to every participant; DMs are visible only to th
   (Web API + Socket Mode, so no public URL is needed), Render (REST + Standard Webhooks
   signatures with a replay window), and MCP servers over Streamable HTTP (JSON or SSE responses;
   tools the server marks read-only aren't gated).
-- **Accounts** are added in Settings → Connectors, never through chat (secrets would end up in
-  the history). Credentials are verified with the service before saving and stored encrypted;
-  the API never returns them. Several accounts per type are fine ("Slack — work", "Slack — side").
+- **Accounts** are added in Settings → Connectors, or proposed by an agent with `connect_app`:
+  the agent fills in the type, name, non-secret config (e.g. an MCP server URL) and who gets
+  access, and a connect card appears in its DM. The user types any secrets on the card
+  (`POST /messages/{id}/connect`), so they never pass through chat or the model. Either way,
+  credentials are verified with the service before saving and stored encrypted; the API never
+  returns them. A failed check leaves the card open; the agent learns the outcome (and its new
+  tool names) as a `<connection_result>`. Only admin agents may propose access for others.
+  Several accounts per type are fine ("Slack — work", "Slack — side").
 - **Grants** decide which agents may use an account. Tools appear to an agent as
   `<account slug>__<tool>`; the system prompt lists its accounts and their signal types.
 - **Signals** arrive at `POST /hooks/{accountID}` (public, verified per type) or over a

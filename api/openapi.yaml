@@ -596,6 +596,50 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /messages/{messageId}/connect:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: connectPrompt
+      tags: [chats]
+      description: |
+        Accept a connection an agent proposed (a prompt of kind connect). barn checks the
+        credentials with the app, saves the connection with the proposed agents' access, marks
+        the prompt answered (broadcast as message.updated) and tells the agent. Credentials go
+        straight to the connection and are never shown to the agent. To decline, answer the
+        prompt with option 1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectPromptRequest" }
+      responses:
+        "200":
+          description: The updated message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "400":
+          description: The app rejected the details; the prompt stays pending
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The prompt was already answered or dismissed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: barn couldn't reach the app
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /messages/{messageId}/reactions:
     parameters:
       - name: messageId
@@ -1112,10 +1156,12 @@ components:
       properties:
         kind:
           type: string
-          enum: [single, multi, text, approval]
+          enum: [single, multi, text, approval, connect]
           description: |
             single = pick one; multi = pick any number; text = free-text answer; approval = the
-            agent wants to do something that needs the user's OK (options: Approve, Decline)
+            agent wants to do something that needs the user's OK (options: Approve, Decline);
+            connect = the agent proposes connecting an app (see connection; options: Connect,
+            Decline; connect with POST /messages/{messageId}/connect)
         question: { type: string }
         options:
           type: array
@@ -1127,6 +1173,41 @@ components:
         answer:
           allOf: [{ $ref: "#/components/schemas/PromptAnswer" }]
           nullable: true
+        connection:
+          allOf: [{ $ref: "#/components/schemas/PromptConnection" }]
+          nullable: true
+          description: The proposed connection (connect prompts only)
+
+    PromptConnection:
+      type: object
+      required: [type, name, config, agentIds, accountId]
+      properties:
+        type: { type: string, description: Connector type name (see /connectors/types) }
+        name: { type: string }
+        config:
+          type: object
+          additionalProperties: { type: string }
+          description: Non-secret settings the agent filled in (e.g. the server URL)
+        agentIds:
+          type: array
+          items: { type: string }
+          description: Agents that get access once it's connected
+        accountId:
+          type: string
+          nullable: true
+          description: The connection, once the user connected it
+
+    ConnectPromptRequest:
+      type: object
+      required: [credentials]
+      properties:
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+          description: Values for the type's credential fields
+        name:
+          type: string
+          description: Overrides the proposed name
 
     PromptOption:
       type: object

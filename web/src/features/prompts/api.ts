@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query"
+import { useCallback } from "react"
 
 import { api, ApiError, unwrap, type Chat, type Message } from "@/lib/api-client"
 import { findCachedMessage, updateMessageInCache } from "@/lib/chat-cache"
 import { queryKeys } from "@/lib/query-keys"
 
+import type { ConnectPromptRequest } from "./connect"
 import { answerMessage, dismissMessage, type PromptAnswer } from "./logic"
 
 type Snapshot = { previous: Message | undefined }
@@ -64,4 +66,35 @@ export async function ensureChatLoaded(queryClient: QueryClient, chatId: string)
   const chats = queryClient.getQueryData<Chat[]>(queryKeys.chats)
   if (chats?.some((chat) => chat.id === chatId)) return
   await queryClient.invalidateQueries({ queryKey: queryKeys.chats, exact: true })
+}
+
+/**
+ * Connects the app a "connect" prompt proposes. Deliberately not a `useMutation`: the request
+ * carries secrets, and mutation state would keep them in the query client's cache.
+ * Resolves on success (or a 409, after refetching); throws `ApiError` on 400/502 etc.
+ */
+export function useConnectPrompt(message: Message) {
+  const queryClient = useQueryClient()
+  return useCallback(
+    async (body: ConnectPromptRequest) => {
+      try {
+        const updated = await unwrap(
+          api.POST("/messages/{messageId}/connect", {
+            params: { path: { messageId: message.id } },
+            body,
+          }),
+        )
+        updateMessageInCache(queryClient, updated)
+        void queryClient.invalidateQueries({ queryKey: queryKeys.connectors })
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          // Already answered elsewhere: show the server's version.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.messages(message.chatId) })
+          return
+        }
+        throw error
+      }
+    },
+    [message.id, message.chatId, queryClient],
+  )
 }

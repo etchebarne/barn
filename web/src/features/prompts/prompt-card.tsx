@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { cn } from "cn"
 import { CheckIcon, PencilIcon, SendHorizontalIcon, XIcon } from "lucide-react"
@@ -11,9 +11,13 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
+import { useConnectorTypes } from "@/features/connectors"
+import { agentsQueryOptions } from "@/lib/agents"
 import { ApiError, type Message } from "@/lib/api-client"
 
-import { ensureChatLoaded, useAnswerPrompt, useDismissPrompt } from "./api"
+import { ensureChatLoaded, useAnswerPrompt, useConnectPrompt, useDismissPrompt } from "./api"
+import { DECLINE_CONNECT } from "./connect"
+import { ConnectCard } from "./connect-card"
 import {
   acceptsLetterKeys,
   approvalAnswer,
@@ -320,6 +324,41 @@ function ApprovalOutcome({ prompt }: { prompt: Prompt }) {
   )
 }
 
+/** Wires a "connect" prompt to the connector types, agent names and the connect request. */
+function ConnectPrompt({
+  message,
+  prompt,
+  isLatest,
+  disabled,
+  onDecline,
+  onDismiss,
+}: {
+  message: Message
+  prompt: Prompt
+  isLatest: boolean
+  disabled: boolean
+  onDecline: () => void
+  onDismiss: () => void
+}) {
+  const types = useConnectorTypes()
+  const { data: agents } = useQuery(agentsQueryOptions)
+  const connect = useConnectPrompt(message)
+  const agentNames = new Map((agents ?? []).map((a) => [a.id, a.name]))
+  return (
+    <ConnectCard
+      prompt={prompt}
+      type={types.data?.find((t) => t.type === prompt.connection?.type)}
+      typesLoading={types.isPending}
+      agentNames={agentNames}
+      isLatest={isLatest}
+      disabled={disabled}
+      onConnect={connect}
+      onDecline={onDecline}
+      onDismiss={onDismiss}
+    />
+  )
+}
+
 /**
  * An agent's question with clickable answers. Pending: options (single answers on click, multi
  * toggles then submits), optional "type your own", or a text field. Answered: collapses to the
@@ -358,6 +397,26 @@ export function PromptCard({
   }
 
   const dismissed = prompt.status === "dismissed"
+
+  if (prompt.kind === "connect") {
+    return (
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <ConnectPrompt
+          message={message}
+          prompt={prompt}
+          isLatest={isLatest}
+          disabled={busy}
+          onDecline={() => onAnswer(DECLINE_CONNECT)}
+          onDismiss={() => dismiss.mutate()}
+        />
+        {error && (
+          <p role="alert" className="px-1.5 text-xs text-destructive">
+            {error.message}
+          </p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">

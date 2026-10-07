@@ -94,11 +94,11 @@ func (l *loop) writeConnectedApps(ctx context.Context, b *strings.Builder, agent
 		return err
 	}
 	if len(accts) == 0 {
-		b.WriteString("None yet. The user connects apps (GitHub, Linear, Slack, Render, MCP servers, webhooks) in " +
-			"Settings → Connectors and chooses which agents can use each; suggest that when an app would help.\n\n")
+		b.WriteString("None yet. When an app or MCP server would help, propose it with connect_app (the user " +
+			"adds secrets on the card), or they can add one in Settings → Connectors.\n\n")
 		return nil
 	}
-	b.WriteString("Use their tools (named <account>__<tool>). To react to events, create a signal task: task_create " +
+	b.WriteString("Use their tools (named <account>__<tool>); propose more with connect_app. To react to events, create a signal task: task_create " +
 		"with on_signal {account, type, match}; match maps a field to text it must contain (case-insensitive).\n")
 	for i, a := range accts {
 		fmt.Fprintf(b, "- %s (%s, account_id %s)", a.Name, types[i].DisplayName(), a.ID)

@@ -93,6 +93,10 @@ func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool strin
 // the agent the outcome.
 func (m *Manager) ResolveApproval(ctx context.Context, msg store.Message) error {
 	p := msg.Prompt
+	if p != nil && p.Kind == "connect" && p.Connection != nil && p.Answer != nil {
+		// Connecting goes through Connect; an answer here is a decline.
+		return m.declineConnection(ctx, msg)
+	}
 	if p == nil || p.Kind != "approval" || p.Action == nil || p.Answer == nil {
 		return nil
 	}
@@ -120,8 +124,12 @@ func (m *Manager) ResolveApproval(ctx context.Context, msg store.Message) error 
 }
 
 func renderApproval(msg store.Message, outcome json.RawMessage) string {
-	return fmt.Sprintf("<approval_result prompt_id=%q question=%q>\n%s\n</approval_result>",
-		msg.ID, msg.Prompt.Question, string(outcome))
+	tag := "approval_result"
+	if msg.Prompt.Kind == "connect" {
+		tag = "connection_result"
+	}
+	return fmt.Sprintf("<%s prompt_id=%q question=%q>\n%s\n</%s>",
+		tag, msg.ID, msg.Prompt.Question, string(outcome), tag)
 }
 
 // describeArgs lists tool arguments as "key: value" lines for an approval question.

@@ -416,6 +416,17 @@ func TestMCP(t *testing.T) {
 			if out["content"] != "results for deploys" {
 				t.Fatalf("call = %+v", out)
 			}
+
+			// A recent successful check must not let wrong or missing credentials through.
+			for _, auth := range []string{"Bearer wrong", ""} {
+				bad := Account{ID: acct.ID, Credentials: map[string]string{"authorization": auth}, Config: acct.Config}
+				if err := m.Verify(context.Background(), bad); err == nil {
+					t.Fatalf("verify with %q should fail", auth)
+				}
+				if _, err := m.Tools(context.Background(), bad); err == nil {
+					t.Fatalf("tools with %q should not come from the cache", auth)
+				}
+			}
 		})
 	}
 }
@@ -465,6 +476,20 @@ func TestManagerAccountsToolsAndSignals(t *testing.T) {
 	}
 	if _, err := m.Call(ctx, agent.ID, "github_work__nope", nil); err == nil {
 		t.Fatal("unknown tools must fail")
+	}
+
+	// Accounts with the same name get numbered prefixes.
+	for range 2 {
+		dup, _ := m.Save(ctx, "", "github", "GitHub — work", map[string]string{"token": "t"}, map[string]string{"base_url": api.URL})
+		st.SetGrants(ctx, dup.ID, []string{agent.ID})
+	}
+	prefixes := map[string]bool{}
+	all, _ := m.ToolsFor(ctx, agent.ID)
+	for _, tool := range all {
+		prefixes[strings.Split(tool.Name, "__")[0]] = true
+	}
+	if len(prefixes) != 3 || !prefixes["github_work"] || !prefixes["github_work2"] || !prefixes["github_work3"] {
+		t.Fatalf("prefixes = %v", prefixes)
 	}
 
 	// Updating with an empty secret keeps the saved one.

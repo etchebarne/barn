@@ -246,6 +246,8 @@ func toolLabel(name string) string {
 		return "setting up a group"
 	case toolUpdateGroup:
 		return "updating a group"
+	case toolConnectApp:
+		return "setting up an app"
 	default:
 		return "using " + name
 	}
@@ -254,6 +256,9 @@ func toolLabel(name string) string {
 // runTool executes a tool call and returns the result for the model, and whether it succeeded.
 func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCall) (string, bool) {
 	args := []byte(call.Function.Arguments)
+	if call.Function.Name == toolConnectApp && l.m.Connectors != nil {
+		return l.connectApp(ctx, agent, args)
+	}
 	if !slices.ContainsFunc(toolsFor(agent, l.m.sandboxesAvailable()), func(t model.Tool) bool { return t.Function.Name == call.Function.Name }) {
 		if _, ok := l.connectorTool(ctx, agent, call.Function.Name); ok {
 			return l.callConnector(ctx, agent, call.Function.Name, args)

@@ -432,3 +432,63 @@ func TestConnectorsAPI(t *testing.T) {
 	}
 	r.Body.Close()
 }
+
+func TestConnectPromptAPI(t *testing.T) {
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer good" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"message":"Bad credentials"}`))
+			return
+		}
+		w.Write([]byte(`{"login":"martin"}`))
+	}))
+	defer gh.Close()
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	agent, dm, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	card := func() string {
+		msg, err := st.InsertPrompt(ctx, dm, agent.ID, store.Prompt{
+			Kind: "connect", Question: "Connect GitHub (GitHub)?", Options: []store.PromptOption{{Label: "Connect"}, {Label: "Decline"}},
+			Connection: &store.PendingConnection{AgentID: agent.ID, Type: "github", Name: "GitHub",
+				Config: map[string]string{"base_url": gh.URL}, AgentIDs: []string{agent.ID}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return msg.ID
+	}
+
+	id := card()
+	if resp, _ := c.do("POST", "/api/messages/"+id+"/answer", `{"selected":[0]}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("connecting must go through /connect, got %d", resp.StatusCode)
+	}
+	resp, body := c.do("POST", "/api/messages/"+id+"/connect", `{"credentials":{"token":"bad"}}`, true)
+	if resp.StatusCode != http.StatusBadRequest || !strings.HasPrefix(body["message"].(string), "The service rejected the credentials") {
+		t.Fatalf("bad token: %d %v", resp.StatusCode, body)
+	}
+	resp, body = c.do("POST", "/api/messages/"+id+"/connect", `{"credentials":{"token":"good"},"name":"Work GitHub"}`, true)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("connect: %d %v", resp.StatusCode, body)
+	}
+	p := body["prompt"].(map[string]any)
+	conn := p["connection"].(map[string]any)
+	if p["status"] != "answered" || conn["accountId"] == nil || conn["name"] != "Work GitHub" || strings.Contains(fmt.Sprint(body), "good") {
+		t.Fatalf("answered card = %v", p)
+	}
+	if resp, _ := c.do("POST", "/api/messages/"+id+"/connect", `{"credentials":{"token":"good"}}`, true); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("second connect: %d", resp.StatusCode)
+	}
+	_, list := c.doList("GET", "/api/connectors")
+	if len(list) != 1 || fmt.Sprint(list[0].(map[string]any)["agentIds"]) != "["+agent.ID+"]" {
+		t.Fatalf("connectors = %v", list)
+	}
+
+	id = card()
+	if resp, body := c.do("POST", "/api/messages/"+id+"/answer", `{"selected":[1]}`, true); resp.StatusCode != http.StatusOK || body["prompt"].(map[string]any)["connection"].(map[string]any)["accountId"] != nil {
+		t.Fatalf("decline: %d %v", resp.StatusCode, body)
+	}
+	plain, _ := st.InsertPrompt(ctx, dm, agent.ID, store.Prompt{Kind: "single", Question: "?", Options: []store.PromptOption{{Label: "a"}}})
+	if resp, _ := c.do("POST", "/api/messages/"+plain.ID+"/connect", `{"credentials":{}}`, true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("connect on a plain question: %d", resp.StatusCode)
+	}
+}

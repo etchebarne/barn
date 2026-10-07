@@ -61,6 +61,19 @@ type Prompt struct {
 	Answer     *PromptAnswer  `json:"answer"`
 	// Action is the gated tool call an approval prompt is about. Never sent to clients.
 	Action *PendingAction `json:"action,omitempty"`
+	// Connection is the app a connect prompt proposes.
+	Connection *PendingConnection `json:"connection,omitempty"`
+}
+
+// PendingConnection is a connection an agent proposed (kind "connect"). It holds no secrets: the
+// user types those on the card and they go straight into the connection.
+type PendingConnection struct {
+	AgentID   string            `json:"agentId"` // who proposed it
+	Type      string            `json:"type"`
+	Name      string            `json:"name"`
+	Config    map[string]string `json:"config"`
+	AgentIDs  []string          `json:"agentIds"`
+	AccountID string            `json:"accountId,omitempty"` // set once connected
 }
 
 type PromptOption struct {

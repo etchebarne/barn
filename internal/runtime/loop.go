@@ -139,10 +139,10 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			} else {
 				result, ok = l.runTool(ctx, agent, call)
 			}
-			if ok && (call.Function.Name == toolSendMessage || call.Function.Name == toolAskUser || call.Function.Name == toolReact) {
+			if ok && (call.Function.Name == toolSendMessage || call.Function.Name == toolAskUser || call.Function.Name == toolReact || call.Function.Name == toolConnectApp) {
 				spoke = true
 			}
-			if ok && call.Function.Name == toolAskUser {
+			if ok && (call.Function.Name == toolAskUser || call.Function.Name == toolConnectApp) {
 				asked = true
 			}
 			if err := l.appendEntries(ctx, model.Message{
@@ -241,6 +241,9 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 	}
 	// Each agent is one continuous conversation, so its id is a stable session id.
 	tools := toolsFor(agent, l.m.sandboxesAvailable())
+	if l.m.Connectors != nil {
+		tools = append(tools, connectAppTool())
+	}
 	tools = append(tools, asModelTools(ctx, l.m, l.connectorTools(ctx, agent))...)
 	return model.Request{Session: "barn-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools}, nil
 }

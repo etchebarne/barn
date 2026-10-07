@@ -500,6 +500,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{messageId}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Accept a connection an agent proposed (a prompt of kind connect). barn checks the
+         *     credentials with the app, saves the connection with the proposed agents' access, marks
+         *     the prompt answered (broadcast as message.updated) and tells the agent. Credentials go
+         *     straight to the connection and are never shown to the agent. To decline, answer the
+         *     prompt with option 1.
+         */
+        post: operations["connectPrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{messageId}/reactions": {
         parameters: {
             query?: never;
@@ -834,10 +859,12 @@ export interface components {
         Prompt: {
             /**
              * @description single = pick one; multi = pick any number; text = free-text answer; approval = the
-             *     agent wants to do something that needs the user's OK (options: Approve, Decline)
+             *     agent wants to do something that needs the user's OK (options: Approve, Decline);
+             *     connect = the agent proposes connecting an app (see connection; options: Connect,
+             *     Decline; connect with POST /messages/{messageId}/connect)
              * @enum {string}
              */
-            kind: "single" | "multi" | "text" | "approval";
+            kind: "single" | "multi" | "text" | "approval" | "connect";
             question: string;
             options: components["schemas"]["PromptOption"][];
             /** @description Offer "type your own" in addition to the options */
@@ -845,6 +872,29 @@ export interface components {
             /** @enum {string} */
             status: "pending" | "answered" | "dismissed";
             answer: components["schemas"]["PromptAnswer"] | null;
+            /** @description The proposed connection (connect prompts only) */
+            connection?: components["schemas"]["PromptConnection"] | null;
+        };
+        PromptConnection: {
+            /** @description Connector type name (see /connectors/types) */
+            type: string;
+            name: string;
+            /** @description Non-secret settings the agent filled in (e.g. the server URL) */
+            config: {
+                [key: string]: string;
+            };
+            /** @description Agents that get access once it's connected */
+            agentIds: string[];
+            /** @description The connection, once the user connected it */
+            accountId: string | null;
+        };
+        ConnectPromptRequest: {
+            /** @description Values for the type's credential fields */
+            credentials: {
+                [key: string]: string;
+            };
+            /** @description Overrides the proposed name */
+            name?: string;
         };
         PromptOption: {
             label: string;
@@ -1795,6 +1845,61 @@ export interface operations {
             404: components["responses"]["Error"];
             /** @description The prompt was already answered or dismissed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    connectPrompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectPromptRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated message */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description The app rejected the details; the prompt stays pending */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The prompt was already answered or dismissed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description barn couldn't reach the app */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

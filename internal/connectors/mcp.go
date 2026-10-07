@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -165,13 +167,27 @@ func (s *mcpSession) rpc(ctx context.Context, method string, params any, out any
 }
 
 func (m MCP) Tools(ctx context.Context, acct Account) ([]Tool, error) {
-	key := acct.ID + "|" + acct.Config["url"]
+	// Keyed by credentials too, so changing them never serves tools listed with the old ones.
+	sum := sha256.Sum256([]byte(acct.Credentials["authorization"]))
+	key := acct.ID + "|" + acct.Config["url"] + "|" + hex.EncodeToString(sum[:8])
 	mcpCache.Lock()
 	entry, ok := mcpCache.tools[key]
 	mcpCache.Unlock()
 	if ok && time.Now().Before(entry.expires) {
 		return entry.tools, nil
 	}
+	tools, err := m.listTools(ctx, acct)
+	if err != nil {
+		return nil, err
+	}
+	mcpCache.Lock()
+	mcpCache.tools[key] = mcpCacheEntry{tools: tools, expires: time.Now().Add(5 * time.Minute)}
+	mcpCache.Unlock()
+	return tools, nil
+}
+
+// listTools asks the server for its tools (uncached).
+func (m MCP) listTools(ctx context.Context, acct Account) ([]Tool, error) {
 	s, err := m.connect(ctx, acct)
 	if err != nil {
 		return nil, err
@@ -190,9 +206,6 @@ func (m MCP) Tools(ctx context.Context, acct Account) ([]Tool, error) {
 		}
 		tools = append(tools, Tool{Name: t.Name, Description: truncateStr(t.Description, 1000), Parameters: schema, External: !t.Annotations.ReadOnlyHint})
 	}
-	mcpCache.Lock()
-	mcpCache.tools[key] = mcpCacheEntry{tools: tools, expires: time.Now().Add(5 * time.Minute)}
-	mcpCache.Unlock()
 	return tools, nil
 }
 
@@ -230,6 +243,7 @@ func (m MCP) Call(ctx context.Context, acct Account, tool string, args json.RawM
 }
 
 func (m MCP) Verify(ctx context.Context, acct Account) error {
-	_, err := m.Tools(ctx, Account{ID: "verify", Config: acct.Config, Credentials: acct.Credentials})
+	// Always ask the server: a cached list would let wrong credentials pass.
+	_, err := m.listTools(ctx, acct)
 	return err
 }

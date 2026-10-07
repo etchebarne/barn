@@ -135,6 +135,7 @@ func (e MessageFailureReason) Valid() bool {
 // Defines values for PromptKind.
 const (
 	Approval PromptKind = "approval"
+	Connect  PromptKind = "connect"
 	Multi    PromptKind = "multi"
 	Single   PromptKind = "single"
 	Text     PromptKind = "text"
@@ -144,6 +145,8 @@ const (
 func (e PromptKind) Valid() bool {
 	switch e {
 	case Approval:
+		return true
+	case Connect:
 		return true
 	case Multi:
 		return true
@@ -456,6 +459,15 @@ type CompleteOnboardingResponse struct {
 	ChatId string `json:"chatId"`
 }
 
+// ConnectPromptRequest defines model for ConnectPromptRequest.
+type ConnectPromptRequest struct {
+	// Credentials Values for the type's credential fields
+	Credentials map[string]string `json:"credentials"`
+
+	// Name Overrides the proposed name
+	Name *string `json:"name,omitempty"`
+}
+
 // Connector defines model for Connector.
 type Connector struct {
 	// AgentIds Agents allowed to use this account
@@ -634,8 +646,13 @@ type Prompt struct {
 	AllowOther bool          `json:"allowOther"`
 	Answer     *PromptAnswer `json:"answer"`
 
+	// Connection The proposed connection (connect prompts only)
+	Connection *PromptConnection `json:"connection,omitempty"`
+
 	// Kind single = pick one; multi = pick any number; text = free-text answer; approval = the
-	// agent wants to do something that needs the user's OK (options: Approve, Decline)
+	// agent wants to do something that needs the user's OK (options: Approve, Decline);
+	// connect = the agent proposes connecting an app (see connection; options: Connect,
+	// Decline; connect with POST /messages/{messageId}/connect)
 	Kind     PromptKind     `json:"kind"`
 	Options  []PromptOption `json:"options"`
 	Question string         `json:"question"`
@@ -643,7 +660,9 @@ type Prompt struct {
 }
 
 // PromptKind single = pick one; multi = pick any number; text = free-text answer; approval = the
-// agent wants to do something that needs the user's OK (options: Approve, Decline)
+// agent wants to do something that needs the user's OK (options: Approve, Decline);
+// connect = the agent proposes connecting an app (see connection; options: Connect,
+// Decline; connect with POST /messages/{messageId}/connect)
 type PromptKind string
 
 // PromptStatus defines model for Prompt.Status.
@@ -656,6 +675,22 @@ type PromptAnswer struct {
 
 	// Text Free-text answer (text prompts, or "type your own")
 	Text *string `json:"text,omitempty"`
+}
+
+// PromptConnection defines model for PromptConnection.
+type PromptConnection struct {
+	// AccountId The connection, once the user connected it
+	AccountId *string `json:"accountId"`
+
+	// AgentIds Agents that get access once it's connected
+	AgentIds []string `json:"agentIds"`
+
+	// Config Non-secret settings the agent filled in (e.g. the server URL)
+	Config map[string]string `json:"config"`
+	Name   string            `json:"name"`
+
+	// Type Connector type name (see /connectors/types)
+	Type string `json:"type"`
 }
 
 // PromptOption defines model for PromptOption.
@@ -920,6 +955,9 @@ type UpdateConnectorJSONRequestBody = UpdateConnectorRequest
 
 // AnswerPromptJSONRequestBody defines body for AnswerPrompt for application/json ContentType.
 type AnswerPromptJSONRequestBody = PromptAnswer
+
+// ConnectPromptJSONRequestBody defines body for ConnectPrompt for application/json ContentType.
+type ConnectPromptJSONRequestBody = ConnectPromptRequest
 
 // ToggleReactionJSONRequestBody defines body for ToggleReaction for application/json ContentType.
 type ToggleReactionJSONRequestBody = ToggleReactionRequest
@@ -1330,6 +1368,9 @@ type ServerInterface interface {
 
 	// (POST /messages/{messageId}/answer)
 	AnswerPrompt(w http.ResponseWriter, r *http.Request, messageId string)
+
+	// (POST /messages/{messageId}/connect)
+	ConnectPrompt(w http.ResponseWriter, r *http.Request, messageId string)
 
 	// (POST /messages/{messageId}/dismiss)
 	DismissPrompt(w http.ResponseWriter, r *http.Request, messageId string)
@@ -1908,6 +1949,32 @@ func (siw *ServerInterfaceWrapper) AnswerPrompt(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ConnectPrompt operation middleware
+func (siw *ServerInterfaceWrapper) ConnectPrompt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectPrompt(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DismissPrompt operation middleware
 func (siw *ServerInterfaceWrapper) DismissPrompt(w http.ResponseWriter, r *http.Request) {
 
@@ -2291,6 +2358,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/answer", wrapper.AnswerPrompt)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/connect", wrapper.ConnectPrompt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/reactions", wrapper.ToggleReaction)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/dismiss", wrapper.DismissPrompt)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/models", wrapper.ListModels)

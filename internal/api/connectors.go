@@ -12,7 +12,9 @@ import (
 
 	"github.com/etchebarne/barn/internal/api/gen"
 	"github.com/etchebarne/barn/internal/connectors"
+	"github.com/etchebarne/barn/internal/runtime"
 	"github.com/etchebarne/barn/internal/store"
+	"github.com/etchebarne/barn/internal/view"
 )
 
 func connectorErr(w http.ResponseWriter, err error) {
@@ -234,4 +236,35 @@ func (s *Server) DeleteConnector(w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) ConnectPrompt(w http.ResponseWriter, r *http.Request, messageID string) {
+	ctx := r.Context()
+	var req gen.ConnectPromptRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	name := ""
+	if req.Name != nil {
+		name = *req.Name
+	}
+	msg, err := s.runtime.Connect(ctx, messageID, name, req.Credentials)
+	switch {
+	case errors.Is(err, store.ErrNotFound), errors.Is(err, runtime.ErrNotConnectPrompt):
+		writeError(w, http.StatusNotFound, "connect card not found")
+		return
+	case errors.Is(err, store.ErrPromptClosed):
+		writeError(w, http.StatusConflict, "this card was already answered")
+		return
+	case err != nil:
+		connectorErr(w, err)
+		return
+	}
+	if err := s.store.MarkRead(ctx, msg.ChatID, msg.ID); err != nil {
+		internalError(w, err)
+		return
+	}
+	out := view.Message(msg)
+	s.bus.Publish(view.MessageUpdated(out))
+	writeJSON(w, http.StatusOK, out)
 }
