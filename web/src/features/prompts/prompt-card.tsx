@@ -162,27 +162,39 @@ function PendingCard({
   const [text, setText] = useState("")
   const multi = prompt.kind === "multi"
 
+  /**
+   * Picking an option only selects it; nothing is sent until Submit (or Enter), so a stray
+   * click or keypress can't answer. Single choice keeps one selection, and an option and a
+   * typed answer replace each other.
+   */
   function choose(index: number) {
     if (disabled) return
-    if (!multi) {
-      onAnswer({ selected: [index] })
-      return
-    }
     setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(index)) next.delete(index)
-      else next.add(index)
-      return next
+      if (multi) {
+        const next = new Set(current)
+        if (next.has(index)) next.delete(index)
+        else next.add(index)
+        return next
+      }
+      return current.has(index) ? new Set() : new Set([index])
     })
+    if (!multi) setText("")
   }
 
+  function changeText(value: string) {
+    setText(value)
+    if (!multi && value.trim()) setSelected(new Set())
+  }
+
+  const answer = buildAnswer(selected, text)
   function submit() {
-    const answer = buildAnswer(multi ? selected : [], text)
     if (answer && !disabled) onAnswer(answer)
   }
 
-  // Letter keys pick options on the latest card, unless the user is typing somewhere.
+  // Letter keys select options on the latest card, unless the user is typing somewhere.
+  // Enter (outside text fields, which handle it themselves) submits a single-choice selection.
   const onLetter = useEffectEvent((index: number) => choose(index))
+  const onEnter = useEffectEvent(() => submit())
   const keysActive = acceptsLetterKeys(prompt, isLatest)
   const optionCount = prompt.options.length
   useEffect(() => {
@@ -190,6 +202,13 @@ function PendingCard({
     function onKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
       if (isTypingTarget(event.target)) return
+      if (event.key === "Enter" && !multi) {
+        // Focused buttons handle their own Enter (options submit; others act normally).
+        if (event.target instanceof HTMLButtonElement) return
+        event.preventDefault()
+        onEnter()
+        return
+      }
       const index = letterIndex(event.key, optionCount)
       if (index === null) return
       event.preventDefault()
@@ -197,7 +216,7 @@ function PendingCard({
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [keysActive, optionCount])
+  }, [keysActive, optionCount, multi])
 
   if (prompt.kind === "text") {
     return (
@@ -218,7 +237,7 @@ function PendingCard({
     )
   }
 
-  const canSubmit = buildAnswer(multi ? selected : [], text) !== null
+  const canSubmit = answer !== null
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -231,9 +250,16 @@ function PendingCard({
               key={index}
               type="button"
               disabled={disabled}
-              aria-pressed={multi ? isOn : undefined}
+              aria-pressed={isOn}
               className={cn(ROW, PRESSABLE, isOn && "bg-background ring-1 ring-border")}
               onClick={() => choose(index)}
+              onKeyDown={(event) => {
+                // On a single-choice option, Enter submits rather than toggling it again.
+                if (!multi && event.key === "Enter") {
+                  event.preventDefault()
+                  submit()
+                }
+              }}
             >
               <Badge active={isOn}>{optionLetter(index)}</Badge>
               <span className="min-w-0 flex-1 wrap-break-word">{option.label}</span>
@@ -249,9 +275,9 @@ function PendingCard({
                 autoFocus
                 disabled={disabled}
                 value={text}
-                onChange={setText}
+                onChange={changeText}
                 onSubmit={submit}
-                showSend={!multi}
+                showSend={false}
               />
             </div>
           ) : (
@@ -268,13 +294,11 @@ function PendingCard({
             </button>
           ))}
       </div>
-      {multi && (
-        <div className="flex justify-end pt-1.5">
-          <Button size="sm" disabled={disabled || !canSubmit} onClick={submit}>
-            Submit
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-end pt-1.5">
+        <Button size="sm" disabled={disabled || !canSubmit} onClick={submit}>
+          Submit
+        </Button>
+      </div>
     </div>
   )
 }
