@@ -35,6 +35,12 @@ func newTestServer(t *testing.T) *httptest.Server {
 
 func newTestServerWithProvider(t *testing.T, providerURL string) (*httptest.Server, *store.Store) {
 	t.Helper()
+	return newTestServerWith(t, providerURL, nil)
+}
+
+// newTestServerWith builds a test server; configure (if set) adjusts the runtime first.
+func newTestServerWith(t *testing.T, providerURL string, configure func(*runtime.Manager)) (*httptest.Server, *store.Store) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	dir := t.TempDir()
 	st, err := store.Open(ctx, dir)
@@ -49,6 +55,9 @@ func newTestServerWithProvider(t *testing.T, providerURL string) (*httptest.Serv
 	b := bus.New()
 	llm := model.New(providerURL, "openbot/test", set.APIKey)
 	rt := runtime.New(st, b, llm)
+	if configure != nil {
+		configure(rt)
+	}
 	if err := rt.Start(ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -27,7 +27,16 @@ function BackButton() {
  * Header bar for a screen. On mobile, screens are pushed over the chat list, so it starts with
  * a back button and makes room for the status bar.
  */
-export function PageHeader({ children, className }: { children: ReactNode; className?: string }) {
+export function PageHeader({
+  children,
+  actions,
+  className,
+}: {
+  children: ReactNode
+  /** Buttons on the right edge. */
+  actions?: ReactNode
+  className?: string
+}) {
   const mobile = useIsMobile()
   return (
     <header
@@ -39,6 +48,7 @@ export function PageHeader({ children, className }: { children: ReactNode; class
     >
       {mobile && <BackButton />}
       <div className="flex min-w-0 flex-1 items-center gap-3">{children}</div>
+      {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </header>
   )
 }

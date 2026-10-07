@@ -17,4 +17,7 @@ export const queryKeys = {
   connectors: ["connectors", "list"] as const,
   connectorCatalog: ["connectors", "catalog"] as const,
   messages: (chatId: string) => ["chats", chatId, "messages"] as const,
+  sandbox: (agentId: string) => ["agents", agentId, "sandbox"] as const,
+  sandboxFolder: (agentId: string, path: string) =>
+    ["agents", agentId, "sandbox", "files", path] as const,
 }

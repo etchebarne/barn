@@ -71,7 +71,7 @@ func (f *Files) Save(ctx context.Context, chatID, name string, r io.Reader) (sto
 		return a, err
 	}
 	a.Size = n
-	a.Mime = detectType(a.Name, head.Bytes())
+	a.Mime = DetectType(a.Name, head.Bytes())
 	if strings.HasPrefix(a.Mime, "image/") {
 		if cfg, _, err := image.DecodeConfig(bytes.NewReader(head.Bytes())); err == nil {
 			a.Width, a.Height = &cfg.Width, &cfg.Height
@@ -84,9 +84,9 @@ func (f *Files) Save(ctx context.Context, chatID, name string, r io.Reader) (sto
 	return saved, err
 }
 
-// detectType sniffs the content, falling back to the extension for formats sniffing doesn't
+// DetectType sniffs the content, falling back to the extension for formats sniffing doesn't
 // know (text files of many kinds, office documents).
-func detectType(name string, head []byte) string {
+func DetectType(name string, head []byte) string {
 	sniffed := http.DetectContentType(head)
 	if base, _, _ := strings.Cut(sniffed, ";"); base != "application/octet-stream" && base != "text/plain" {
 		return base

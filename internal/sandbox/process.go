@@ -84,16 +84,7 @@ func (p *Process) Close() error {
 		case <-time.After(2 * time.Second):
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			// Walk /proc for descendants; minimal images don't have pkill.
-			_, _ = p.m.run(ctx, nil, "exec", containerName(p.sandboxID), "sh", "-c", `
-k() {
-  for s in /proc/[0-9]*/stat; do
-    read -r pid _ _ ppid _ < "$s" 2>/dev/null || continue
-    [ "$ppid" = "$1" ] && k "$pid"
-  done
-  kill -TERM "$1" 2>/dev/null
-}
-[ -f "$1" ] && k "$(cat "$1")"`, "sh", p.pidFile)
+			p.m.killTree(ctx, p.sandboxID, p.pidFile, "TERM")
 			select {
 			case <-p.done:
 			case <-time.After(3 * time.Second):
@@ -105,6 +96,21 @@ k() {
 		_, _ = p.m.run(ctx, nil, "exec", containerName(p.sandboxID), "rm", "-f", p.pidFile)
 	})
 	return nil
+}
+
+// killTree signals the process whose pid is in pidFile and all its descendants, inside the
+// sandbox. Killing a docker client doesn't stop what it started in the container.
+func (m *Manager) killTree(ctx context.Context, sandboxID, pidFile, signal string) {
+	// Walk /proc for descendants; minimal images don't have pkill.
+	_, _ = m.run(ctx, nil, "exec", containerName(sandboxID), "sh", "-c", `
+k() {
+  for s in /proc/[0-9]*/stat; do
+    read -r pid _ _ ppid _ < "$s" 2>/dev/null || continue
+    [ "$ppid" = "$1" ] && k "$pid" "$2"
+  done
+  kill -"$2" "$1" 2>/dev/null
+}
+[ -f "$1" ] && k "$(cat "$1")" "$2"`, "sh", pidFile, signal)
 }
 
 // Done is closed once the process has exited.

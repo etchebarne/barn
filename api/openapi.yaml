@@ -582,6 +582,179 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
 
+  /agents/{agentId}/sandbox/files:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listSandboxFiles
+      tags: [computer]
+      description: |
+        A folder in the agent's computer (starting it if needed). Up to 5000 items; `truncated`
+        says when there were more.
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+          description: Absolute path in the computer, e.g. /home/agent/notes.md
+      responses:
+        "200":
+          description: The folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolderListing" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: writeSandboxFile
+      tags: [computer]
+      description: Write a file (upload or save), creating its folder; replaces what's there. Up to 200 MB.
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+          description: Absolute path in the computer, e.g. /home/agent/notes.md
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "204": { description: Written }
+        "413": { $ref: "#/components/responses/Error" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteSandboxFile
+      tags: [computer]
+      description: Delete a file, or a folder with everything in it.
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+          description: Absolute path in the computer, e.g. /home/agent/notes.md
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/sandbox/files/download:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: downloadSandboxFile
+      tags: [computer]
+      description: |
+        A file's bytes (up to 200 MB). Images and PDFs are served inline when `inline` is true;
+        everything else as a download.
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+          description: Absolute path in the computer, e.g. /home/agent/notes.md
+        - name: inline
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: The file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "413": { $ref: "#/components/responses/Error" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/sandbox/folders:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: createSandboxFolder
+      tags: [computer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PathRequest" }
+      responses:
+        "204": { description: Created }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/sandbox/move:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: moveSandboxFile
+      tags: [computer]
+      description: Rename or move a file or folder. Fails with 409 if the destination exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MoveRequest" }
+      responses:
+        "204": { description: Moved }
+        "409": { $ref: "#/components/responses/Error" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/sandbox/terminal:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: sandboxTerminal
+      tags: [computer]
+      description: |
+        WebSocket: an interactive shell in the agent's computer (bash, in /home/agent). Query
+        `cols` and `rows` set the starting size. Binary messages carry terminal bytes both ways;
+        the client sends text messages `{"type":"resize","cols":120,"rows":40}` to resize. The
+        server closes with status 1000 when the shell exits, and the shell ends when the
+        connection closes.
+      parameters:
+        - name: cols
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+        - name: rows
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "101": { description: Switching to WebSocket }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
   /agents/{agentId}/tasks:
     parameters:
       - name: agentId
@@ -1470,6 +1643,42 @@ components:
       required: [timezone]
       properties:
         timezone: { type: string, description: 'IANA name, e.g. "America/Montevideo"' }
+
+    FolderListing:
+      type: object
+      required: [path, entries, truncated]
+      properties:
+        path: { type: string, description: The folder's clean absolute path }
+        entries:
+          type: array
+          description: Folders first, then files, by name
+          items: { $ref: "#/components/schemas/FileEntry" }
+        truncated: { type: boolean }
+
+    FileEntry:
+      type: object
+      required: [name, kind, size, modifiedAt]
+      properties:
+        name: { type: string }
+        kind:
+          type: string
+          enum: [file, dir, link, dirlink, other]
+          description: link and dirlink are symlinks to a file or a folder
+        size: { type: integer, format: int64 }
+        modifiedAt: { type: string, format: date-time }
+
+    PathRequest:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string }
+
+    MoveRequest:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: string }
+        to: { type: string }
 
     Sandbox:
       type: object

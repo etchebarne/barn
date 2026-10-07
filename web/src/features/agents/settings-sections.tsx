@@ -19,7 +19,7 @@ import { AUTO_LANGUAGE, isAutoLanguage, trustChangeNeedsConfirmation } from "./t
  * Inline confirmation inside the sheet. Confirmations live here rather than in a dialog so a
  * dialog never stacks on top of the sheet.
  */
-function InlineConfirm({
+export function InlineConfirm({
   tone,
   title,
   children,

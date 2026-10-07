@@ -88,6 +88,33 @@ func (e ConnectorSignIn) Valid() bool {
 	}
 }
 
+// Defines values for FileEntryKind.
+const (
+	Dir     FileEntryKind = "dir"
+	Dirlink FileEntryKind = "dirlink"
+	File    FileEntryKind = "file"
+	Link    FileEntryKind = "link"
+	Other   FileEntryKind = "other"
+)
+
+// Valid indicates whether the value is a known member of the FileEntryKind enum.
+func (e FileEntryKind) Valid() bool {
+	switch e {
+	case Dir:
+		return true
+	case Dirlink:
+		return true
+	case File:
+		return true
+	case Link:
+		return true
+	case Other:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageAuthorKind.
 const (
 	MessageAuthorKindAgent  MessageAuthorKind = "agent"
@@ -705,6 +732,28 @@ type Error struct {
 	Message string  `json:"message"`
 }
 
+// FileEntry defines model for FileEntry.
+type FileEntry struct {
+	// Kind link and dirlink are symlinks to a file or a folder
+	Kind       FileEntryKind `json:"kind"`
+	ModifiedAt time.Time     `json:"modifiedAt"`
+	Name       string        `json:"name"`
+	Size       int64         `json:"size"`
+}
+
+// FileEntryKind link and dirlink are symlinks to a file or a folder
+type FileEntryKind string
+
+// FolderListing defines model for FolderListing.
+type FolderListing struct {
+	// Entries Folders first, then files, by name
+	Entries []FileEntry `json:"entries"`
+
+	// Path The folder's clean absolute path
+	Path      string `json:"path"`
+	Truncated bool   `json:"truncated"`
+}
+
 // MarkReadRequest defines model for MarkReadRequest.
 type MarkReadRequest struct {
 	LastMessageId string `json:"lastMessageId"`
@@ -808,6 +857,12 @@ type Model struct {
 	Id string `json:"id"`
 }
 
+// MoveRequest defines model for MoveRequest.
+type MoveRequest struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 // OnboardingState defines model for OnboardingState.
 type OnboardingState struct {
 	// Completed Both steps are done; the app is ready to use
@@ -816,6 +871,11 @@ type OnboardingState struct {
 	// ProviderConfigured An OpenCode Go API key has been saved
 	ProviderConfigured  bool `json:"providerConfigured"`
 	StarterAgentCreated bool `json:"starterAgentCreated"`
+}
+
+// PathRequest defines model for PathRequest.
+type PathRequest struct {
+	Path string `json:"path"`
 }
 
 // PreviewField defines model for PreviewField.
@@ -1250,6 +1310,37 @@ type WsSidebarUpdatedType string
 // ChatId defines model for ChatId.
 type ChatId = string
 
+// DeleteSandboxFileParams defines parameters for DeleteSandboxFile.
+type DeleteSandboxFileParams struct {
+	// Path Absolute path in the computer, e.g. /home/agent/notes.md
+	Path string `form:"path" json:"path"`
+}
+
+// ListSandboxFilesParams defines parameters for ListSandboxFiles.
+type ListSandboxFilesParams struct {
+	// Path Absolute path in the computer, e.g. /home/agent/notes.md
+	Path string `form:"path" json:"path"`
+}
+
+// WriteSandboxFileParams defines parameters for WriteSandboxFile.
+type WriteSandboxFileParams struct {
+	// Path Absolute path in the computer, e.g. /home/agent/notes.md
+	Path string `form:"path" json:"path"`
+}
+
+// DownloadSandboxFileParams defines parameters for DownloadSandboxFile.
+type DownloadSandboxFileParams struct {
+	// Path Absolute path in the computer, e.g. /home/agent/notes.md
+	Path   string `form:"path" json:"path"`
+	Inline *bool  `form:"inline,omitempty" json:"inline,omitempty"`
+}
+
+// SandboxTerminalParams defines parameters for SandboxTerminal.
+type SandboxTerminalParams struct {
+	Cols *int `form:"cols,omitempty" json:"cols,omitempty"`
+	Rows *int `form:"rows,omitempty" json:"rows,omitempty"`
+}
+
 // GetAttachmentParams defines parameters for GetAttachment.
 type GetAttachmentParams struct {
 	// Download Send as a download even if the browser could show it
@@ -1276,6 +1367,12 @@ type CreateMemoryJSONRequestBody = MemoryRequest
 
 // UpdateMemoryJSONRequestBody defines body for UpdateMemory for application/json ContentType.
 type UpdateMemoryJSONRequestBody = MemoryRequest
+
+// CreateSandboxFolderJSONRequestBody defines body for CreateSandboxFolder for application/json ContentType.
+type CreateSandboxFolderJSONRequestBody = PathRequest
+
+// MoveSandboxFileJSONRequestBody defines body for MoveSandboxFile for application/json ContentType.
+type MoveSandboxFileJSONRequestBody = MoveRequest
 
 // CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
 type CreateTaskJSONRequestBody = CreateTaskRequest
@@ -1768,8 +1865,29 @@ type ServerInterface interface {
 	// (GET /agents/{agentId}/sandbox)
 	GetSandbox(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (DELETE /agents/{agentId}/sandbox/files)
+	DeleteSandboxFile(w http.ResponseWriter, r *http.Request, agentId string, params DeleteSandboxFileParams)
+
+	// (GET /agents/{agentId}/sandbox/files)
+	ListSandboxFiles(w http.ResponseWriter, r *http.Request, agentId string, params ListSandboxFilesParams)
+
+	// (PUT /agents/{agentId}/sandbox/files)
+	WriteSandboxFile(w http.ResponseWriter, r *http.Request, agentId string, params WriteSandboxFileParams)
+
+	// (GET /agents/{agentId}/sandbox/files/download)
+	DownloadSandboxFile(w http.ResponseWriter, r *http.Request, agentId string, params DownloadSandboxFileParams)
+
+	// (POST /agents/{agentId}/sandbox/folders)
+	CreateSandboxFolder(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (POST /agents/{agentId}/sandbox/move)
+	MoveSandboxFile(w http.ResponseWriter, r *http.Request, agentId string)
+
 	// (POST /agents/{agentId}/sandbox/restart)
 	RestartSandbox(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (GET /agents/{agentId}/sandbox/terminal)
+	SandboxTerminal(w http.ResponseWriter, r *http.Request, agentId string, params SandboxTerminalParams)
 
 	// (GET /agents/{agentId}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, agentId string)
@@ -2205,6 +2323,239 @@ func (siw *ServerInterfaceWrapper) GetSandbox(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteSandboxFile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSandboxFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSandboxFileParams
+
+	// ------------- Required query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSandboxFile(w, r, agentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSandboxFiles operation middleware
+func (siw *ServerInterfaceWrapper) ListSandboxFiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSandboxFilesParams
+
+	// ------------- Required query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSandboxFiles(w, r, agentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// WriteSandboxFile operation middleware
+func (siw *ServerInterfaceWrapper) WriteSandboxFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params WriteSandboxFileParams
+
+	// ------------- Required query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.WriteSandboxFile(w, r, agentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadSandboxFile operation middleware
+func (siw *ServerInterfaceWrapper) DownloadSandboxFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DownloadSandboxFileParams
+
+	// ------------- Required query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "inline" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "inline", r.URL.Query(), &params.Inline, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "inline"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "inline", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadSandboxFile(w, r, agentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSandboxFolder operation middleware
+func (siw *ServerInterfaceWrapper) CreateSandboxFolder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSandboxFolder(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MoveSandboxFile operation middleware
+func (siw *ServerInterfaceWrapper) MoveSandboxFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MoveSandboxFile(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RestartSandbox operation middleware
 func (siw *ServerInterfaceWrapper) RestartSandbox(w http.ResponseWriter, r *http.Request) {
 
@@ -2222,6 +2573,61 @@ func (siw *ServerInterfaceWrapper) RestartSandbox(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestartSandbox(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SandboxTerminal operation middleware
+func (siw *ServerInterfaceWrapper) SandboxTerminal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SandboxTerminalParams
+
+	// ------------- Optional query parameter "cols" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cols", r.URL.Query(), &params.Cols, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cols"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cols", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "rows" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "rows", r.URL.Query(), &params.Rows, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rows"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rows", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SandboxTerminal(w, r, agentId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3217,6 +3623,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/approvals/{approvalId}", wrapper.RevokeStandingApproval)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox", wrapper.GetSandbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/sandbox/restart", wrapper.RestartSandbox)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/sandbox/files", wrapper.DeleteSandboxFile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox/files", wrapper.ListSandboxFiles)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{agentId}/sandbox/files", wrapper.WriteSandboxFile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox/files/download", wrapper.DownloadSandboxFile)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/sandbox/folders", wrapper.CreateSandboxFolder)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/sandbox/move", wrapper.MoveSandboxFile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/sandbox/terminal", wrapper.SandboxTerminal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.ListTasks)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.CreateTask)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/tasks/{taskId}", wrapper.DeleteTask)

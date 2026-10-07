@@ -273,6 +273,11 @@ Messages in a group are visible to every participant; DMs are visible only to th
   agents are told.
 - The installer installs Docker and adds the `openbot` user to the `docker` group (root-equivalent on
   the host; `--no-docker` skips it).
+- **The user's own access ("Computer").** The app opens an agent's sandbox directly: a file
+  browser (list, preview, edit, upload, download, move, delete, up to 200 MB per file) and a real
+  terminal (`docker exec -it … bash -l` on a host pseudo-terminal, streamed over a same-origin
+  WebSocket; resizable). The shell runs as the agents do, its whole process tree ends when the
+  connection closes, and the agent sees whatever the user changes.
 
 ## 9. Models
 

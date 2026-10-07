@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
+import { MonitorIcon } from "lucide-react"
 
 import { PageHeader } from "@/components/page-header"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { MessageScrollerProvider } from "@/components/ui/message-scroller"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   activityLabel,
   AgentAvatar,
@@ -58,7 +61,27 @@ function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
   if (chat.kind === "dm") {
     const status = agent ? (activityLabel(agent) ?? "idle") : null
     return (
-      <PageHeader>
+      <PageHeader
+        actions={
+          agent ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    to="/agents/$agentId/computer"
+                    params={{ agentId: agent.id }}
+                    aria-label={`${agent.name}'s computer`}
+                    className={buttonVariants({ variant: "ghost", size: "icon" })}
+                  />
+                }
+              >
+                <MonitorIcon />
+              </TooltipTrigger>
+              <TooltipContent>Computer</TooltipContent>
+            </Tooltip>
+          ) : undefined
+        }
+      >
         {agent ? (
           <>
             <h1 className="sr-only">{chat.name}</h1>

@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router"
 import {
   FolderPlusIcon,
   LogOutIcon,
+  MonitorIcon,
   MoonIcon,
   PlugIcon,
   PlusIcon,
@@ -136,6 +137,25 @@ export function CommandPalette() {
                 >
                   <AgentAvatar id={agent.id} name={agent.name} size="sm" />
                   <span className="truncate">Open {agent.name}'s settings</span>
+                </CommandItem>
+              ))}
+              {[...agents.values()].map((agent) => (
+                <CommandItem
+                  key={`computer-${agent.id}`}
+                  value={`computer ${agent.id} ${agent.name}`}
+                  keywords={[agent.name, "computer", "files", "terminal", "sandbox"]}
+                  onSelect={() =>
+                    run(
+                      () =>
+                        void navigate({
+                          to: "/agents/$agentId/computer",
+                          params: { agentId: agent.id },
+                        }),
+                    )
+                  }
+                >
+                  <MonitorIcon />
+                  <span className="truncate">Open {agent.name}'s computer</span>
                 </CommandItem>
               ))}
             </CommandGroup>

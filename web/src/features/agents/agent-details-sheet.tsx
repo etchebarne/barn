@@ -20,6 +20,7 @@ import type { Agent } from "@/lib/api-client"
 
 import { AgentAvatar } from "./agent-avatar"
 import { useAgentsById, useUpdateAgent } from "./api"
+import { ComputerSection } from "./computer-section"
 import { useAgentDetailsStore } from "./details-store"
 import { MemoriesSection } from "./memories-section"
 import {
@@ -144,6 +145,7 @@ export function AgentDetailsSheet() {
               <StandingApprovalsSection agent={shown} />
               <MemoriesSection agent={shown} />
               <TasksSection agent={shown} />
+              <ComputerSection agent={shown} onOpen={close} />
               <AgentConnections agentId={shown.id} agentName={shown.name} onNavigate={close} />
               <DangerZone agent={shown} />
             </div>

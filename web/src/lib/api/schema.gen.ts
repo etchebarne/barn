@@ -463,6 +463,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/sandbox/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description A folder in the agent's computer (starting it if needed). Up to 5000 items; `truncated`
+         *     says when there were more.
+         */
+        get: operations["listSandboxFiles"];
+        /** @description Write a file (upload or save), creating its folder; replaces what's there. Up to 200 MB. */
+        put: operations["writeSandboxFile"];
+        post?: never;
+        /** @description Delete a file, or a folder with everything in it. */
+        delete: operations["deleteSandboxFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sandbox/files/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description A file's bytes (up to 200 MB). Images and PDFs are served inline when `inline` is true;
+         *     everything else as a download.
+         */
+        get: operations["downloadSandboxFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sandbox/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createSandboxFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sandbox/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Rename or move a file or folder. Fails with 409 if the destination exists. */
+        post: operations["moveSandboxFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sandbox/terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description WebSocket: an interactive shell in the agent's computer (bash, in /home/agent). Query
+         *     `cols` and `rows` set the starting size. Binary messages carry terminal bytes both ways;
+         *     the client sends text messages `{"type":"resize","cols":120,"rows":40}` to resize. The
+         *     server closes with status 1000 when the shell exits, and the shell ends when the
+         *     connection closes.
+         */
+        get: operations["sandboxTerminal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/tasks": {
         parameters: {
             query?: never;
@@ -1072,6 +1180,32 @@ export interface components {
         SetTimezoneRequest: {
             /** @description IANA name, e.g. "America/Montevideo" */
             timezone: string;
+        };
+        FolderListing: {
+            /** @description The folder's clean absolute path */
+            path: string;
+            /** @description Folders first, then files, by name */
+            entries: components["schemas"]["FileEntry"][];
+            truncated: boolean;
+        };
+        FileEntry: {
+            name: string;
+            /**
+             * @description link and dirlink are symlinks to a file or a folder
+             * @enum {string}
+             */
+            kind: "file" | "dir" | "link" | "dirlink" | "other";
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            modifiedAt: string;
+        };
+        PathRequest: {
+            path: string;
+        };
+        MoveRequest: {
+            from: string;
+            to: string;
         };
         Sandbox: {
             /**
@@ -2246,6 +2380,209 @@ export interface operations {
                     "application/json": components["schemas"]["Sandbox"];
                 };
             };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    listSandboxFiles: {
+        parameters: {
+            query: {
+                /** @description Absolute path in the computer, e.g. /home/agent/notes.md */
+                path: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderListing"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    writeSandboxFile: {
+        parameters: {
+            query: {
+                /** @description Absolute path in the computer, e.g. /home/agent/notes.md */
+                path: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Written */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    deleteSandboxFile: {
+        parameters: {
+            query: {
+                /** @description Absolute path in the computer, e.g. /home/agent/notes.md */
+                path: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    downloadSandboxFile: {
+        parameters: {
+            query: {
+                /** @description Absolute path in the computer, e.g. /home/agent/notes.md */
+                path: string;
+                inline?: boolean;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    createSandboxFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PathRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    moveSandboxFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Moved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    sandboxTerminal: {
+        parameters: {
+            query?: {
+                cols?: number;
+                rows?: number;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching to WebSocket */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             503: components["responses"]["Error"];

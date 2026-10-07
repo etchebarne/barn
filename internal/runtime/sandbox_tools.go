@@ -260,3 +260,26 @@ func activityFor(call model.ToolCall) string {
 	}
 	return toolLabel(call.Function.Name)
 }
+
+// Computer is the user's own access to an agent's sandbox: files and a shell. *sandbox.Manager
+// implements it.
+type Computer interface {
+	List(ctx context.Context, sandboxID, dir string) ([]sandbox.Entry, bool, error)
+	CopyIn(ctx context.Context, sandboxID, file string, r io.Reader) error
+	CopyOut(ctx context.Context, sandboxID, path string, max int64) (io.ReadCloser, int64, error)
+	Mkdir(ctx context.Context, sandboxID, dir string) error
+	Move(ctx context.Context, sandboxID, from, to string) error
+	Delete(ctx context.Context, sandboxID, target string) error
+	Shell(ctx context.Context, sandboxID string, cols, rows uint16) (*sandbox.Terminal, error)
+}
+
+// Computer returns access to the agent's computer and its sandbox id (creating the sandbox's
+// record if the agent has none yet; the container starts on first use).
+func (m *Manager) Computer(ctx context.Context, agentID string) (Computer, string, error) {
+	c, ok := m.Sandboxes.(Computer)
+	if !m.sandboxesAvailable() || !ok {
+		return nil, "", sandbox.ErrUnavailable
+	}
+	id, err := m.store.SandboxFor(ctx, agentID)
+	return c, id, err
+}
