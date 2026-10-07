@@ -30,6 +30,8 @@ export function makeChat(overrides: Partial<Chat> = {}): Chat {
     members: [{ agentId: "agent-1", position: 0 }],
     unreadCount: 0,
     lastMessage: null,
+    categoryId: null,
+    position: null,
     createdAt: "2026-10-01T00:00:00.000Z",
     ...overrides,
   }

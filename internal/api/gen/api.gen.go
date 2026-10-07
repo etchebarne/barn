@@ -412,6 +412,21 @@ func (e WsMessageUpdatedType) Valid() bool {
 	}
 }
 
+// Defines values for WsSidebarUpdatedType.
+const (
+	SidebarUpdated WsSidebarUpdatedType = "sidebar.updated"
+)
+
+// Valid indicates whether the value is a known member of the WsSidebarUpdatedType enum.
+func (e WsSidebarUpdatedType) Valid() bool {
+	switch e {
+	case SidebarUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActionPreview defines model for ActionPreview.
 type ActionPreview struct {
 	// AppName The connection's name
@@ -512,6 +527,8 @@ type CatalogApp struct {
 
 // Chat defines model for Chat.
 type Chat struct {
+	// CategoryId The sidebar category it's in; null = Unassigned
+	CategoryId  *string   `json:"categoryId"`
 	CreatedAt   time.Time `json:"createdAt"`
 	Id          string    `json:"id"`
 	Kind        ChatKind  `json:"kind"`
@@ -521,8 +538,13 @@ type Chat struct {
 	Members []ChatMember `json:"members"`
 
 	// Name Group name, or the agent's name for DMs
-	Name        string `json:"name"`
-	UnreadCount int    `json:"unreadCount"`
+	Name string `json:"name"`
+
+	// Position Its place within its section once the user arranged it. Within a section, chats
+	// with no position (new or never moved) come first, most recently active first, then
+	// the rest by position.
+	Position    *int `json:"position"`
+	UnreadCount int  `json:"unreadCount"`
 }
 
 // ChatKind defines model for Chat.Kind.
@@ -646,6 +668,11 @@ type CreateConnectorRequest struct {
 	Credentials map[string]string  `json:"credentials"`
 	Name        string             `json:"name"`
 	Type        string             `json:"type"`
+}
+
+// CreateSidebarCategoryRequest defines model for CreateSidebarCategoryRequest.
+type CreateSidebarCategoryRequest struct {
+	Name string `json:"name"`
 }
 
 // Credentials defines model for Credentials.
@@ -931,6 +958,26 @@ type SetupStep struct {
 	Text string `json:"text"`
 }
 
+// SidebarCategory defines model for SidebarCategory.
+type SidebarCategory struct {
+	Collapsed bool   `json:"collapsed"`
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+}
+
+// SidebarLayout defines model for SidebarLayout.
+type SidebarLayout struct {
+	// CategoryOrder Every category id, in the new order
+	CategoryOrder []string `json:"categoryOrder"`
+
+	// Sections Sections whose chats changed, each with all its chats in order
+	Sections []struct {
+		// CategoryId null for Unassigned
+		CategoryId *string  `json:"categoryId"`
+		ChatIds    []string `json:"chatIds"`
+	} `json:"sections"`
+}
+
 // SignInResult defines model for SignInResult.
 type SignInResult struct {
 	// ChatId The chat whose connect card this answered
@@ -1035,6 +1082,12 @@ type UpdateProviderSettingsRequest struct {
 	ApiKey string `json:"apiKey"`
 }
 
+// UpdateSidebarCategoryRequest defines model for UpdateSidebarCategoryRequest.
+type UpdateSidebarCategoryRequest struct {
+	Collapsed *bool   `json:"collapsed,omitempty"`
+	Name      *string `json:"name,omitempty"`
+}
+
 // UpdateTaskRequest defines model for UpdateTaskRequest.
 type UpdateTaskRequest struct {
 	Enabled bool `json:"enabled"`
@@ -1136,6 +1189,14 @@ type WsMessageUpdated struct {
 // WsMessageUpdatedType defines model for WsMessageUpdated.Type.
 type WsMessageUpdatedType string
 
+// WsSidebarUpdated The sidebar's categories or order changed (e.g. on another device); refetch
+type WsSidebarUpdated struct {
+	Type WsSidebarUpdatedType `json:"type"`
+}
+
+// WsSidebarUpdatedType defines model for WsSidebarUpdated.Type.
+type WsSidebarUpdatedType string
+
 // ChatId defines model for ChatId.
 type ChatId = string
 
@@ -1210,6 +1271,15 @@ type UpdateProviderSettingsJSONRequestBody = UpdateProviderSettingsRequest
 
 // SetTimezoneJSONRequestBody defines body for SetTimezone for application/json ContentType.
 type SetTimezoneJSONRequestBody = SetTimezoneRequest
+
+// CreateSidebarCategoryJSONRequestBody defines body for CreateSidebarCategory for application/json ContentType.
+type CreateSidebarCategoryJSONRequestBody = CreateSidebarCategoryRequest
+
+// UpdateSidebarCategoryJSONRequestBody defines body for UpdateSidebarCategory for application/json ContentType.
+type UpdateSidebarCategoryJSONRequestBody = UpdateSidebarCategoryRequest
+
+// SetSidebarLayoutJSONRequestBody defines body for SetSidebarLayout for application/json ContentType.
+type SetSidebarLayoutJSONRequestBody = SidebarLayout
 
 // UpdateTaskJSONRequestBody defines body for UpdateTask for application/json ContentType.
 type UpdateTaskJSONRequestBody = UpdateTaskRequest
@@ -1520,6 +1590,40 @@ func (t *WsEvent) MergeWsAgentDeleted(v WsAgentDeleted) error {
 	return err
 }
 
+// AsWsSidebarUpdated returns the union data inside the WsEvent as a WsSidebarUpdated
+func (t WsEvent) AsWsSidebarUpdated() (WsSidebarUpdated, error) {
+	var body WsSidebarUpdated
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsSidebarUpdated overwrites any union data inside the WsEvent as the provided WsSidebarUpdated
+func (t *WsEvent) FromWsSidebarUpdated(v WsSidebarUpdated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"sidebar.updated"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsSidebarUpdated performs a merge with any union data inside the WsEvent, using the provided WsSidebarUpdated
+func (t *WsEvent) MergeWsSidebarUpdated(v WsSidebarUpdated) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"sidebar.updated"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -1552,6 +1656,8 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 		return t.AsWsMessageCreated()
 	case "message.updated":
 		return t.AsWsMessageUpdated()
+	case "sidebar.updated":
+		return t.AsWsSidebarUpdated()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
@@ -1698,6 +1804,21 @@ type ServerInterface interface {
 
 	// (PUT /settings/timezone)
 	SetTimezone(w http.ResponseWriter, r *http.Request)
+
+	// (GET /sidebar/categories)
+	ListSidebarCategories(w http.ResponseWriter, r *http.Request)
+
+	// (POST /sidebar/categories)
+	CreateSidebarCategory(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /sidebar/categories/{categoryId})
+	DeleteSidebarCategory(w http.ResponseWriter, r *http.Request, categoryId string)
+
+	// (PATCH /sidebar/categories/{categoryId})
+	UpdateSidebarCategory(w http.ResponseWriter, r *http.Request, categoryId string)
+
+	// (PUT /sidebar/layout)
+	SetSidebarLayout(w http.ResponseWriter, r *http.Request)
 
 	// (DELETE /tasks/{taskId})
 	DeleteTask(w http.ResponseWriter, r *http.Request, taskId string)
@@ -2644,6 +2765,100 @@ func (siw *ServerInterfaceWrapper) SetTimezone(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListSidebarCategories operation middleware
+func (siw *ServerInterfaceWrapper) ListSidebarCategories(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSidebarCategories(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSidebarCategory operation middleware
+func (siw *ServerInterfaceWrapper) CreateSidebarCategory(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSidebarCategory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSidebarCategory operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSidebarCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "categoryId" -------------
+	var categoryId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "categoryId", r.PathValue("categoryId"), &categoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSidebarCategory(w, r, categoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSidebarCategory operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSidebarCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "categoryId" -------------
+	var categoryId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "categoryId", r.PathValue("categoryId"), &categoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSidebarCategory(w, r, categoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSidebarLayout operation middleware
+func (siw *ServerInterfaceWrapper) SetSidebarLayout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSidebarLayout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteTask operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTask(w http.ResponseWriter, r *http.Request) {
 
@@ -2825,6 +3040,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings/provider", wrapper.GetProviderSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/provider", wrapper.UpdateProviderSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/chats", wrapper.ListChats)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/sidebar/categories", wrapper.ListSidebarCategories)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/sidebar/categories", wrapper.CreateSidebarCategory)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/sidebar/categories/{categoryId}", wrapper.DeleteSidebarCategory)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/sidebar/categories/{categoryId}", wrapper.UpdateSidebarCategory)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/sidebar/layout", wrapper.SetSidebarLayout)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/chats/{chatId}/attachments", wrapper.UploadAttachment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/attachments/{attachmentId}", wrapper.GetAttachment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/chats/{chatId}/messages", wrapper.ListMessages)

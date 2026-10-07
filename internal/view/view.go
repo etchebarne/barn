@@ -184,6 +184,8 @@ func Chat(c store.Chat) gen.Chat {
 		Members:     members,
 		UnreadCount: c.UnreadCount,
 		CreatedAt:   store.Time(c.CreatedAt),
+		CategoryId:  c.CategoryID,
+		Position:    c.Position,
 	}
 	if c.LastMessage != nil {
 		m := Message(*c.LastMessage)

@@ -235,6 +235,15 @@ describe("applyWsEvent", () => {
     })
   })
 
+  describe("sidebar.updated", () => {
+    it("refetches categories and chats", () => {
+      const spy = vi.spyOn(qc, "invalidateQueries")
+      applyWsEvent(qc, { type: "sidebar.updated" })
+      expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.sidebarCategories })
+      expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.chats, exact: true })
+    })
+  })
+
   describe("agent.deleted", () => {
     it("drops the agent, its DM and the DM's messages, and reports the DM", () => {
       qc.setQueryData<Agent[]>(queryKeys.agents, [makeAgent(), makeAgent({ id: "tracker" })])

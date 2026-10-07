@@ -139,6 +139,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sidebar/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The user's sidebar categories, in order. Only the user arranges the sidebar. */
+        get: operations["listSidebarCategories"];
+        put?: never;
+        /** @description Add a category at the end. Broadcasts sidebar.updated. */
+        post: operations["createSidebarCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sidebar/categories/{categoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Delete a category; its chats move to Unassigned. Broadcasts sidebar.updated. */
+        delete: operations["deleteSidebarCategory"];
+        options?: never;
+        head?: never;
+        /** @description Rename or collapse/expand a category. Broadcasts sidebar.updated. */
+        patch: operations["updateSidebarCategory"];
+        trace?: never;
+    };
+    "/sidebar/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Arrange the sidebar after a drag: the order of categories, and for each listed section
+         *     (a category, or null for Unassigned) its chats in order. Chats not listed keep their
+         *     place. Broadcasts sidebar.updated.
+         */
+        put: operations["setSidebarLayout"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{chatId}/attachments": {
         parameters: {
             query?: never;
@@ -1034,6 +1093,36 @@ export interface components {
             lastMessage: components["schemas"]["Message"] | null;
             /** Format: date-time */
             createdAt: string;
+            /** @description The sidebar category it's in; null = Unassigned */
+            categoryId: string | null;
+            /**
+             * @description Its place within its section once the user arranged it. Within a section, chats
+             *     with no position (new or never moved) come first, most recently active first, then
+             *     the rest by position.
+             */
+            position: number | null;
+        };
+        SidebarCategory: {
+            id: string;
+            name: string;
+            collapsed: boolean;
+        };
+        CreateSidebarCategoryRequest: {
+            name: string;
+        };
+        UpdateSidebarCategoryRequest: {
+            name?: string;
+            collapsed?: boolean;
+        };
+        SidebarLayout: {
+            /** @description Every category id, in the new order */
+            categoryOrder: string[];
+            /** @description Sections whose chats changed, each with all its chats in order */
+            sections: {
+                /** @description null for Unassigned */
+                categoryId: string | null;
+                chatIds: string[];
+            }[];
         };
         MessageAuthor: {
             /** @enum {string} */
@@ -1211,7 +1300,7 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"] | components["schemas"]["WsAgentDeleted"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentArchived"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"];
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1281,6 +1370,14 @@ export interface components {
              */
             type: "agent.archived";
             agentId: string;
+        };
+        /** @description The sidebar's categories or order changed (e.g. on another device); refetch */
+        WsSidebarUpdated: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "sidebar.updated";
         };
         /**
          * @description An agent was deleted: drop it and its DM (chatId) from the app. Its messages in group
@@ -1528,6 +1625,128 @@ export interface operations {
                     "application/json": components["schemas"]["Chat"][];
                 };
             };
+            401: components["responses"]["Error"];
+        };
+    };
+    listSidebarCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Categories in order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SidebarCategory"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    createSidebarCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSidebarCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description The new category */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SidebarCategory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
+    deleteSidebarCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateSidebarCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSidebarCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description The category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SidebarCategory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    setSidebarLayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SidebarLayout"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
         };
     };

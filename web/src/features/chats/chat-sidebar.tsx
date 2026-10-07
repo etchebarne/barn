@@ -16,71 +16,12 @@ import {
   SidebarMenuSkeleton,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { AgentAvatar, GroupAvatar, useAgentsById } from "@/features/agents"
-import type { Agent, Chat } from "@/lib/api-client"
+import { useAgentsById } from "@/features/agents"
 import { useConnectionStore } from "@/lib/ws"
 
 import { chatsQueryOptions } from "./api"
-import { chatPreview, dmAgent } from "./preview"
-
-function UnreadBadge({ count }: { count: number }) {
-  if (count <= 0) return null
-  return (
-    <span
-      className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground tabular-nums"
-      aria-label={`${count} unread`}
-    >
-      {count > 99 ? "99+" : count}
-    </span>
-  )
-}
-
-function ChatAvatar({ chat, agent }: { chat: Chat; agent: Agent | undefined }) {
-  if (chat.kind === "dm") return <AgentAvatar id={agent?.id} name={agent?.name ?? chat.name} />
-  return <GroupAvatar memberIds={chat.members.map((m) => m.agentId)} />
-}
-
-function ChatListItem({
-  chat,
-  agents,
-  active,
-  onNavigate,
-}: {
-  chat: Chat
-  agents: Map<string, Agent>
-  active: boolean
-  onNavigate: () => void
-}) {
-  const agent = dmAgent(chat, agents)
-  const unread = chat.unreadCount > 0
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        size="lg"
-        isActive={active}
-        className="h-auto gap-3 py-2 select-none"
-        render={<Link to="/chats/$chatId" params={{ chatId: chat.id }} onClick={onNavigate} />}
-      >
-        <ChatAvatar chat={chat} agent={agent} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium">{chat.name}</span>
-          </div>
-          <span
-            className={
-              unread
-                ? "truncate text-xs text-sidebar-foreground"
-                : "truncate text-xs text-muted-foreground"
-            }
-          >
-            {chatPreview(chat, agents)}
-          </span>
-        </div>
-        <UnreadBadge count={chat.unreadCount} />
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  )
-}
+import { useCategories } from "./sidebar-api"
+import { NewCategory, SidebarSections } from "./sidebar-sections"
 
 function ConnectionNotice() {
   const status = useConnectionStore((s) => s.status)
@@ -93,9 +34,10 @@ function ConnectionNotice() {
   )
 }
 
-/** Left sidebar: chats (most recently active first), settings pinned at the bottom. */
+/** Left sidebar: chats in the user's categories and order, settings pinned at the bottom. */
 export function ChatSidebar() {
   const { data: chats, isPending, error } = useQuery(chatsQueryOptions)
+  const { data: categories, isPending: categoriesPending } = useCategories()
   const agents = useAgentsById()
   const matchRoute = useMatchRoute()
   const { isMobile, setOpenMobile } = useSidebar()
@@ -113,7 +55,7 @@ export function ChatSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu aria-label="Chats" className="gap-0.5">
-              {isPending &&
+              {(isPending || categoriesPending) &&
                 Array.from({ length: 3 }, (_, i) => (
                   <SidebarMenuItem key={i}>
                     <SidebarMenuSkeleton showIcon className="h-12" />
@@ -124,16 +66,21 @@ export function ChatSidebar() {
                   Couldn't load chats: {error.message}
                 </p>
               )}
-              {chats?.map((chat) => (
-                <ChatListItem
-                  key={chat.id}
-                  chat={chat}
-                  agents={agents}
-                  active={!!matchRoute({ to: "/chats/$chatId", params: { chatId: chat.id } })}
-                  onNavigate={closeOnMobile}
-                />
-              ))}
             </SidebarMenu>
+            {chats && categories && (
+              <SidebarSections
+                chats={chats}
+                categories={categories}
+                agents={agents}
+                isActive={(chatId) => !!matchRoute({ to: "/chats/$chatId", params: { chatId } })}
+                onNavigate={closeOnMobile}
+              />
+            )}
+            {chats && categories && (
+              <div className="mt-2">
+                <NewCategory />
+              </div>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

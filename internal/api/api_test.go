@@ -746,3 +746,67 @@ func TestAttachmentsAPI(t *testing.T) {
 		t.Fatalf("too large: %d", resp.StatusCode)
 	}
 }
+
+func TestSidebarLayoutAPI(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	_, dmA, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "Claude Sessions", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	_, dmB, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "Ona Tester", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	_, dmC, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "Grok Bot", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+
+	_, casino := c.do("POST", "/api/sidebar/categories", `{"name":" casino "}`, true)
+	_, groups := c.do("POST", "/api/sidebar/categories", `{"name":"groups"}`, true)
+	if casino["name"] != "casino" || groups["id"] == nil {
+		t.Fatalf("create: %v %v", casino, groups)
+	}
+	if resp, _ := c.do("POST", "/api/sidebar/categories", `{"name":"   "}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatal("empty names are refused")
+	}
+	cid, gid := casino["id"].(string), groups["id"].(string)
+
+	// Put both DMs in casino (B first), reorder categories.
+	layout := `{"categoryOrder":["` + gid + `","` + cid + `"],"sections":[{"categoryId":"` + cid + `","chatIds":["` + dmB + `","` + dmA + `"]}]}`
+	if resp, body := c.do("PUT", "/api/sidebar/layout", layout, true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("layout: %d %v", resp.StatusCode, body)
+	}
+	_, cats := c.doList("GET", "/api/sidebar/categories")
+	if len(cats) != 2 || cats[0].(map[string]any)["name"] != "groups" {
+		t.Fatalf("categories = %v", cats)
+	}
+	chats := map[string]map[string]any{}
+	_, list := c.doList("GET", "/api/chats")
+	for _, raw := range list {
+		ch := raw.(map[string]any)
+		chats[ch["id"].(string)] = ch
+	}
+	if chats[dmB]["categoryId"] != cid || chats[dmB]["position"] != float64(0) || chats[dmA]["position"] != float64(1) ||
+		chats[dmC]["categoryId"] != nil || chats[dmC]["position"] != nil {
+		t.Fatalf("chats = %v / %v / %v", chats[dmA], chats[dmB], chats[dmC])
+	}
+
+	// Bad layouts: a category left out, an unknown chat, an unknown category.
+	for _, bad := range []string{
+		`{"categoryOrder":["` + cid + `"],"sections":[]}`,
+		`{"categoryOrder":["` + gid + `","` + cid + `"],"sections":[{"categoryId":null,"chatIds":["nope"]}]}`,
+		`{"categoryOrder":["` + gid + `","` + cid + `"],"sections":[{"categoryId":"nope","chatIds":["` + dmC + `"]}]}`,
+	} {
+		if resp, _ := c.do("PUT", "/api/sidebar/layout", bad, true); resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("bad layout accepted: %s", bad)
+		}
+	}
+
+	// Rename and collapse; deleting a category sends its chats back to Unassigned.
+	resp, upd := c.do("PATCH", "/api/sidebar/categories/"+cid, `{"name":"Casino","collapsed":true}`, true)
+	if resp.StatusCode != http.StatusOK || upd["name"] != "Casino" || upd["collapsed"] != true {
+		t.Fatalf("update: %v", upd)
+	}
+	if resp, _ := c.do("DELETE", "/api/sidebar/categories/"+cid, "", true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %d", resp.StatusCode)
+	}
+	_, list = c.doList("GET", "/api/chats")
+	for _, raw := range list {
+		if ch := raw.(map[string]any); ch["categoryId"] != nil || ch["position"] != nil {
+			t.Fatalf("after deleting the category: %v", ch)
+		}
+	}
+}

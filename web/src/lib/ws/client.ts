@@ -37,6 +37,7 @@ const KNOWN_EVENTS = new Set([
   "agent.deleted",
   "chat.created",
   "chat.read",
+  "sidebar.updated",
 ])
 
 export function parseWsEvent(data: unknown): WsEvent | null {

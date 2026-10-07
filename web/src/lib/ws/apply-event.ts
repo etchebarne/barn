@@ -24,6 +24,11 @@ const NOTHING_REMOVED: ApplyResult = { removedChatIds: [] }
 /** Applies one realtime event to the TanStack Query cache (the single source of truth). */
 export function applyWsEvent(queryClient: QueryClient, event: WsEvent): ApplyResult {
   switch (event.type) {
+    case "sidebar.updated":
+      // Categories or the layout changed (here or on another device): refetch both.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sidebarCategories })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chats, exact: true })
+      return NOTHING_REMOVED
     case "agent.deleted":
       return { removedChatIds: removeDeletedAgent(queryClient, event.agentId, event.chatId) }
     case "agent.archived":

@@ -154,6 +154,89 @@ paths:
                 items: { $ref: "#/components/schemas/Chat" }
         "401": { $ref: "#/components/responses/Error" }
 
+  /sidebar/categories:
+    get:
+      operationId: listSidebarCategories
+      tags: [chats]
+      description: The user's sidebar categories, in order. Only the user arranges the sidebar.
+      responses:
+        "200":
+          description: Categories in order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SidebarCategory" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createSidebarCategory
+      tags: [chats]
+      description: Add a category at the end. Broadcasts sidebar.updated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSidebarCategoryRequest" }
+      responses:
+        "201":
+          description: The new category
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SidebarCategory" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /sidebar/categories/{categoryId}:
+    parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateSidebarCategory
+      tags: [chats]
+      description: Rename or collapse/expand a category. Broadcasts sidebar.updated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSidebarCategoryRequest" }
+      responses:
+        "200":
+          description: The category
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SidebarCategory" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteSidebarCategory
+      tags: [chats]
+      description: Delete a category; its chats move to Unassigned. Broadcasts sidebar.updated.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /sidebar/layout:
+    put:
+      operationId: setSidebarLayout
+      tags: [chats]
+      description: |
+        Arrange the sidebar after a drag: the order of categories, and for each listed section
+        (a category, or null for Unassigned) its chats in order. Chats not listed keep their
+        place. Broadcasts sidebar.updated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SidebarLayout" }
+      responses:
+        "204": { description: Saved }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /chats/{chatId}/attachments:
     parameters:
       - $ref: "#/components/parameters/ChatId"
@@ -1358,7 +1441,7 @@ components:
 
     Chat:
       type: object
-      required: [id, kind, name, members, unreadCount, lastMessage, createdAt]
+      required: [id, kind, name, members, unreadCount, lastMessage, createdAt, categoryId, position]
       properties:
         id: { type: string }
         kind: { type: string, enum: [dm, group] }
@@ -1374,6 +1457,60 @@ components:
           allOf: [{ $ref: "#/components/schemas/Message" }]
           nullable: true
         createdAt: { type: string, format: date-time }
+        categoryId:
+          type: string
+          nullable: true
+          description: The sidebar category it's in; null = Unassigned
+        position:
+          type: integer
+          nullable: true
+          description: |
+            Its place within its section once the user arranged it. Within a section, chats
+            with no position (new or never moved) come first, most recently active first, then
+            the rest by position.
+
+    SidebarCategory:
+      type: object
+      required: [id, name, collapsed]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        collapsed: { type: boolean }
+
+    CreateSidebarCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+
+    UpdateSidebarCategoryRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        collapsed: { type: boolean }
+
+    SidebarLayout:
+      type: object
+      required: [categoryOrder, sections]
+      properties:
+        categoryOrder:
+          type: array
+          description: Every category id, in the new order
+          items: { type: string }
+        sections:
+          type: array
+          description: Sections whose chats changed, each with all its chats in order
+          items:
+            type: object
+            required: [categoryId, chatIds]
+            properties:
+              categoryId:
+                type: string
+                nullable: true
+                description: null for Unassigned
+              chatIds:
+                type: array
+                items: { type: string }
 
     MessageAuthor:
       type: object
@@ -1653,6 +1790,7 @@ components:
         - $ref: "#/components/schemas/WsChatCreated"
         - $ref: "#/components/schemas/WsAgentArchived"
         - $ref: "#/components/schemas/WsAgentDeleted"
+        - $ref: "#/components/schemas/WsSidebarUpdated"
       discriminator:
         propertyName: type
         mapping:
@@ -1665,6 +1803,7 @@ components:
           chat.created: "#/components/schemas/WsChatCreated"
           agent.archived: "#/components/schemas/WsAgentArchived"
           agent.deleted: "#/components/schemas/WsAgentDeleted"
+          sidebar.updated: "#/components/schemas/WsSidebarUpdated"
 
     WsMessageCreated:
       type: object
@@ -1727,6 +1866,13 @@ components:
       properties:
         type: { type: string, enum: [agent.archived] }
         agentId: { type: string }
+
+    WsSidebarUpdated:
+      type: object
+      required: [type]
+      description: The sidebar's categories or order changed (e.g. on another device); refetch
+      properties:
+        type: { type: string, enum: [sidebar.updated] }
 
     WsAgentDeleted:
       type: object

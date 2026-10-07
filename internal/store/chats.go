@@ -19,6 +19,9 @@ type Chat struct {
 	Members     []ChatMember
 	UnreadCount int
 	LastMessage *Message
+	// Where the user put it in the sidebar (nil: Unassigned / not arranged yet).
+	CategoryID *string
+	Position   *int
 }
 
 type ChatMember struct {
@@ -162,7 +165,7 @@ func (s *Store) ChatSummary(ctx context.Context, id string) (Chat, error) {
 
 func (s *Store) chatSummaries(ctx context.Context, filter string, args []any) ([]Chat, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.kind, c.name, c.created_at,
+		SELECT c.id, c.kind, c.name, c.created_at, c.category_id, c.position,
 		       (SELECT COUNT(*) FROM messages m
 		         WHERE m.chat_id = c.id AND m.author_kind != 'user'
 		           AND m.id > COALESCE((SELECT last_message_id FROM reads r
@@ -179,7 +182,7 @@ func (s *Store) chatSummaries(ctx context.Context, filter string, args []any) ([
 	var chats []Chat
 	for rows.Next() {
 		var c Chat
-		if err := rows.Scan(&c.ID, &c.Kind, &c.Name, &c.CreatedAt, &c.UnreadCount); err != nil {
+		if err := rows.Scan(&c.ID, &c.Kind, &c.Name, &c.CreatedAt, &c.CategoryID, &c.Position, &c.UnreadCount); err != nil {
 			rows.Close()
 			return nil, err
 		}
