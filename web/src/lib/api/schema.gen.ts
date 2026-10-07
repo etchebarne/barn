@@ -682,6 +682,30 @@ export interface components {
             help?: string;
             secret: boolean;
             optional: boolean;
+            /**
+             * @description Only needed to receive events (e.g. a webhook signing secret). Filled in after
+             *     connecting, next to the webhook URL, rather than in the first form.
+             */
+            events: boolean;
+        };
+        SetupStep: {
+            text: string;
+            /** @description A page to open for this step */
+            link: {
+                label: string;
+                url: string;
+            } | null;
+            /** @description Something to copy for this step (e.g. an app manifest) */
+            copy: {
+                label: string;
+                text: string;
+            } | null;
+        };
+        ConnectorSetup: {
+            /** @description How to get the credentials to connect */
+            steps: components["schemas"]["SetupStep"][];
+            /** @description How to start receiving events once connected (with the webhook URL) */
+            eventSteps: components["schemas"]["SetupStep"][];
         };
         ConnectorSignalType: {
             type: string;
@@ -699,6 +723,7 @@ export interface components {
             signals: components["schemas"]["ConnectorSignalType"][];
             /** @description Receives events at a webhook URL (shown after connecting) */
             webhooks: boolean;
+            setup: components["schemas"]["ConnectorSetup"];
         };
         Connector: {
             id: string;
@@ -713,6 +738,11 @@ export interface components {
             agentIds: string[];
             /** @description Where the service should send events (types with webhooks) */
             webhookUrl: string | null;
+            /**
+             * @description A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
+             *     the user can copy it there
+             */
+            webhookSecret: string | null;
             /** Format: date-time */
             createdAt: string;
         };

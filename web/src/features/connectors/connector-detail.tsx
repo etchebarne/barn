@@ -11,6 +11,9 @@ import { useDeleteConnector, useSetConnectorAgents, useUpdateConnector } from ".
 import { ConnectorFields } from "./connector-fields"
 import {
   buildFormFields,
+  connectFormFields,
+  eventFormFields,
+  hasEventsSection,
   buildUpdateRequest,
   initialValues,
   toggleGrant,
@@ -18,7 +21,8 @@ import {
   type Connector,
   type ConnectorType,
 } from "./logic"
-import { SignalsList, WebhookInfo } from "./webhook-info"
+import { SetupSteps } from "./setup-steps"
+import { SignalsList, WebhookInfo, WebhookSecret } from "./webhook-info"
 
 function NameField({ connector }: { connector: Connector }) {
   const update = useUpdateConnector(connector.id)
@@ -68,9 +72,19 @@ function NameField({ connector }: { connector: Connector }) {
   )
 }
 
-function CredentialsForm({ connector, type }: { connector: Connector; type: ConnectorType }) {
+/** Credentials and config. `events` picks the event-only fields (webhook signing secrets). */
+function CredentialsForm({
+  connector,
+  type,
+  events = false,
+}: {
+  connector: Connector
+  type: ConnectorType
+  events?: boolean
+}) {
   const update = useUpdateConnector(connector.id)
-  const fields = buildFormFields(type, connector)
+  const pick = events ? eventFormFields : connectFormFields
+  const fields = pick(buildFormFields(type, connector))
   const [values, setValues] = useState(() => initialValues(fields, connector))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const pristine = initialValues(fields, connector)
@@ -83,7 +97,7 @@ function CredentialsForm({ connector, type }: { connector: Connector; type: Conn
     if (Object.keys(next).length > 0) return
     update.mutate(buildUpdateRequest(fields, values), {
       onSuccess: (updated) => {
-        setValues(initialValues(buildFormFields(type, updated), updated))
+        setValues(initialValues(pick(buildFormFields(type, updated)), updated))
         toast.success(`Updated ${updated.name}`)
       },
     })
@@ -94,7 +108,7 @@ function CredentialsForm({ connector, type }: { connector: Connector; type: Conn
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <FieldGroup>
         <ConnectorFields
-          idPrefix={`connector-${connector.id}`}
+          idPrefix={`connector-${connector.id}${events ? "-events" : ""}`}
           fields={fields}
           values={values}
           errors={errors}
@@ -222,6 +236,33 @@ function Disconnect({
   )
 }
 
+/** How the service sends events to barn: URL, secret, setup steps and event-only fields. */
+function ReceiveEvents({
+  connector,
+  type,
+}: {
+  connector: Connector
+  type: ConnectorType | undefined
+}) {
+  return (
+    <section
+      aria-labelledby={`receive-events-${connector.id}`}
+      className="flex flex-col gap-5 border-t pt-6"
+    >
+      <h2 id={`receive-events-${connector.id}`} className="text-sm font-semibold">
+        Receive events
+      </h2>
+      {type && type.setup.eventSteps.length > 0 && (
+        <SetupSteps steps={type.setup.eventSteps} label={`How to receive ${type.name} events`} />
+      )}
+      <WebhookInfo connector={connector} type={type} />
+      <WebhookSecret connector={connector} type={type} />
+      {type && <CredentialsForm connector={connector} type={type} events />}
+      <SignalsList type={type} />
+    </section>
+  )
+}
+
 /** One connected account: rename, credentials and config, agent access, webhook, disconnect. */
 export function ConnectorDetail({
   connector,
@@ -239,8 +280,7 @@ export function ConnectorDetail({
       </FieldGroup>
       {type && <CredentialsForm connector={connector} type={type} />}
       <Access connector={connector} />
-      <WebhookInfo connector={connector} type={type} />
-      <SignalsList type={type} />
+      {hasEventsSection(type, connector) && <ReceiveEvents connector={connector} type={type} />}
       <Disconnect connector={connector} onDisconnected={onDisconnected} />
     </div>
   )

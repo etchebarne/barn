@@ -872,13 +872,53 @@ components:
 
     ConnectorField:
       type: object
-      required: [key, label, secret, optional]
+      required: [key, label, secret, optional, events]
       properties:
         key: { type: string }
         label: { type: string }
         help: { type: string }
         secret: { type: boolean }
         optional: { type: boolean }
+        events:
+          type: boolean
+          description: |
+            Only needed to receive events (e.g. a webhook signing secret). Filled in after
+            connecting, next to the webhook URL, rather than in the first form.
+
+    SetupStep:
+      type: object
+      required: [text, link, copy]
+      properties:
+        text: { type: string }
+        link:
+          type: object
+          nullable: true
+          description: A page to open for this step
+          required: [label, url]
+          properties:
+            label: { type: string }
+            url: { type: string }
+        copy:
+          type: object
+          nullable: true
+          description: Something to copy for this step (e.g. an app manifest)
+          required: [label, text]
+          properties:
+            label: { type: string }
+            text: { type: string }
+
+    ConnectorSetup:
+      type: object
+      required: [steps, eventSteps]
+      properties:
+        steps:
+          type: array
+          description: How to get the credentials to connect
+          items: { $ref: "#/components/schemas/SetupStep" }
+        eventSteps:
+          type: array
+          description: How to start receiving events once connected (with the webhook URL)
+          items: { $ref: "#/components/schemas/SetupStep" }
 
     ConnectorSignalType:
       type: object
@@ -892,7 +932,7 @@ components:
 
     ConnectorType:
       type: object
-      required: [type, name, description, credentialFields, configFields, signals, webhooks]
+      required: [type, name, description, credentialFields, configFields, signals, webhooks, setup]
       properties:
         type: { type: string, description: 'Machine name, e.g. "github"' }
         name: { type: string, description: 'Display name, e.g. "GitHub"' }
@@ -909,10 +949,11 @@ components:
         webhooks:
           type: boolean
           description: Receives events at a webhook URL (shown after connecting)
+        setup: { $ref: "#/components/schemas/ConnectorSetup" }
 
     Connector:
       type: object
-      required: [id, type, name, config, credentialsSet, agentIds, webhookUrl, createdAt]
+      required: [id, type, name, config, credentialsSet, agentIds, webhookUrl, webhookSecret, createdAt]
       properties:
         id: { type: string }
         type: { type: string }
@@ -932,6 +973,12 @@ components:
           type: string
           nullable: true
           description: Where the service should send events (types with webhooks)
+        webhookSecret:
+          type: string
+          nullable: true
+          description: |
+            A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
+            the user can copy it there
         createdAt: { type: string, format: date-time }
 
     CreateConnectorRequest:

@@ -23,9 +23,9 @@ func (Render) Description() string {
 }
 func (Render) CredentialFields() []Field {
 	return []Field{
-		{Key: "api_key", Label: "API key", Secret: true, Help: "Render → Account settings → API keys."},
-		{Key: "webhook_secret", Label: "Webhook signing secret", Secret: true, Optional: true,
-			Help: "Create a webhook in Render → Integrations → Webhooks pointing at the URL below, then paste its secret (whsec_…)."},
+		{Key: "api_key", Label: "API key", Secret: true, Help: "Starts with rnd_."},
+		{Key: "webhook_secret", Label: "Webhook signing secret", Secret: true, Optional: true, Events: true,
+			Help: "Starts with whsec_. Shown on the webhook you create in Render."},
 	}
 }
 func (Render) ConfigFields() []Field { return nil }

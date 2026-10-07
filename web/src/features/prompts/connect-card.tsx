@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
-import { CheckIcon, XIcon } from "lucide-react"
+import { CheckIcon, ChevronRightIcon, XIcon } from "lucide-react"
 import { useEffect, useRef, useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import {
   ConnectorFields,
   ConnectorIcon,
   initialValues,
+  SetupSteps,
   validateForm,
   type ConnectorType,
 } from "@/features/connectors"
@@ -96,6 +97,7 @@ function ConnectForm({
       <p className="text-xs text-muted-foreground">
         {accessLabel(connection.agentIds, agentNames)}
       </p>
+      {type.setup.steps.length > 0 && <SetupGuide type={type} defaultOpen={fields.length > 0} />}
       {fields.length > 0 && (
         <FieldGroup className="gap-4">
           <ConnectorFields
@@ -144,6 +146,34 @@ function QuestionText({ question, muted }: { question: string; muted: boolean })
     >
       <p className={cn(!muted && "font-medium")}>{title}</p>
       {reason && <p className="whitespace-pre-line">{reason}</p>}
+    </div>
+  )
+}
+
+/** "How to get these": the type's setup steps, collapsible to keep the card compact. */
+function SetupGuide({ type, defaultOpen }: { type: ConnectorType; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const id = `connect-guide-${type.type}`
+  return (
+    <div className={cn("flex flex-col gap-2 border bg-background/40 p-2", INNER_RADIUS)}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        className="flex items-center gap-1.5 text-left text-xs font-medium outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ChevronRightIcon
+          aria-hidden="true"
+          className={cn("size-3.5 text-muted-foreground", open && "rotate-90")}
+        />
+        How to get these
+      </button>
+      {open && (
+        <div id={id}>
+          <SetupSteps steps={type.setup.steps} label={`How to connect ${type.name}`} />
+        </div>
+      )}
     </div>
   )
 }

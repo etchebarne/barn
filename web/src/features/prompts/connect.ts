@@ -14,13 +14,21 @@ export const DECLINE_CONNECT = { selected: [1] }
  * hidden by default (Trust), even if the type doesn't flag one as secret.
  */
 export function connectFields(type: ConnectorType): FormField[] {
-  return type.credentialFields.map((field) => ({
-    ...field,
-    group: "credentials",
-    input: "secret",
-    saved: false,
-    required: !field.optional,
-  }))
+  // Event-only fields (webhook signing secrets) are set later, on the connection's page.
+  return type.credentialFields
+    .filter((field) => !field.events)
+    .map((field): FormField => ({
+      key: field.key,
+      label: field.label,
+      help: field.help,
+      secret: field.secret,
+      optional: field.optional,
+      events: field.events,
+      group: "credentials",
+      input: "secret",
+      saved: false,
+      required: !field.optional,
+    }))
 }
 
 /** The connect request: trimmed credential values, leaving out empty optional ones. */

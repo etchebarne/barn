@@ -16,12 +16,15 @@ const notion: ConnectorType = {
   name: "MCP server",
   description: "Any MCP server",
   credentialFields: [
-    { key: "token", label: "Access token", secret: true, optional: false },
-    { key: "extra", label: "Extra header", secret: false, optional: true },
+    { key: "token", label: "Access token", secret: true, optional: false, events: false },
+    { key: "extra", label: "Extra header", secret: false, optional: true, events: false },
   ],
-  configFields: [{ key: "url", label: "Server URL", secret: false, optional: false }],
+  configFields: [
+    { key: "url", label: "Server URL", secret: false, optional: false, events: false },
+  ],
   signals: [],
   webhooks: false,
+  setup: { steps: [], eventSteps: [] },
 }
 
 function prompt(overrides: Partial<Prompt> = {}): Prompt {
@@ -44,6 +47,17 @@ function prompt(overrides: Partial<Prompt> = {}): Prompt {
 }
 
 describe("connect prompt logic", () => {
+  it("leaves out event-only credentials", () => {
+    const withEvents: ConnectorType = {
+      ...notion,
+      credentialFields: [
+        ...notion.credentialFields,
+        { key: "signing", label: "Signing secret", secret: true, optional: true, events: true },
+      ],
+    }
+    expect(connectFields(withEvents).map((f) => f.key)).toEqual(["token", "extra"])
+  })
+
   it("asks for every credential, always hidden", () => {
     expect(connectFields(notion).map((f) => [f.key, f.input, f.required])).toEqual([
       ["token", "secret", true],

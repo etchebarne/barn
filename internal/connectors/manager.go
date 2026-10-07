@@ -127,6 +127,9 @@ func (m *Manager) Save(ctx context.Context, id, typeName, name string, creds, co
 	if typeName == "webhook" && creds["token"] == "" {
 		creds["token"] = randomToken()
 	}
+	if g, ok := t.(GeneratedSecret); ok && creds[g.GeneratedSecret()] == "" {
+		creds[g.GeneratedSecret()] = randomToken()
+	}
 	for _, f := range t.CredentialFields() {
 		if !f.Optional && strings.TrimSpace(creds[f.Key]) == "" {
 			return store.ConnectorAccount{}, userErr("%s is required", f.Label)

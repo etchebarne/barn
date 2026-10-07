@@ -505,17 +505,33 @@ type Connector struct {
 	Name           string   `json:"name"`
 	Type           string   `json:"type"`
 
+	// WebhookSecret A secret barn generated for the service's webhook settings (e.g. GitHub's), shown so
+	// the user can copy it there
+	WebhookSecret *string `json:"webhookSecret"`
+
 	// WebhookUrl Where the service should send events (types with webhooks)
 	WebhookUrl *string `json:"webhookUrl"`
 }
 
 // ConnectorField defines model for ConnectorField.
 type ConnectorField struct {
+	// Events Only needed to receive events (e.g. a webhook signing secret). Filled in after
+	// connecting, next to the webhook URL, rather than in the first form.
+	Events   bool    `json:"events"`
 	Help     *string `json:"help,omitempty"`
 	Key      string  `json:"key"`
 	Label    string  `json:"label"`
 	Optional bool    `json:"optional"`
 	Secret   bool    `json:"secret"`
+}
+
+// ConnectorSetup defines model for ConnectorSetup.
+type ConnectorSetup struct {
+	// EventSteps How to start receiving events once connected (with the webhook URL)
+	EventSteps []SetupStep `json:"eventSteps"`
+
+	// Steps How to get the credentials to connect
+	Steps []SetupStep `json:"steps"`
 }
 
 // ConnectorSignalType defines model for ConnectorSignalType.
@@ -533,6 +549,7 @@ type ConnectorType struct {
 
 	// Name Display name, e.g. "GitHub"
 	Name    string                `json:"name"`
+	Setup   ConnectorSetup        `json:"setup"`
 	Signals []ConnectorSignalType `json:"signals"`
 
 	// Type Machine name, e.g. "github"
@@ -801,6 +818,22 @@ type SendMessageRequest struct {
 type SetTimezoneRequest struct {
 	// Timezone IANA name, e.g. "America/Montevideo"
 	Timezone string `json:"timezone"`
+}
+
+// SetupStep defines model for SetupStep.
+type SetupStep struct {
+	// Copy Something to copy for this step (e.g. an app manifest)
+	Copy *struct {
+		Label string `json:"label"`
+		Text  string `json:"text"`
+	} `json:"copy"`
+
+	// Link A page to open for this step
+	Link *struct {
+		Label string `json:"label"`
+		Url   string `json:"url"`
+	} `json:"link"`
+	Text string `json:"text"`
 }
 
 // Task defines model for Task.

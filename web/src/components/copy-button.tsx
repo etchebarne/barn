@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+/** Copies `text`, with a short-lived `copied` flag for feedback. Shared by every copy button. */
+export function useCopy(text: string) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -19,6 +20,29 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
       // Copying was refused; nothing sensible to do.
     }
   }
+
+  return { copied, copy }
+}
+
+/** A small secondary "Copy" button with a text label, for things too long to show (manifests). */
+export function CopyTextButton({ text, label }: { text: string; label: string }) {
+  const { copied, copy } = useCopy(text)
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="xs"
+      aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
+      onClick={() => void copy()}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+      {copied ? "Copied" : "Copy"}
+    </Button>
+  )
+}
+
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const { copied, copy } = useCopy(text)
 
   return (
     <Tooltip>

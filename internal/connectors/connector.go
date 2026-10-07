@@ -17,6 +17,36 @@ type Field struct {
 	Help     string `json:"help,omitempty"`
 	Secret   bool   `json:"secret"`
 	Optional bool   `json:"optional"`
+	// Events fields are only needed to receive events (e.g. a webhook signing secret). They're
+	// filled in after connecting, next to the webhook URL they go with.
+	Events bool `json:"events,omitempty"`
+}
+
+// Guide is implemented by types that explain, step by step, how to get their credentials.
+type Guide interface {
+	Setup() Setup
+}
+
+// Setup is a type's how-to: steps to connect, and steps to start receiving its events.
+type Setup struct {
+	Steps      []SetupStep
+	EventSteps []SetupStep
+}
+
+// SetupStep is one instruction, optionally with a page to open or something to copy.
+type SetupStep struct {
+	Text string
+	Link *SetupLink
+	Copy *SetupCopy
+}
+
+type SetupLink struct{ Label, URL string }
+type SetupCopy struct{ Label, Text string }
+
+// GeneratedSecret is implemented by types whose event secret barn makes up itself (so the user
+// copies it into the service instead of the other way around).
+type GeneratedSecret interface {
+	GeneratedSecret() string // the credential key
 }
 
 // Tool is an action agents can take with an account.

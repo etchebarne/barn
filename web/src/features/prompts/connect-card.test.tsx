@@ -28,12 +28,16 @@ const mcp: ConnectorType = {
       help: "From Notion's integrations page",
       secret: true,
       optional: false,
+      events: false,
     },
-    { key: "header", label: "Extra header", secret: false, optional: true },
+    { key: "header", label: "Extra header", secret: false, optional: true, events: false },
   ],
-  configFields: [{ key: "url", label: "Server URL", secret: false, optional: false }],
+  configFields: [
+    { key: "url", label: "Server URL", secret: false, optional: false, events: false },
+  ],
   signals: [],
   webhooks: false,
+  setup: { steps: [], eventSteps: [] },
 }
 
 const webhookType: ConnectorType = {
@@ -176,5 +180,34 @@ describe("ConnectCard", () => {
     )
     expect(screen.getByText("Declined")).toBeVisible()
     expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument()
+  })
+
+  it("leaves out event-only fields and shows a collapsible setup guide", async () => {
+    const guided: ConnectorType = {
+      ...mcp,
+      credentialFields: [
+        ...mcp.credentialFields,
+        { key: "signing", label: "Signing secret", secret: true, optional: true, events: true },
+      ],
+      setup: {
+        steps: [
+          {
+            text: "Open the server's settings and create a token.",
+            link: { label: "Open settings", url: "https://example.com/tokens" },
+            copy: null,
+          },
+        ],
+        eventSteps: [],
+      },
+    }
+    await renderInRouter(card({ type: guided }))
+    expect(screen.queryByLabelText(/Signing secret/)).not.toBeInTheDocument()
+
+    const toggle = screen.getByRole("button", { name: "How to get these" })
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("link", { name: /Open settings/ })).toHaveAttribute("target", "_blank")
+
+    await userEvent.click(toggle)
+    expect(screen.queryByRole("link", { name: /Open settings/ })).not.toBeInTheDocument()
   })
 })

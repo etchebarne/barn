@@ -2,6 +2,7 @@ import type { Agent, Schemas } from "@/lib/api-client"
 
 export type ConnectorType = Schemas["ConnectorType"]
 export type ConnectorField = Schemas["ConnectorField"]
+export type SetupStep = Schemas["SetupStep"]
 export type Connector = Schemas["Connector"]
 
 export type FormField = ConnectorField & {
@@ -98,16 +99,49 @@ export function buildCreateRequest(
   }
 }
 
-/** An update: only credentials the user typed (empty keeps the saved value), all config. */
+/**
+ * An update: only credentials the user typed (empty keeps the saved value), and all config
+ * fields in the form (none when the form has no config fields, so nothing is cleared).
+ */
 export function buildUpdateRequest(
   fields: FormField[],
   values: FormValues,
 ): Schemas["UpdateConnectorRequest"] {
   const credentials = collect(fields, values, "credentials", true)
+  const hasConfig = fields.some((f) => f.group === "config")
   return {
     ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
-    config: collect(fields, values, "config", false),
+    ...(hasConfig ? { config: collect(fields, values, "config", false) } : {}),
   }
+}
+
+/**
+ * Fields needed to connect: everything except `events` fields (webhook signing secrets), which
+ * only matter for receiving events and live in the connection's "Receive events" section.
+ */
+export function connectFormFields(fields: FormField[]): FormField[] {
+  return fields.filter((field) => !field.events)
+}
+
+/** Only the fields used to receive events. */
+export function eventFormFields(fields: FormField[]): FormField[] {
+  return fields.filter((field) => field.events)
+}
+
+/** Whether a connection's detail shows a "Receive events" section. */
+export function hasEventsSection(type: ConnectorType | undefined, connector: Connector): boolean {
+  if (!type) return connector.webhookUrl !== null
+  return (
+    type.webhooks ||
+    connector.webhookUrl !== null ||
+    type.setup.eventSteps.length > 0 ||
+    [...type.credentialFields, ...type.configFields].some((f) => f.events)
+  )
+}
+
+/** A fully masked secret, so even its length isn't revealed. */
+export function maskSecret(): string {
+  return "•".repeat(16)
 }
 
 /** Grants with one agent turned on or off (sorted, unique). */

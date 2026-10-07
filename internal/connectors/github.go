@@ -19,10 +19,9 @@ func (GitHub) Description() string {
 }
 func (GitHub) CredentialFields() []Field {
 	return []Field{
-		{Key: "token", Label: "Personal access token", Secret: true,
-			Help: "A fine-grained token with access to the repositories agents should use (Issues and Pull requests: read & write)."},
-		{Key: "webhook_secret", Label: "Webhook secret", Secret: true, Optional: true,
-			Help: "Set the same secret on the repository's webhook (Settings → Webhooks) to receive events."},
+		{Key: "token", Label: "Personal access token", Secret: true, Help: "Starts with github_pat_."},
+		{Key: "webhook_secret", Label: "Webhook secret", Secret: true, Optional: true, Events: true,
+			Help: "barn makes one up; paste it into the repository's webhook. Change it only if you need a specific value."},
 	}
 }
 func (GitHub) ConfigFields() []Field {

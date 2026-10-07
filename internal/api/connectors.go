@@ -38,7 +38,7 @@ func sentence(msg string) string {
 func fieldsView(fields []connectors.Field) []gen.ConnectorField {
 	out := make([]gen.ConnectorField, 0, len(fields))
 	for _, f := range fields {
-		gf := gen.ConnectorField{Key: f.Key, Label: f.Label, Secret: f.Secret, Optional: f.Optional}
+		gf := gen.ConnectorField{Key: f.Key, Label: f.Label, Secret: f.Secret, Optional: f.Optional, Events: f.Events}
 		if f.Help != "" {
 			help := f.Help
 			gf.Help = &help
@@ -56,10 +56,36 @@ func (s *Server) ListConnectorTypes(w http.ResponseWriter, r *http.Request) {
 			sigs = append(sigs, gen.ConnectorSignalType{Type: st.Type, Description: st.Description, Fields: st.Fields})
 		}
 		_, webhooks := t.(connectors.WebhookReceiver)
+		var setup connectors.Setup
+		if g, ok := t.(connectors.Guide); ok {
+			setup = g.Setup()
+		}
 		out = append(out, gen.ConnectorType{Type: t.Name(), Name: t.DisplayName(), Description: t.Description(),
-			CredentialFields: fieldsView(t.CredentialFields()), ConfigFields: fieldsView(t.ConfigFields()), Signals: sigs, Webhooks: webhooks})
+			CredentialFields: fieldsView(t.CredentialFields()), ConfigFields: fieldsView(t.ConfigFields()), Signals: sigs, Webhooks: webhooks,
+			Setup: gen.ConnectorSetup{Steps: stepsView(setup.Steps), EventSteps: stepsView(setup.EventSteps)}})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func stepsView(steps []connectors.SetupStep) []gen.SetupStep {
+	out := make([]gen.SetupStep, 0, len(steps))
+	for _, st := range steps {
+		v := gen.SetupStep{Text: st.Text}
+		if st.Link != nil {
+			v.Link = &struct {
+				Label string `json:"label"`
+				Url   string `json:"url"`
+			}{st.Link.Label, st.Link.URL}
+		}
+		if st.Copy != nil {
+			v.Copy = &struct {
+				Label string `json:"label"`
+				Text  string `json:"text"`
+			}{st.Copy.Label, st.Copy.Text}
+		}
+		out = append(out, v)
+	}
+	return out
 }
 
 // publicOrigin is where external services reach barnd: BARN_PUBLIC_URL, or this request's host.
@@ -101,6 +127,11 @@ func (s *Server) connectorView(ctx context.Context, r *http.Request, a store.Con
 			u += "?token=" + url.QueryEscape(acct.Credentials["token"])
 		}
 		out.WebhookUrl = &u
+	}
+	if g, ok := t.(connectors.GeneratedSecret); ok {
+		if v := acct.Credentials[g.GeneratedSecret()]; v != "" {
+			out.WebhookSecret = &v
+		}
 	}
 	return out, nil
 }

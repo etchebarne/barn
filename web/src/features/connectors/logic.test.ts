@@ -27,12 +27,14 @@ const slack: ConnectorType = {
       help: "Starts with xoxb-",
       secret: true,
       optional: false,
+      events: false,
     },
-    { key: "appToken", label: "App token", secret: true, optional: true },
+    { key: "appToken", label: "App token", secret: true, optional: true, events: false },
   ],
-  configFields: [{ key: "team", label: "Team", secret: false, optional: false }],
+  configFields: [{ key: "team", label: "Team", secret: false, optional: false, events: false }],
   signals: [],
   webhooks: false,
+  setup: { steps: [], eventSteps: [] },
 }
 
 const saved: Connector = {
@@ -43,6 +45,7 @@ const saved: Connector = {
   credentialsSet: ["botToken"],
   agentIds: ["a1"],
   webhookUrl: null,
+  webhookSecret: null,
   createdAt: "2026-10-01T00:00:00Z",
 }
 
@@ -53,7 +56,7 @@ describe("form generation", () => {
       ...slack,
       configFields: [
         ...slack.configFields,
-        { key: "region", label: "Region", secret: false, optional: true },
+        { key: "region", label: "Region", secret: false, optional: true, events: false },
       ],
     })
     expect(fields.map((f) => [fieldId(f), f.input, f.required])).toEqual([

@@ -22,13 +22,15 @@ import { ConnectorIcon } from "./connector-icon"
 import {
   buildCreateRequest,
   buildFormFields,
+  connectFormFields,
   initialValues,
   toggleGrant,
   validateForm,
   type Connector,
   type ConnectorType,
 } from "./logic"
-import { SignalsList, WebhookInfo } from "./webhook-info"
+import { SetupSteps } from "./setup-steps"
+import { SignalsList, WebhookInfo, WebhookSecret } from "./webhook-info"
 
 function TypePicker({ onPick }: { onPick: (type: ConnectorType) => void }) {
   const { data: types, isPending, error } = useConnectorTypes()
@@ -70,7 +72,8 @@ function ConnectForm({
   onConnected: (connector: Connector) => void
 }) {
   const create = useCreateConnector()
-  const [fields] = useState(() => buildFormFields(type))
+  // Webhook signing secrets aren't needed to connect; they're set under "Receive events".
+  const [fields] = useState(() => connectFormFields(buildFormFields(type)))
   const [values, setValues] = useState(() => initialValues(fields))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [name, setName] = useState(type.name)
@@ -91,6 +94,14 @@ function ConnectForm({
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6">
+      {type.setup.steps.length > 0 && (
+        <section aria-labelledby="how-to-connect" className="flex flex-col gap-3">
+          <h3 id="how-to-connect" className="text-sm font-medium">
+            How to connect
+          </h3>
+          <SetupSteps steps={type.setup.steps} label={`How to connect ${type.name}`} />
+        </section>
+      )}
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="new-connector-name">Name</FieldLabel>
@@ -133,7 +144,7 @@ function ConnectForm({
   )
 }
 
-function Connected({
+export function Connected({
   connector,
   type,
   onDone,
@@ -150,7 +161,14 @@ function Connected({
         <CircleCheckIcon className="size-4 shrink-0" aria-hidden="true" />
         {connector.name} is connected.
       </p>
+      {type.setup.eventSteps.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          To let agents react to {type.name} events, follow the steps under Receive events in the
+          connection's settings.
+        </p>
+      )}
       <WebhookInfo connector={connector} type={type} />
+      <WebhookSecret connector={connector} type={type} />
       <SignalsList type={type} />
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onOpen}>

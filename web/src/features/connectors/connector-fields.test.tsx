@@ -16,11 +16,15 @@ const github: ConnectorType = {
       help: "A fine-grained token",
       secret: true,
       optional: false,
+      events: false,
     },
   ],
-  configFields: [{ key: "org", label: "Organization", secret: false, optional: true }],
+  configFields: [
+    { key: "org", label: "Organization", secret: false, optional: true, events: false },
+  ],
   signals: [],
   webhooks: true,
+  setup: { steps: [], eventSteps: [] },
 }
 
 function renderFields(connector?: Connector) {
@@ -58,6 +62,7 @@ describe("ConnectorFields", () => {
       credentialsSet: ["token"],
       agentIds: [],
       webhookUrl: null,
+      webhookSecret: null,
       createdAt: "2026-10-01T00:00:00Z",
     })
     expect(screen.getByText("Saved")).toBeVisible()

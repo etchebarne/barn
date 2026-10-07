@@ -18,9 +18,9 @@ func (Linear) Description() string {
 }
 func (Linear) CredentialFields() []Field {
 	return []Field{
-		{Key: "api_key", Label: "API key", Secret: true, Help: "Linear → Settings → Security & access → Personal API keys."},
-		{Key: "webhook_secret", Label: "Webhook signing secret", Secret: true, Optional: true,
-			Help: "Create a webhook in Linear → Settings → API → Webhooks pointing at the URL below, then paste its signing secret."},
+		{Key: "api_key", Label: "API key", Secret: true, Help: "Starts with lin_api_."},
+		{Key: "webhook_secret", Label: "Webhook signing secret", Secret: true, Optional: true, Events: true,
+			Help: "Shown on the webhook you create in Linear."},
 	}
 }
 func (Linear) ConfigFields() []Field { return nil }

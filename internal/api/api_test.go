@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -490,5 +491,55 @@ func TestConnectPromptAPI(t *testing.T) {
 	plain, _ := st.InsertPrompt(ctx, dm, agent.ID, store.Prompt{Kind: "single", Question: "?", Options: []store.PromptOption{{Label: "a"}}})
 	if resp, _ := c.do("POST", "/api/messages/"+plain.ID+"/connect", `{"credentials":{}}`, true); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("connect on a plain question: %d", resp.StatusCode)
+	}
+}
+
+func TestConnectorSetupGuides(t *testing.T) {
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"login":"martin"}`)) }))
+	defer gh.Close()
+	c, _ := setupWithKey(t)
+	_, types := c.doList("GET", "/api/connectors/types")
+	byName := map[string]map[string]any{}
+	for _, raw := range types {
+		ty := raw.(map[string]any)
+		byName[ty["type"].(string)] = ty
+	}
+
+	// Slack's first step links to Slack's create-app page with barn's manifest filled in.
+	slack := byName["slack"]["setup"].(map[string]any)["steps"].([]any)
+	link := slack[0].(map[string]any)["link"].(map[string]any)["url"].(string)
+	u, err := url.Parse(link)
+	if err != nil || u.Host != "api.slack.com" || u.Query().Get("new_app") != "1" {
+		t.Fatalf("slack link = %s", link)
+	}
+	var manifest struct {
+		Settings struct {
+			SocketMode bool `json:"socket_mode_enabled"`
+			Events     struct {
+				Bot []string `json:"bot_events"`
+			} `json:"event_subscriptions"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal([]byte(u.Query().Get("manifest_json")), &manifest); err != nil || !manifest.Settings.SocketMode ||
+		len(manifest.Settings.Events.Bot) != 2 {
+		t.Fatalf("manifest = %+v %v", manifest, err)
+	}
+	if slack[0].(map[string]any)["copy"] == nil {
+		t.Fatal("the manifest should also be copyable")
+	}
+
+	// Event-only fields are flagged, and GitHub's webhook secret is made up by barn.
+	for _, f := range byName["github"]["credentialFields"].([]any) {
+		field := f.(map[string]any)
+		if field["key"] == "webhook_secret" && field["events"] != true {
+			t.Fatal("webhook_secret should be an events field")
+		}
+	}
+	resp, body := c.do("POST", "/api/connectors", `{"type":"github","name":"GitHub","credentials":{"token":"t"},"config":{"base_url":"`+gh.URL+`"}}`, true)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create: %d %v", resp.StatusCode, body)
+	}
+	if s, _ := body["webhookSecret"].(string); len(s) < 32 {
+		t.Fatalf("webhookSecret = %v", body["webhookSecret"])
 	}
 }

@@ -23,10 +23,9 @@ func (Slack) Description() string {
 }
 func (Slack) CredentialFields() []Field {
 	return []Field{
-		{Key: "bot_token", Label: "Bot token (xoxb-…)", Secret: true,
-			Help: "Create a Slack app, add bot scopes (chat:write, channels:history, channels:read, groups:history, groups:read, im:history, users:read, app_mentions:read), install it, and copy the bot token."},
-		{Key: "app_token", Label: "App-level token (xapp-…)", Secret: true, Optional: true,
-			Help: "To receive mentions and DMs: enable Socket Mode, subscribe to app_mention and message.im events, and create an app-level token with connections:write."},
+		{Key: "bot_token", Label: "Bot token", Secret: true, Help: "Starts with xoxb-. From Install App or OAuth & Permissions."},
+		{Key: "app_token", Label: "App-level token", Secret: true, Optional: true,
+			Help: "Starts with xapp-. Lets agents hear mentions and DMs."},
 	}
 }
 func (Slack) ConfigFields() []Field { return nil }
