@@ -674,6 +674,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Search messages in every chat (full text: every word must appear, as a prefix of a word),
+         *     agents' memories, and tasks. Best message matches first.
+         */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/config": {
         parameters: {
             query?: never;
@@ -1267,6 +1287,28 @@ export interface components {
             tasks: components["schemas"]["Task"][];
             upcoming: components["schemas"]["UpcomingRuns"][];
             recent: components["schemas"]["TaskRun"][];
+        };
+        SearchResults: {
+            messages: components["schemas"]["MessageHit"][];
+            memories: components["schemas"]["MemoryHit"][];
+            tasks: components["schemas"]["Task"][];
+        };
+        MessageHit: {
+            id: string;
+            chatId: string;
+            author: components["schemas"]["MessageAuthor"];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description Plain text around the match; matched words sit between U+0002 and U+0003 (control
+             *     characters, never in a message), and cut text is marked with "…".
+             */
+            snippet: string;
+        };
+        MemoryHit: {
+            id: string;
+            agentId: string;
+            text: string;
         };
         ConnectorField: {
             key: string;
@@ -3063,6 +3105,31 @@ export interface operations {
                     "application/json": components["schemas"]["Schedule"];
                 };
             };
+            401: components["responses"]["Error"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
         };
     };

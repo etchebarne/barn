@@ -883,6 +883,13 @@ type Memory struct {
 	Text      string    `json:"text"`
 }
 
+// MemoryHit defines model for MemoryHit.
+type MemoryHit struct {
+	AgentId string `json:"agentId"`
+	Id      string `json:"id"`
+	Text    string `json:"text"`
+}
+
 // MemoryRequest defines model for MemoryRequest.
 type MemoryRequest struct {
 	Text string `json:"text"`
@@ -964,6 +971,18 @@ type MessageFailure struct {
 // data and the workspace's privacy settings forbid that). Offer to change the model.
 // stopped: the user stopped the agent (a neutral notice, not an error).
 type MessageFailureReason string
+
+// MessageHit defines model for MessageHit.
+type MessageHit struct {
+	Author    MessageAuthor `json:"author"`
+	ChatId    string        `json:"chatId"`
+	CreatedAt time.Time     `json:"createdAt"`
+	Id        string        `json:"id"`
+
+	// Snippet Plain text around the match; matched words sit between U+0002 and U+0003 (control
+	// characters, never in a message), and cut text is marked with "…".
+	Snippet string `json:"snippet"`
+}
 
 // MessagePage defines model for MessagePage.
 type MessagePage struct {
@@ -1173,6 +1192,13 @@ type Schedule struct {
 	Recent   []TaskRun      `json:"recent"`
 	Tasks    []Task         `json:"tasks"`
 	Upcoming []UpcomingRuns `json:"upcoming"`
+}
+
+// SearchResults defines model for SearchResults.
+type SearchResults struct {
+	Memories []MemoryHit  `json:"memories"`
+	Messages []MessageHit `json:"messages"`
+	Tasks    []Task       `json:"tasks"`
 }
 
 // SecretRequest defines model for SecretRequest.
@@ -1636,6 +1662,12 @@ type ListMessagesParams struct {
 // GetScheduleParams defines parameters for GetSchedule.
 type GetScheduleParams struct {
 	Days *int `form:"days,omitempty" json:"days,omitempty"`
+}
+
+// SearchParams defines parameters for Search.
+type SearchParams struct {
+	Q     string `form:"q" json:"q"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetUsageParams defines parameters for GetUsage.
@@ -2329,6 +2361,9 @@ type ServerInterface interface {
 
 	// (GET /schedule)
 	GetSchedule(w http.ResponseWriter, r *http.Request, params GetScheduleParams)
+
+	// (GET /search)
+	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
 
 	// (GET /settings/provider)
 	GetProviderSettings(w http.ResponseWriter, r *http.Request)
@@ -3864,6 +3899,52 @@ func (siw *ServerInterfaceWrapper) GetSchedule(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// Search operation middleware
+func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Search(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProviderSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetProviderSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -4302,6 +4383,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tasks/{taskId}/runs", wrapper.ListTaskRuns)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tasks/{taskId}/run", wrapper.RunTaskNow)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedule", wrapper.GetSchedule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/search", wrapper.Search)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/push/subscriptions", wrapper.UnsubscribePush)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)

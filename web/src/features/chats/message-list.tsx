@@ -19,6 +19,7 @@ import { flattenMessages } from "@/lib/chat-cache"
 import { messagesQueryOptions, useSendMessage } from "./api"
 import { toRows } from "./grouping"
 import { DaySeparator, MessageRow, PendingRow } from "./message-row"
+import { usePaletteStore } from "./palette-store"
 import { reconcilePending, usePendingMessages } from "./pending-store"
 import { JumpToMessageContext } from "./quote-block"
 import { useMarkReadWhenSeen } from "./read-tracker"
@@ -103,6 +104,14 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
     },
     [query.data, hasNextPage, fetchNextPage, reveal],
   )
+
+  // A search result in this chat: jump to it once the newest page is in.
+  const jump = usePaletteStore((s) => s.jump)
+  useEffect(() => {
+    if (!jump || jump.chatId !== chat.id || query.isPending) return
+    usePaletteStore.getState().clearJump()
+    void jumpTo(jump.messageId)
+  }, [jump, chat.id, query.isPending, jumpTo])
 
   const latest = messages.at(-1)
   const lastPending = pending.at(-1)

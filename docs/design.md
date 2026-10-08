@@ -405,6 +405,13 @@ Messages in a group are visible to every participant; DMs are visible only to th
   account, auth, appearance, and system config. Agents, tasks, memories, connectors, and
   sandboxes are managed by talking to agents, not with forms (read-only inspection views are fine).
 - Composer supports `@` autocomplete of group participants; mentions render as chips.
+- **Search** (the command palette, Ctrl/⌘+K): besides chats, agents and actions, typing two or
+  more characters searches every chat's messages (`GET /search`: SQLite FTS5 over message
+  bodies, every word as a prefix, accents folded, best matches first, system notices left out),
+  agents' memories and tasks. Message results show the matched words marked; picking one opens
+  its chat and scrolls to the message (loading older history if needed) and flashes it; a memory
+  opens the agent's settings, a task its sheet on the Schedule page. The index is an
+  external-content FTS table kept in step by triggers (rebuild it after a `VACUUM`).
 - Messages arrive whole (agents speak via a tool call), so there is no text streaming. Instead, a
   live **activity line** shows what an agent is doing ("thinking…", "running `npm test`…").
 - Theme: light / dark / system, **system by default**, switchable in settings and persisted

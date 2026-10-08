@@ -6,6 +6,10 @@ type PaletteState = {
   /** Bumped to ask the sidebar to start naming a new category. */
   newCategoryRequest: number
   requestNewCategory: () => void
+  /** A message to scroll to once its chat is open (a search result). */
+  jump: { chatId: string; messageId: string } | null
+  requestJump: (chatId: string, messageId: string) => void
+  clearJump: () => void
 }
 
 /** UI state for the command palette and the actions it triggers elsewhere. */
@@ -14,6 +18,9 @@ export const usePaletteStore = create<PaletteState>()((set) => ({
   setOpen: (open) => set({ open }),
   newCategoryRequest: 0,
   requestNewCategory: () => set((s) => ({ newCategoryRequest: s.newCategoryRequest + 1 })),
+  jump: null,
+  requestJump: (chatId, messageId) => set({ jump: { chatId, messageId } }),
+  clearJump: () => set({ jump: null }),
 }))
 
 /** "⌘K" on Apple platforms, "Ctrl K" elsewhere. */

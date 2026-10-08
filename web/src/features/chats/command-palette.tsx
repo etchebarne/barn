@@ -12,7 +12,7 @@ import {
   SettingsIcon,
   SunIcon,
 } from "lucide-react"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 
 import {
   Command,
@@ -31,6 +31,8 @@ import { useThemeStore } from "@/lib/theme"
 import { chatsQueryOptions } from "./api"
 import { isPaletteShortcut, paletteShortcutLabel, usePaletteStore } from "./palette-store"
 import { dmAgent } from "./preview"
+import { MIN_SEARCH_LENGTH, useSearch } from "./search"
+import { firstResultValue, SearchResultGroups } from "./search-results"
 import { useCategories } from "./sidebar-api"
 
 /** With no query, unread chats come first, then the rest by recent activity (the list order). */
@@ -62,6 +64,19 @@ export function CommandPalette() {
   const resolved = useThemeStore((s) => s.resolved)
   const setPreference = useThemeStore((s) => s.setPreference)
   const logout = useLogout(() => navigate({ to: "/login" }))
+  const [query, setQuery] = useState("")
+  const search = useSearch(open ? query : "")
+  const searching = query.trim().length >= MIN_SEARCH_LENGTH
+  const chatsById = new Map(chats.map((c) => [c.id, c]))
+  // The highlighted item. cmdk picks the first match as you type, but results that arrive
+  // later don't get picked: fall back to the first one when nothing is selected.
+  const [selected, setSelected] = useState("")
+  const results = searching ? search.data : undefined
+  const highlighted = selected || (results && firstResultValue(results)) || ""
+  const hasResults =
+    searching &&
+    search.data !== undefined &&
+    search.data.messages.length + search.data.memories.length + search.data.tasks.length > 0
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -78,22 +93,35 @@ export function CommandPalette() {
   /** Closes the palette, then runs the choice. */
   function run(action: () => void) {
     setOpen(false)
+    setQuery("")
     action()
   }
 
   return (
     <CommandDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setQuery("")
+      }}
       animated={false}
       title="Search openbot"
-      description="Jump to a chat, open an agent's settings, or run an action."
+      description="Search messages, memories and tasks, jump to a chat, open an agent's settings, or run an action."
       className="max-sm:top-0 max-sm:max-w-full max-sm:rounded-none! sm:max-w-lg"
     >
-      <Command>
-        <CommandInput placeholder="Search chats, agents and actions…" />
-        <CommandList className="max-h-[min(24rem,70svh)]">
-          <CommandEmpty>Nothing found.</CommandEmpty>
+      <Command value={highlighted} onValueChange={setSelected}>
+        <CommandInput
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Search messages, chats, agents…"
+        />
+        <CommandList className="max-h-[min(28rem,70svh)]">
+          {/* cmdk counts only the items it filters itself, not the server's results. */}
+          {!hasResults && (
+            <CommandEmpty>
+              {searching && search.isFetching ? "Searching…" : "Nothing found."}
+            </CommandEmpty>
+          )}
           {chats.length > 0 && (
             <CommandGroup heading="Chats">
               {paletteChatOrder(chats).map((chat) => {
@@ -160,6 +188,23 @@ export function CommandPalette() {
                 </CommandItem>
               ))}
             </CommandGroup>
+          )}
+          {searching && search.data && (
+            <SearchResultGroups
+              results={search.data}
+              chats={chatsById}
+              agents={agents}
+              onMessage={(hit) =>
+                run(() => {
+                  usePaletteStore.getState().requestJump(hit.chatId, hit.id)
+                  void navigate({ to: "/chats/$chatId", params: { chatId: hit.chatId } })
+                })
+              }
+              onMemory={(agentId) => run(() => openAgentDetails(agentId))}
+              onTask={(taskId) =>
+                run(() => void navigate({ to: "/schedule", search: { task: taskId } }))
+              }
+            />
           )}
           <CommandGroup heading="Actions">
             <CommandItem value="action new category" onSelect={() => run(requestNewCategory)}>
