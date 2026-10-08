@@ -255,6 +255,9 @@ func (l *loop) runSandboxTool(ctx context.Context, agent store.Agent, name strin
 
 // activityFor is the activity line shown while a tool runs.
 func activityFor(call model.ToolCall) string {
+	if call.Function.Name == toolWebSearch {
+		return searchActivity(call)
+	}
 	if call.Function.Name == toolRunCommand {
 		var a struct {
 			Command string `json:"command"`

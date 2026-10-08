@@ -1,7 +1,15 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 import { cn } from "cn"
-import { BotIcon, PlugIcon, SettingsIcon, SquarePenIcon, UsersIcon } from "lucide-react"
+import {
+  BotIcon,
+  CalendarClockIcon,
+  PlugIcon,
+  SettingsIcon,
+  SparklesIcon,
+  SquarePenIcon,
+  UsersIcon,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -88,10 +96,12 @@ function NewButton({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-/** Connectors and Settings, always one click away above the account button. */
+/** The app's pages, always one click away above the account button. */
 function SidebarNav({ mobile }: { mobile: boolean }) {
   const matchRoute = useMatchRoute()
   const links = [
+    { to: "/schedule", label: "Schedule", icon: CalendarClockIcon },
+    { to: "/skills", label: "Skills", icon: SparklesIcon },
     { to: "/connectors", label: "Connectors", icon: PlugIcon },
     { to: "/settings", label: "Settings", icon: SettingsIcon },
   ] as const

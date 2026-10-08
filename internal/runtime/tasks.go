@@ -211,7 +211,7 @@ func (m *Manager) fireDueTasks(ctx context.Context) {
 		}
 		if t.Check != "" {
 			// Off the scheduler's loop: a check can take up to a minute.
-			go m.fireCheck(context.WithoutCancel(ctx), t, scheduled)
+			go m.fireCheck(context.WithoutCancel(ctx), t, scheduled, false)
 			continue
 		}
 		if _, err := m.store.InsertEvent(ctx, t.AgentID, EventTask, map[string]any{

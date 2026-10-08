@@ -19,6 +19,7 @@ const EventApproval = "approval"
 // gatedTools need the user's approval unless the agent is trusted.
 var gatedTools = map[string]bool{
 	toolAllowWithoutAsking: true,
+	toolSaveSkill:          true,
 }
 
 // alwaysAsk need the user's approval every time, trusted or not, and can't be allowed for good:
@@ -89,6 +90,8 @@ func (l *loop) describeAction(ctx context.Context, agent store.Agent, tool strin
 	switch tool {
 	case toolAllowWithoutAsking:
 		return l.describeAllow(ctx, agent, args)
+	case toolSaveSkill:
+		return describeSaveSkill(args)
 	case toolDeleteAgent:
 		var a struct {
 			AgentID string `json:"agent_id"`

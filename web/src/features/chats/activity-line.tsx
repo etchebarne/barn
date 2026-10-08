@@ -1,6 +1,9 @@
+import { SquareIcon } from "lucide-react"
 import { useEffect, useState } from "react"
 
-import { activityLabel, AgentAvatar } from "@/features/agents"
+import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { activityLabel, AgentAvatar, useStopAgent } from "@/features/agents"
 import type { Agent } from "@/lib/api-client"
 
 /** Wait this long before showing work, so quick turns don't flash a line. */
@@ -74,7 +77,34 @@ function WorkingRow({ agent, named }: { agent: Agent; named: boolean }) {
           {formatElapsed(elapsed)}
         </span>
       )}
+      {agent.activity.state === "working" && <StopButton agent={agent} />}
     </div>
+  )
+}
+
+/** "Stop" beside a working agent: ends what it's doing right now. */
+function StopButton({ agent }: { agent: Agent }) {
+  const stop = useStopAgent(agent.id)
+  const stopping = stop.isPending || agent.activity.label === "stopping"
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="xs"
+            className="rounded-full text-muted-foreground"
+            disabled={stopping}
+            aria-label={`Stop ${agent.name}`}
+            onClick={() => stop.mutate()}
+          />
+        }
+      >
+        <SquareIcon className="fill-current" aria-hidden="true" />
+        Stop
+      </TooltipTrigger>
+      <TooltipContent>Stop what {agent.name} is doing now</TooltipContent>
+    </Tooltip>
   )
 }
 

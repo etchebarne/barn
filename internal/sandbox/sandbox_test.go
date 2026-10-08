@@ -3,6 +3,7 @@ package sandbox
 import (
 	"bufio"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,6 +66,19 @@ func TestSandbox(t *testing.T) {
 	alive := `for p in /proc/[0-9]*; do tr '\0' ' ' < $p/cmdline 2>/dev/null; echo; done | grep -c '^sleep 30' || true`
 	if res, _ := m.Exec(ctx, id, alive, "", nil, 10*time.Second, nil); strings.TrimSpace(res.Output) != "0" {
 		t.Fatalf("the timed-out command should be dead, found %q", res.Output)
+	}
+
+	// A cancelled command (the user pressed Stop) dies with what it started, inside the container.
+	cctx, cancel := context.WithCancel(ctx)
+	time.AfterFunc(2*time.Second, cancel)
+	start = time.Now()
+	_, err = m.Exec(cctx, id, "sleep 31 & sleep 31; wait", "", nil, time.Minute, nil)
+	if !errors.Is(err, context.Canceled) || time.Since(start) > 15*time.Second {
+		t.Fatalf("expected a prompt cancel, got err=%v after %s", err, time.Since(start))
+	}
+	alive = strings.ReplaceAll(alive, "sleep 30", "sleep 31")
+	if res, _ := m.Exec(ctx, id, alive, "", nil, 10*time.Second, nil); strings.TrimSpace(res.Output) != "0" {
+		t.Fatalf("the cancelled command should be dead, found %q", res.Output)
 	}
 
 	// Huge output is clipped in the middle.

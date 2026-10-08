@@ -18,6 +18,7 @@ import (
 	"github.com/etchebarne/openbot/internal/bus"
 	"github.com/etchebarne/openbot/internal/connectors"
 	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/skills"
 	"github.com/etchebarne/openbot/internal/store"
 	"github.com/etchebarne/openbot/internal/view"
 )
@@ -59,6 +60,10 @@ type Manager struct {
 	SecretBox *secrets.Box
 	// Timezone is the user's time zone for schedules and prompts (set before Start).
 	Timezone Timezone
+	// Search lets agents search the web; nil means no web_search tool.
+	Search Searcher
+	// Skills is the shared skill library; nil means no skills.
+	Skills *skills.Library
 	// Connectors gives agents tools and signals from external services; nil disables them.
 	Connectors *connectors.Manager
 	// Files stores attachments (nil: none).
@@ -98,6 +103,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Unlock()
 	agents, err := m.store.ListAgents(ctx)
 	if err != nil {
+		return err
+	}
+	if err := m.store.InterruptTaskRuns(ctx); err != nil {
 		return err
 	}
 	for _, a := range agents {

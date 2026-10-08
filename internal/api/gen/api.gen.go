@@ -52,6 +52,39 @@ func (e AgentActivityState) Valid() bool {
 	}
 }
 
+// Defines values for AgentBackupTrustMode.
+const (
+	AgentBackupTrustModeAsk     AgentBackupTrustMode = "ask"
+	AgentBackupTrustModeTrusted AgentBackupTrustMode = "trusted"
+)
+
+// Valid indicates whether the value is a known member of the AgentBackupTrustMode enum.
+func (e AgentBackupTrustMode) Valid() bool {
+	switch e {
+	case AgentBackupTrustModeAsk:
+		return true
+	case AgentBackupTrustModeTrusted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentsBackupFormat.
+const (
+	OpenbotAgents AgentsBackupFormat = "openbot-agents"
+)
+
+// Valid indicates whether the value is a known member of the AgentsBackupFormat enum.
+func (e AgentsBackupFormat) Valid() bool {
+	switch e {
+	case OpenbotAgents:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatKind.
 const (
 	Dm    ChatKind = "dm"
@@ -153,25 +186,28 @@ func (e MessageEventKind) Valid() bool {
 
 // Defines values for MessageFailureReason.
 const (
-	InvalidKey    MessageFailureReason = "invalid_key"
-	ModelBlocked  MessageFailureReason = "model_blocked"
-	NoKey         MessageFailureReason = "no_key"
-	ProviderError MessageFailureReason = "provider_error"
-	TooManySteps  MessageFailureReason = "too_many_steps"
+	MessageFailureReasonInvalidKey    MessageFailureReason = "invalid_key"
+	MessageFailureReasonModelBlocked  MessageFailureReason = "model_blocked"
+	MessageFailureReasonNoKey         MessageFailureReason = "no_key"
+	MessageFailureReasonProviderError MessageFailureReason = "provider_error"
+	MessageFailureReasonStopped       MessageFailureReason = "stopped"
+	MessageFailureReasonTooManySteps  MessageFailureReason = "too_many_steps"
 )
 
 // Valid indicates whether the value is a known member of the MessageFailureReason enum.
 func (e MessageFailureReason) Valid() bool {
 	switch e {
-	case InvalidKey:
+	case MessageFailureReasonInvalidKey:
 		return true
-	case ModelBlocked:
+	case MessageFailureReasonModelBlocked:
 		return true
-	case NoKey:
+	case MessageFailureReasonNoKey:
 		return true
-	case ProviderError:
+	case MessageFailureReasonProviderError:
 		return true
-	case TooManySteps:
+	case MessageFailureReasonStopped:
+		return true
+	case MessageFailureReasonTooManySteps:
 		return true
 	default:
 		return false
@@ -246,22 +282,22 @@ func (e ProviderSettingsProvider) Valid() bool {
 
 // Defines values for SandboxStatus.
 const (
-	None        SandboxStatus = "none"
-	Running     SandboxStatus = "running"
-	Stopped     SandboxStatus = "stopped"
-	Unavailable SandboxStatus = "unavailable"
+	SandboxStatusNone        SandboxStatus = "none"
+	SandboxStatusRunning     SandboxStatus = "running"
+	SandboxStatusStopped     SandboxStatus = "stopped"
+	SandboxStatusUnavailable SandboxStatus = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the SandboxStatus enum.
 func (e SandboxStatus) Valid() bool {
 	switch e {
-	case None:
+	case SandboxStatusNone:
 		return true
-	case Running:
+	case SandboxStatusRunning:
 		return true
-	case Stopped:
+	case SandboxStatusStopped:
 		return true
-	case Unavailable:
+	case SandboxStatusUnavailable:
 		return true
 	default:
 		return false
@@ -270,19 +306,91 @@ func (e SandboxStatus) Valid() bool {
 
 // Defines values for TaskKind.
 const (
-	Cron   TaskKind = "cron"
-	Once   TaskKind = "once"
-	Signal TaskKind = "signal"
+	TaskKindCron   TaskKind = "cron"
+	TaskKindOnce   TaskKind = "once"
+	TaskKindSignal TaskKind = "signal"
 )
 
 // Valid indicates whether the value is a known member of the TaskKind enum.
 func (e TaskKind) Valid() bool {
 	switch e {
-	case Cron:
+	case TaskKindCron:
 		return true
-	case Once:
+	case TaskKindOnce:
 		return true
-	case Signal:
+	case TaskKindSignal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskBackupKind.
+const (
+	TaskBackupKindCron   TaskBackupKind = "cron"
+	TaskBackupKindOnce   TaskBackupKind = "once"
+	TaskBackupKindSignal TaskBackupKind = "signal"
+)
+
+// Valid indicates whether the value is a known member of the TaskBackupKind enum.
+func (e TaskBackupKind) Valid() bool {
+	switch e {
+	case TaskBackupKindCron:
+		return true
+	case TaskBackupKindOnce:
+		return true
+	case TaskBackupKindSignal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskRunOutcome.
+const (
+	TaskRunOutcomeActed     TaskRunOutcome = "acted"
+	TaskRunOutcomeFailed    TaskRunOutcome = "failed"
+	TaskRunOutcomeQuiet     TaskRunOutcome = "quiet"
+	TaskRunOutcomeRunning   TaskRunOutcome = "running"
+	TaskRunOutcomeStopped   TaskRunOutcome = "stopped"
+	TaskRunOutcomeUnchanged TaskRunOutcome = "unchanged"
+)
+
+// Valid indicates whether the value is a known member of the TaskRunOutcome enum.
+func (e TaskRunOutcome) Valid() bool {
+	switch e {
+	case TaskRunOutcomeActed:
+		return true
+	case TaskRunOutcomeFailed:
+		return true
+	case TaskRunOutcomeQuiet:
+		return true
+	case TaskRunOutcomeRunning:
+		return true
+	case TaskRunOutcomeStopped:
+		return true
+	case TaskRunOutcomeUnchanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskRunTrigger.
+const (
+	TaskRunTriggerManual   TaskRunTrigger = "manual"
+	TaskRunTriggerSchedule TaskRunTrigger = "schedule"
+	TaskRunTriggerSignal   TaskRunTrigger = "signal"
+)
+
+// Valid indicates whether the value is a known member of the TaskRunTrigger enum.
+func (e TaskRunTrigger) Valid() bool {
+	switch e {
+	case TaskRunTriggerManual:
+		return true
+	case TaskRunTriggerSchedule:
+		return true
+	case TaskRunTriggerSignal:
 		return true
 	default:
 		return false
@@ -457,6 +565,21 @@ func (e WsSidebarUpdatedType) Valid() bool {
 	}
 }
 
+// Defines values for WsTaskRunType.
+const (
+	WsTaskRunTypeTaskRun WsTaskRunType = "task.run"
+)
+
+// Valid indicates whether the value is a known member of the WsTaskRunType enum.
+func (e WsTaskRunType) Valid() bool {
+	switch e {
+	case WsTaskRunTypeTaskRun:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActionPreview defines model for ActionPreview.
 type ActionPreview struct {
 	// AppName The connection's name
@@ -518,6 +641,25 @@ type AgentActivity struct {
 // AgentActivityState defines model for AgentActivity.State.
 type AgentActivityState string
 
+// AgentBackup defines model for AgentBackup.
+type AgentBackup struct {
+	Admin         bool                 `json:"admin"`
+	Approvals     []ApprovalBackup     `json:"approvals"`
+	Connections   []ConnectionRef      `json:"connections"`
+	Instructions  string               `json:"instructions"`
+	Language      string               `json:"language"`
+	Memories      []string             `json:"memories"`
+	Model         string               `json:"model"`
+	Name          string               `json:"name"`
+	Notifications bool                 `json:"notifications"`
+	Personality   string               `json:"personality"`
+	Tasks         []TaskBackup         `json:"tasks"`
+	TrustMode     AgentBackupTrustMode `json:"trustMode"`
+}
+
+// AgentBackupTrustMode defines model for AgentBackup.TrustMode.
+type AgentBackupTrustMode string
+
 // AgentSecret A secret an agent has (never its value)
 type AgentSecret struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -541,6 +683,30 @@ type AgentUsage struct {
 
 	// ReasoningTokens Part of completionTokens
 	ReasoningTokens int `json:"reasoningTokens"`
+}
+
+// AgentsBackup defines model for AgentsBackup.
+type AgentsBackup struct {
+	Agents     []AgentBackup      `json:"agents"`
+	ExportedAt time.Time          `json:"exportedAt"`
+	Format     AgentsBackupFormat `json:"format"`
+
+	// Version 1
+	Version int `json:"version"`
+}
+
+// AgentsBackupFormat defines model for AgentsBackup.Format.
+type AgentsBackupFormat string
+
+// ApprovalBackup defines model for ApprovalBackup.
+type ApprovalBackup struct {
+	// Account The connection's name
+	Account *string `json:"account,omitempty"`
+
+	// Action tool:<name>, or connector:<tool> with the connection in account
+	Action string            `json:"action"`
+	Label  string            `json:"label"`
+	Match  map[string]string `json:"match"`
 }
 
 // Attachment defines model for Attachment.
@@ -647,6 +813,12 @@ type ConnectPromptRequest struct {
 
 	// Name Overrides the proposed name
 	Name *string `json:"name,omitempty"`
+}
+
+// ConnectionRef defines model for ConnectionRef.
+type ConnectionRef struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // Connector defines model for Connector.
@@ -817,6 +989,13 @@ type Memory struct {
 	Text      string    `json:"text"`
 }
 
+// MemoryHit defines model for MemoryHit.
+type MemoryHit struct {
+	AgentId string `json:"agentId"`
+	Id      string `json:"id"`
+	Text    string `json:"text"`
+}
+
 // MemoryRequest defines model for MemoryRequest.
 type MemoryRequest struct {
 	Text string `json:"text"`
@@ -889,13 +1068,27 @@ type MessageFailure struct {
 
 	// Reason model_blocked: OpenCode refuses the agent's model (its provider trains on request
 	// data and the workspace's privacy settings forbid that). Offer to change the model.
+	// stopped: the user stopped the agent (a neutral notice, not an error).
 	Reason    MessageFailureReason `json:"reason"`
 	Retryable bool                 `json:"retryable"`
 }
 
 // MessageFailureReason model_blocked: OpenCode refuses the agent's model (its provider trains on request
 // data and the workspace's privacy settings forbid that). Offer to change the model.
+// stopped: the user stopped the agent (a neutral notice, not an error).
 type MessageFailureReason string
+
+// MessageHit defines model for MessageHit.
+type MessageHit struct {
+	Author    MessageAuthor `json:"author"`
+	ChatId    string        `json:"chatId"`
+	CreatedAt time.Time     `json:"createdAt"`
+	Id        string        `json:"id"`
+
+	// Snippet Plain text around the match; matched words sit between U+0002 and U+0003 (control
+	// characters, never in a message), and cut text is marked with "…".
+	Snippet string `json:"snippet"`
+}
 
 // MessagePage defines model for MessagePage.
 type MessagePage struct {
@@ -1086,6 +1279,21 @@ type Reaction struct {
 	Emoji string          `json:"emoji"`
 }
 
+// RestoreResult defines model for RestoreResult.
+type RestoreResult struct {
+	Agents []RestoredAgent `json:"agents"`
+}
+
+// RestoredAgent defines model for RestoredAgent.
+type RestoredAgent struct {
+	AgentId *string `json:"agentId,omitempty"`
+	Name    string  `json:"name"`
+
+	// Notes What was left out, and why
+	Notes    []string `json:"notes"`
+	Restored bool     `json:"restored"`
+}
+
 // Sandbox defines model for Sandbox.
 type Sandbox struct {
 	// SharedWith Other agents using the same computer
@@ -1099,6 +1307,26 @@ type Sandbox struct {
 // SandboxStatus unavailable: Docker isn't set up on the server; none: not created yet (created on
 // first use)
 type SandboxStatus string
+
+// SaveSkillRequest defines model for SaveSkillRequest.
+type SaveSkillRequest struct {
+	Description  string `json:"description"`
+	Instructions string `json:"instructions"`
+}
+
+// Schedule defines model for Schedule.
+type Schedule struct {
+	Recent   []TaskRun      `json:"recent"`
+	Tasks    []Task         `json:"tasks"`
+	Upcoming []UpcomingRuns `json:"upcoming"`
+}
+
+// SearchResults defines model for SearchResults.
+type SearchResults struct {
+	Memories []MemoryHit  `json:"memories"`
+	Messages []MessageHit `json:"messages"`
+	Tasks    []Task       `json:"tasks"`
+}
 
 // SecretRequest defines model for SecretRequest.
 type SecretRequest struct {
@@ -1186,6 +1414,25 @@ type SignInResult struct {
 	Connector Connector `json:"connector"`
 }
 
+// Skill defines model for Skill.
+type Skill struct {
+	Description string `json:"description"`
+
+	// Files Other files in its folder, relative to it (getSkill only)
+	Files *[]string `json:"files,omitempty"`
+
+	// Instructions SKILL.md after the frontmatter (getSkill only)
+	Instructions *string `json:"instructions,omitempty"`
+	Name         string  `json:"name"`
+
+	// Path Its folder as agents see it, e.g. /shared/skills/weekly-report
+	Path string `json:"path"`
+
+	// Problem Why the folder isn't a usable skill, if it isn't
+	Problem   *string   `json:"problem,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 // StandingApproval defines model for StandingApproval.
 type StandingApproval struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -1248,9 +1495,68 @@ type Task struct {
 // TaskKind defines model for Task.Kind.
 type TaskKind string
 
+// TaskBackup defines model for TaskBackup.
+type TaskBackup struct {
+	At      *time.Time        `json:"at,omitempty"`
+	Check   *string           `json:"check,omitempty"`
+	Cron    *string           `json:"cron,omitempty"`
+	Enabled bool              `json:"enabled"`
+	Kind    TaskBackupKind    `json:"kind"`
+	Name    string            `json:"name"`
+	Purpose string            `json:"purpose"`
+	Signal  *TaskBackupSignal `json:"signal,omitempty"`
+}
+
+// TaskBackupKind defines model for TaskBackup.Kind.
+type TaskBackupKind string
+
+// TaskBackupSignal defines model for TaskBackupSignal.
+type TaskBackupSignal struct {
+	// Account The connection's name
+	Account string            `json:"account"`
+	Match   map[string]string `json:"match"`
+	Type    string            `json:"type"`
+}
+
+// TaskRun defines model for TaskRun.
+type TaskRun struct {
+	AgentId    string     `json:"agentId"`
+	Detail     string     `json:"detail"`
+	FinishedAt *time.Time `json:"finishedAt"`
+	Id         string     `json:"id"`
+
+	// Outcome quiet: ran and found nothing worth doing; acted: did something others can see (detail
+	// lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+	// failed: detail says why; stopped: the user stopped it.
+	Outcome   TaskRunOutcome `json:"outcome"`
+	StartedAt time.Time      `json:"startedAt"`
+	TaskId    string         `json:"taskId"`
+
+	// Trigger What started it: the schedule, an app event, or the user (Run now)
+	Trigger TaskRunTrigger `json:"trigger"`
+}
+
+// TaskRunOutcome quiet: ran and found nothing worth doing; acted: did something others can see (detail
+// lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+// failed: detail says why; stopped: the user stopped it.
+type TaskRunOutcome string
+
+// TaskRunTrigger What started it: the schedule, an app event, or the user (Run now)
+type TaskRunTrigger string
+
 // ToggleReactionRequest defines model for ToggleReactionRequest.
 type ToggleReactionRequest struct {
 	Emoji string `json:"emoji"`
+}
+
+// UpcomingRuns defines model for UpcomingRuns.
+type UpcomingRuns struct {
+	// More Runs in the window beyond those listed
+	More   int    `json:"more"`
+	TaskId string `json:"taskId"`
+
+	// Times The next runs in the window, earliest first (at most 50)
+	Times []time.Time `json:"times"`
 }
 
 // UpdateAgentRequest defines model for UpdateAgentRequest.
@@ -1455,6 +1761,15 @@ type WsSidebarUpdated struct {
 // WsSidebarUpdatedType defines model for WsSidebarUpdated.Type.
 type WsSidebarUpdatedType string
 
+// WsTaskRun A task run started or finished
+type WsTaskRun struct {
+	Run  TaskRun       `json:"run"`
+	Type WsTaskRunType `json:"type"`
+}
+
+// WsTaskRunType defines model for WsTaskRun.Type.
+type WsTaskRunType string
+
 // ChatId defines model for ChatId.
 type ChatId = string
 
@@ -1513,6 +1828,17 @@ type ListMessagesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetScheduleParams defines parameters for GetSchedule.
+type GetScheduleParams struct {
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
+}
+
+// SearchParams defines parameters for Search.
+type SearchParams struct {
+	Q     string `form:"q" json:"q"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // GetUsageParams defines parameters for GetUsage.
 type GetUsageParams struct {
 	// Days How many days back, including today, in the user's time zone
@@ -1545,6 +1871,9 @@ type LoginJSONRequestBody = Credentials
 
 // SetupAccountJSONRequestBody defines body for SetupAccount for application/json ContentType.
 type SetupAccountJSONRequestBody = Credentials
+
+// RestoreAgentsJSONRequestBody defines body for RestoreAgents for application/json ContentType.
+type RestoreAgentsJSONRequestBody = AgentsBackup
 
 // UploadAttachmentMultipartRequestBody defines body for UploadAttachment for multipart/form-data ContentType.
 type UploadAttachmentMultipartRequestBody UploadAttachmentMultipartBody
@@ -1602,6 +1931,9 @@ type UpdateSidebarCategoryJSONRequestBody = UpdateSidebarCategoryRequest
 
 // SetSidebarLayoutJSONRequestBody defines body for SetSidebarLayout for application/json ContentType.
 type SetSidebarLayoutJSONRequestBody = SidebarLayout
+
+// SaveSkillJSONRequestBody defines body for SaveSkill for application/json ContentType.
+type SaveSkillJSONRequestBody = SaveSkillRequest
 
 // UpdateTaskJSONRequestBody defines body for UpdateTask for application/json ContentType.
 type UpdateTaskJSONRequestBody = UpdateTaskRequest
@@ -1946,6 +2278,40 @@ func (t *WsEvent) MergeWsChatCleared(v WsChatCleared) error {
 	return err
 }
 
+// AsWsTaskRun returns the union data inside the WsEvent as a WsTaskRun
+func (t WsEvent) AsWsTaskRun() (WsTaskRun, error) {
+	var body WsTaskRun
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsTaskRun overwrites any union data inside the WsEvent as the provided WsTaskRun
+func (t *WsEvent) FromWsTaskRun(v WsTaskRun) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"task.run"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsTaskRun performs a merge with any union data inside the WsEvent, using the provided WsTaskRun
+func (t *WsEvent) MergeWsTaskRun(v WsTaskRun) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"task.run"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -1980,6 +2346,8 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 		return t.AsWsMessageUpdated()
 	case "sidebar.updated":
 		return t.AsWsSidebarUpdated()
+	case "task.run":
+		return t.AsWsTaskRun()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
@@ -2064,6 +2432,9 @@ type ServerInterface interface {
 	// (PUT /agents/{agentId}/secrets/{name})
 	SetAgentSecret(w http.ResponseWriter, r *http.Request, agentId string, name string)
 
+	// (POST /agents/{agentId}/stop)
+	StopAgent(w http.ResponseWriter, r *http.Request, agentId string)
+
 	// (GET /agents/{agentId}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, agentId string)
 
@@ -2087,6 +2458,12 @@ type ServerInterface interface {
 
 	// (GET /auth/status)
 	GetAuthStatus(w http.ResponseWriter, r *http.Request)
+
+	// (GET /backup/agents)
+	ExportAgents(w http.ResponseWriter, r *http.Request)
+
+	// (POST /backup/agents)
+	RestoreAgents(w http.ResponseWriter, r *http.Request)
 
 	// (GET /chats)
 	ListChats(w http.ResponseWriter, r *http.Request)
@@ -2163,6 +2540,12 @@ type ServerInterface interface {
 	// (POST /push/subscriptions)
 	SubscribePush(w http.ResponseWriter, r *http.Request)
 
+	// (GET /schedule)
+	GetSchedule(w http.ResponseWriter, r *http.Request, params GetScheduleParams)
+
+	// (GET /search)
+	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
+
 	// (GET /settings/provider)
 	GetProviderSettings(w http.ResponseWriter, r *http.Request)
 
@@ -2187,11 +2570,29 @@ type ServerInterface interface {
 	// (PUT /sidebar/layout)
 	SetSidebarLayout(w http.ResponseWriter, r *http.Request)
 
+	// (GET /skills)
+	ListSkills(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /skills/{name})
+	DeleteSkill(w http.ResponseWriter, r *http.Request, name string)
+
+	// (GET /skills/{name})
+	GetSkill(w http.ResponseWriter, r *http.Request, name string)
+
+	// (PUT /skills/{name})
+	SaveSkill(w http.ResponseWriter, r *http.Request, name string)
+
 	// (DELETE /tasks/{taskId})
 	DeleteTask(w http.ResponseWriter, r *http.Request, taskId string)
 
 	// (PATCH /tasks/{taskId})
 	UpdateTask(w http.ResponseWriter, r *http.Request, taskId string)
+
+	// (POST /tasks/{taskId}/run)
+	RunTaskNow(w http.ResponseWriter, r *http.Request, taskId string)
+
+	// (GET /tasks/{taskId}/runs)
+	ListTaskRuns(w http.ResponseWriter, r *http.Request, taskId string)
 
 	// (GET /usage)
 	GetUsage(w http.ResponseWriter, r *http.Request, params GetUsageParams)
@@ -2917,6 +3318,32 @@ func (siw *ServerInterfaceWrapper) SetAgentSecret(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// StopAgent operation middleware
+func (siw *ServerInterfaceWrapper) StopAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
@@ -3100,6 +3527,34 @@ func (siw *ServerInterfaceWrapper) GetAuthStatus(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAuthStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportAgents operation middleware
+func (siw *ServerInterfaceWrapper) ExportAgents(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportAgents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreAgents operation middleware
+func (siw *ServerInterfaceWrapper) RestoreAgents(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreAgents(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3632,6 +4087,85 @@ func (siw *ServerInterfaceWrapper) SubscribePush(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetSchedule operation middleware
+func (siw *ServerInterfaceWrapper) GetSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetScheduleParams
+
+	// ------------- Optional query parameter "days" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "days", r.URL.Query(), &params.Days, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "days"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "days", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSchedule(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Search operation middleware
+func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Search(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProviderSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetProviderSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -3768,6 +4302,98 @@ func (siw *ServerInterfaceWrapper) SetSidebarLayout(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListSkills operation middleware
+func (siw *ServerInterfaceWrapper) ListSkills(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSkills(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSkill operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSkill(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSkill operation middleware
+func (siw *ServerInterfaceWrapper) GetSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSkill(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveSkill operation middleware
+func (siw *ServerInterfaceWrapper) SaveSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveSkill(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteTask operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTask(w http.ResponseWriter, r *http.Request) {
 
@@ -3811,6 +4437,58 @@ func (siw *ServerInterfaceWrapper) UpdateTask(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunTaskNow operation middleware
+func (siw *ServerInterfaceWrapper) RunTaskNow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunTaskNow(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTaskRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListTaskRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTaskRuns(w, r, taskId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4015,6 +4693,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.CreateTask)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/tasks/{taskId}", wrapper.DeleteTask)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/tasks/{taskId}", wrapper.UpdateTask)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tasks/{taskId}/runs", wrapper.ListTaskRuns)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tasks/{taskId}/run", wrapper.RunTaskNow)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedule", wrapper.GetSchedule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/search", wrapper.Search)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/skills", wrapper.ListSkills)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/skills/{name}", wrapper.DeleteSkill)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/skills/{name}", wrapper.GetSkill)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/skills/{name}", wrapper.SaveSkill)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/backup/agents", wrapper.ExportAgents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/backup/agents", wrapper.RestoreAgents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/push/subscriptions", wrapper.UnsubscribePush)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)
@@ -4028,6 +4716,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/connectors/{connectorId}", wrapper.UpdateConnector)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/stop", wrapper.StopAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/secret", wrapper.ProvideSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/usage", wrapper.GetAgentUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/usage", wrapper.GetUsage)

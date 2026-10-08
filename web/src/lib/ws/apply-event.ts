@@ -64,6 +64,12 @@ export function applyWsEvent(queryClient: QueryClient, event: WsEvent): ApplyRes
     case "chat.read":
       markChatReadInCache(queryClient, event.chatId, event.lastMessageId)
       return NOTHING_REMOVED
+    case "task.run":
+      // A task started or finished running: refresh the schedule (including that task's runs)
+      // and the agent's task list (its last run).
+      void queryClient.invalidateQueries({ queryKey: queryKeys.schedule })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(event.run.agentId) })
+      return NOTHING_REMOVED
     default:
       // Events this client doesn't know yet.
       return NOTHING_REMOVED

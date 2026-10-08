@@ -50,11 +50,13 @@ func (m *Manager) runCheck(ctx context.Context, t store.Task) string {
 	return out
 }
 
-// fireCheck runs a due task's check and wakes the agent only if its output changed.
-func (m *Manager) fireCheck(ctx context.Context, t store.Task, scheduled int64) {
+// fireCheck runs a due task's check and wakes the agent only if its output changed (or always,
+// when the user ran it with Run now).
+func (m *Manager) fireCheck(ctx context.Context, t store.Task, scheduled int64, manual bool) {
 	out := m.runCheck(ctx, t)
-	if t.CheckOutput != nil && *t.CheckOutput == out {
+	if t.CheckOutput != nil && *t.CheckOutput == out && !manual {
 		logger(t.AgentID).Info("task check unchanged", "task", t.Name)
+		m.recordRun(ctx, t, "schedule", "unchanged", "")
 		return
 	}
 	if err := m.store.SetTaskCheckOutput(ctx, t.ID, out); err != nil {
@@ -66,7 +68,7 @@ func (m *Manager) fireCheck(ctx context.Context, t store.Task, scheduled int64) 
 		before = *t.CheckOutput
 	}
 	if _, err := m.store.InsertEvent(ctx, t.AgentID, EventTask, map[string]any{
-		"taskId": t.ID, "scheduledFor": scheduled, "checkBefore": before, "checkAfter": out,
+		"taskId": t.ID, "scheduledFor": scheduled, "checkBefore": before, "checkAfter": out, "manual": manual,
 	}); err != nil {
 		logger(t.AgentID).Error("fire task", "task", t.ID, "err", err)
 		return

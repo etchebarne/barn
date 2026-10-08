@@ -9,6 +9,7 @@ import { isDesktop } from "@/lib/desktop"
 
 import { AccountSection } from "./account-section"
 import { AppearanceSection } from "./appearance-section"
+import { BackupSection } from "./backup-section"
 import { DesktopAppSection, DesktopNotificationsSection } from "./desktop-sections"
 import { NotificationsSection } from "./notifications-section"
 import { ProviderSection } from "./provider-section"
@@ -33,8 +34,8 @@ const PAGES: Record<SettingsPageId, { label: string; description: string; icon: 
     icon: CpuIcon,
   },
   account: {
-    label: "Account",
-    description: "Your sign-in to this openbot.",
+    label: "Account & data",
+    description: "Your sign-in, and backups of your agents' setup.",
     icon: CircleUserIcon,
   },
 }
@@ -64,7 +65,12 @@ function PageBody({
         </>
       )
     case "account":
-      return <AccountSection onLoggedOut={onLoggedOut} />
+      return (
+        <>
+          <BackupSection />
+          <AccountSection onLoggedOut={onLoggedOut} />
+        </>
+      )
     default:
       return null
   }

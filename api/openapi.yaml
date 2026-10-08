@@ -828,6 +828,186 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /tasks/{taskId}/runs:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listTaskRuns
+      tags: [agents]
+      description: The task's latest runs (up to 100), newest first.
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TaskRun" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /tasks/{taskId}/run:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: runTaskNow
+      tags: [agents]
+      description: |
+        Run the task now, outside its schedule (a test run). A task with a check runs its check and
+        wakes the agent whatever the output. Signal tasks can't: they need an event.
+      responses:
+        "202": { description: Started }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /schedule:
+    get:
+      operationId: getSchedule
+      tags: [agents]
+      description: |
+        Every agent's tasks, when the enabled ones run in the coming days, and the latest runs
+        (unchanged checks left out).
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 31, default: 7 }
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /search:
+    get:
+      operationId: search
+      tags: [chats]
+      description: |
+        Search messages in every chat (full text: every word must appear, as a prefix of a word),
+        agents' memories, and tasks. Best message matches first.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchResults" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /skills:
+    get:
+      operationId: listSkills
+      tags: [skills]
+      description: |
+        The skill library (/shared/skills), by name. Folders that aren't usable skills are listed
+        with the problem.
+      responses:
+        "200":
+          description: Skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Skill" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /skills/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getSkill
+      tags: [skills]
+      description: A skill with its instructions and files.
+      responses:
+        "200":
+          description: The skill
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: saveSkill
+      tags: [skills]
+      description: Create or rewrite a skill's SKILL.md (other files in its folder stay).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveSkillRequest" }
+      responses:
+        "200":
+          description: The saved skill
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteSkill
+      tags: [skills]
+      description: Delete a skill's folder and everything in it.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /backup/agents:
+    get:
+      operationId: exportAgents
+      tags: [settings]
+      description: |
+        Every agent's configuration as one file: settings, instructions and personality, memories,
+        tasks, the connections it may use (by name) and its standing approvals. No secrets,
+        messages, files or skills.
+      responses:
+        "200":
+          description: The backup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentsBackup" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: restoreAgents
+      tags: [settings]
+      description: |
+        Restore agents from a backup. Agents whose name is already taken are skipped, so nothing
+        is overwritten. Connections are matched by name; tasks and approvals that need a
+        connection this server doesn't have, and one-off tasks already past, are left out (the
+        result says which).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentsBackup" }
+      responses:
+        "200":
+          description: What was restored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RestoreResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /push/config:
     get:
       operationId: getPushConfig
@@ -1059,6 +1239,29 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409":
           description: The agent is busy and will pick up pending work on its own
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /agents/{agentId}/stop:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: stopAgent
+      tags: [agents]
+      description: |
+        Stop what the agent is doing right now (its turn or task run, with the model call,
+        helpers and commands in its computer). A "stopped" notice is posted in its DM. Messages and
+        tasks queued after it still run.
+      responses:
+        "202": { description: Stopping }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The agent isn't working
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1562,6 +1765,218 @@ components:
           format: date-time
           nullable: true
 
+    TaskRun:
+      type: object
+      required: [id, taskId, agentId, trigger, outcome, detail, startedAt, finishedAt]
+      properties:
+        id: { type: string }
+        taskId: { type: string }
+        agentId: { type: string }
+        trigger:
+          type: string
+          enum: [schedule, signal, manual]
+          description: "What started it: the schedule, an app event, or the user (Run now)"
+        outcome:
+          type: string
+          enum: [running, quiet, acted, unchanged, failed, stopped]
+          description: |
+            quiet: ran and found nothing worth doing; acted: did something others can see (detail
+            lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+            failed: detail says why; stopped: the user stopped it.
+        detail: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    UpcomingRuns:
+      type: object
+      required: [taskId, times, more]
+      properties:
+        taskId: { type: string }
+        times:
+          type: array
+          items: { type: string, format: date-time }
+          description: The next runs in the window, earliest first (at most 50)
+        more:
+          type: integer
+          description: Runs in the window beyond those listed
+
+    Schedule:
+      type: object
+      required: [tasks, upcoming, recent]
+      properties:
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+        upcoming:
+          type: array
+          items: { $ref: "#/components/schemas/UpcomingRuns" }
+        recent:
+          type: array
+          items: { $ref: "#/components/schemas/TaskRun" }
+
+    SearchResults:
+      type: object
+      required: [messages, memories, tasks]
+      properties:
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/MessageHit" }
+        memories:
+          type: array
+          items: { $ref: "#/components/schemas/MemoryHit" }
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+
+    MessageHit:
+      type: object
+      required: [id, chatId, author, createdAt, snippet]
+      properties:
+        id: { type: string }
+        chatId: { type: string }
+        author: { $ref: "#/components/schemas/MessageAuthor" }
+        createdAt: { type: string, format: date-time }
+        snippet:
+          type: string
+          description: |
+            Plain text around the match; matched words sit between U+0002 and U+0003 (control
+            characters, never in a message), and cut text is marked with "…".
+
+    MemoryHit:
+      type: object
+      required: [id, agentId, text]
+      properties:
+        id: { type: string }
+        agentId: { type: string }
+        text: { type: string }
+
+    Skill:
+      type: object
+      required: [name, description, path, updatedAt]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        path:
+          type: string
+          description: Its folder as agents see it, e.g. /shared/skills/weekly-report
+        instructions:
+          type: string
+          description: SKILL.md after the frontmatter (getSkill only)
+        files:
+          type: array
+          items: { type: string }
+          description: Other files in its folder, relative to it (getSkill only)
+        updatedAt: { type: string, format: date-time }
+        problem:
+          type: string
+          description: Why the folder isn't a usable skill, if it isn't
+
+    SaveSkillRequest:
+      type: object
+      required: [description, instructions]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 1024 }
+        instructions: { type: string, minLength: 1 }
+
+    AgentsBackup:
+      type: object
+      required: [format, version, exportedAt, agents]
+      properties:
+        format: { type: string, enum: [openbot-agents] }
+        version: { type: integer, description: "1" }
+        exportedAt: { type: string, format: date-time }
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/AgentBackup" }
+
+    AgentBackup:
+      type: object
+      required: [name, instructions, personality, model, language, notifications, trustMode, admin, memories, tasks, connections, approvals]
+      properties:
+        name: { type: string }
+        instructions: { type: string }
+        personality: { type: string }
+        model: { type: string }
+        language: { type: string }
+        notifications: { type: boolean }
+        trustMode: { type: string, enum: [ask, trusted] }
+        admin: { type: boolean }
+        memories:
+          type: array
+          items: { type: string }
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/TaskBackup" }
+        connections:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectionRef" }
+        approvals:
+          type: array
+          items: { $ref: "#/components/schemas/ApprovalBackup" }
+
+    TaskBackup:
+      type: object
+      required: [name, purpose, kind, enabled]
+      properties:
+        name: { type: string }
+        purpose: { type: string }
+        kind: { type: string, enum: [cron, once, signal] }
+        cron: { type: string }
+        at: { type: string, format: date-time }
+        check: { type: string }
+        enabled: { type: boolean }
+        signal: { $ref: "#/components/schemas/TaskBackupSignal" }
+
+    TaskBackupSignal:
+      type: object
+      required: [account, type, match]
+      properties:
+        account: { type: string, description: The connection's name }
+        type: { type: string }
+        match:
+          type: object
+          additionalProperties: { type: string }
+
+    ConnectionRef:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+
+    ApprovalBackup:
+      type: object
+      required: [action, label, match]
+      properties:
+        action:
+          type: string
+          description: "tool:<name>, or connector:<tool> with the connection in account"
+        account: { type: string, description: The connection's name, for connector actions }
+        label: { type: string }
+        match:
+          type: object
+          additionalProperties: { type: string }
+
+    RestoreResult:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/RestoredAgent" }
+
+    RestoredAgent:
+      type: object
+      required: [name, restored, notes]
+      properties:
+        name: { type: string }
+        agentId: { type: string }
+        restored: { type: boolean }
+        notes:
+          type: array
+          items: { type: string }
+          description: What was left out, and why
+
     ConnectorField:
       type: object
       required: [key, label, secret, optional, events]
@@ -2035,10 +2450,11 @@ components:
         agentId: { type: string }
         reason:
           type: string
-          enum: [no_key, invalid_key, model_blocked, provider_error, too_many_steps]
+          enum: [no_key, invalid_key, model_blocked, provider_error, too_many_steps, stopped]
           description: |
             model_blocked: OpenCode refuses the agent's model (its provider trains on request
             data and the workspace's privacy settings forbid that). Offer to change the model.
+            stopped: the user stopped the agent (a neutral notice, not an error).
         retryable: { type: boolean }
 
     ToggleReactionRequest:
@@ -2360,6 +2776,7 @@ components:
         - $ref: "#/components/schemas/WsAgentDeleted"
         - $ref: "#/components/schemas/WsSidebarUpdated"
         - $ref: "#/components/schemas/WsChatCleared"
+        - $ref: "#/components/schemas/WsTaskRun"
       discriminator:
         propertyName: type
         mapping:
@@ -2373,6 +2790,15 @@ components:
           agent.deleted: "#/components/schemas/WsAgentDeleted"
           sidebar.updated: "#/components/schemas/WsSidebarUpdated"
           chat.cleared: "#/components/schemas/WsChatCleared"
+          task.run: "#/components/schemas/WsTaskRun"
+
+    WsTaskRun:
+      type: object
+      required: [type, run]
+      description: A task run started or finished
+      properties:
+        type: { type: string, enum: [task.run] }
+        run: { $ref: "#/components/schemas/TaskRun" }
 
     WsMessageCreated:
       type: object

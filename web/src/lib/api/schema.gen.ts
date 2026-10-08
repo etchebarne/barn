@@ -613,6 +613,155 @@ export interface paths {
         patch: operations["updateTask"];
         trace?: never;
     };
+    "/tasks/{taskId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The task's latest runs (up to 100), newest first. */
+        get: operations["listTaskRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{taskId}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Run the task now, outside its schedule (a test run). A task with a check runs its check and
+         *     wakes the agent whatever the output. Signal tasks can't: they need an event.
+         */
+        post: operations["runTaskNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every agent's tasks, when the enabled ones run in the coming days, and the latest runs
+         *     (unchanged checks left out).
+         */
+        get: operations["getSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Search messages in every chat (full text: every word must appear, as a prefix of a word),
+         *     agents' memories, and tasks. Best message matches first.
+         */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The skill library (/shared/skills), by name. Folders that aren't usable skills are listed
+         *     with the problem.
+         */
+        get: operations["listSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /** @description A skill with its instructions and files. */
+        get: operations["getSkill"];
+        /** @description Create or rewrite a skill's SKILL.md (other files in its folder stay). */
+        put: operations["saveSkill"];
+        post?: never;
+        /** @description Delete a skill's folder and everything in it. */
+        delete: operations["deleteSkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every agent's configuration as one file: settings, instructions and personality, memories,
+         *     tasks, the connections it may use (by name) and its standing approvals. No secrets,
+         *     messages, files or skills.
+         */
+        get: operations["exportAgents"];
+        put?: never;
+        /**
+         * @description Restore agents from a backup. Agents whose name is already taken are skipped, so nothing
+         *     is overwritten. Connections are matched by name; tasks and approvals that need a
+         *     connection this server doesn't have, and one-off tasks already past, are left out (the
+         *     result says which).
+         */
+        post: operations["restoreAgents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/config": {
         parameters: {
             query?: never;
@@ -797,6 +946,29 @@ export interface paths {
          *     arrives as usual over the WebSocket.
          */
         post: operations["retryAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Stop what the agent is doing right now (its turn or task run, with the model call,
+         *     helpers and commands in its computer). A "stopped" notice is posted in its DM. Messages and
+         *     tasks queued after it still run.
+         */
+        post: operations["stopAgent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1150,6 +1322,148 @@ export interface components {
             /** Format: date-time */
             lastFiredAt: string | null;
         };
+        TaskRun: {
+            id: string;
+            taskId: string;
+            agentId: string;
+            /**
+             * @description What started it: the schedule, an app event, or the user (Run now)
+             * @enum {string}
+             */
+            trigger: "schedule" | "signal" | "manual";
+            /**
+             * @description quiet: ran and found nothing worth doing; acted: did something others can see (detail
+             *     lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+             *     failed: detail says why; stopped: the user stopped it.
+             * @enum {string}
+             */
+            outcome: "running" | "quiet" | "acted" | "unchanged" | "failed" | "stopped";
+            detail: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
+        };
+        UpcomingRuns: {
+            taskId: string;
+            /** @description The next runs in the window, earliest first (at most 50) */
+            times: string[];
+            /** @description Runs in the window beyond those listed */
+            more: number;
+        };
+        Schedule: {
+            tasks: components["schemas"]["Task"][];
+            upcoming: components["schemas"]["UpcomingRuns"][];
+            recent: components["schemas"]["TaskRun"][];
+        };
+        SearchResults: {
+            messages: components["schemas"]["MessageHit"][];
+            memories: components["schemas"]["MemoryHit"][];
+            tasks: components["schemas"]["Task"][];
+        };
+        MessageHit: {
+            id: string;
+            chatId: string;
+            author: components["schemas"]["MessageAuthor"];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description Plain text around the match; matched words sit between U+0002 and U+0003 (control
+             *     characters, never in a message), and cut text is marked with "…".
+             */
+            snippet: string;
+        };
+        MemoryHit: {
+            id: string;
+            agentId: string;
+            text: string;
+        };
+        Skill: {
+            name: string;
+            description: string;
+            /** @description Its folder as agents see it, e.g. /shared/skills/weekly-report */
+            path: string;
+            /** @description SKILL.md after the frontmatter (getSkill only) */
+            instructions?: string;
+            /** @description Other files in its folder, relative to it (getSkill only) */
+            files?: string[];
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Why the folder isn't a usable skill, if it isn't */
+            problem?: string;
+        };
+        SaveSkillRequest: {
+            description: string;
+            instructions: string;
+        };
+        AgentsBackup: {
+            /** @enum {string} */
+            format: "openbot-agents";
+            /** @description 1 */
+            version: number;
+            /** Format: date-time */
+            exportedAt: string;
+            agents: components["schemas"]["AgentBackup"][];
+        };
+        AgentBackup: {
+            name: string;
+            instructions: string;
+            personality: string;
+            model: string;
+            language: string;
+            notifications: boolean;
+            /** @enum {string} */
+            trustMode: "ask" | "trusted";
+            admin: boolean;
+            memories: string[];
+            tasks: components["schemas"]["TaskBackup"][];
+            connections: components["schemas"]["ConnectionRef"][];
+            approvals: components["schemas"]["ApprovalBackup"][];
+        };
+        TaskBackup: {
+            name: string;
+            purpose: string;
+            /** @enum {string} */
+            kind: "cron" | "once" | "signal";
+            cron?: string;
+            /** Format: date-time */
+            at?: string;
+            check?: string;
+            enabled: boolean;
+            signal?: components["schemas"]["TaskBackupSignal"];
+        };
+        TaskBackupSignal: {
+            /** @description The connection's name */
+            account: string;
+            type: string;
+            match: {
+                [key: string]: string;
+            };
+        };
+        ConnectionRef: {
+            name: string;
+            type: string;
+        };
+        ApprovalBackup: {
+            /** @description tool:<name>, or connector:<tool> with the connection in account */
+            action: string;
+            /** @description The connection's name */
+            account?: string;
+            label: string;
+            match: {
+                [key: string]: string;
+            };
+        };
+        RestoreResult: {
+            agents: components["schemas"]["RestoredAgent"][];
+        };
+        RestoredAgent: {
+            name: string;
+            agentId?: string;
+            restored: boolean;
+            /** @description What was left out, and why */
+            notes: string[];
+        };
         ConnectorField: {
             key: string;
             label: string;
@@ -1452,9 +1766,10 @@ export interface components {
             /**
              * @description model_blocked: OpenCode refuses the agent's model (its provider trains on request
              *     data and the workspace's privacy settings forbid that). Offer to change the model.
+             *     stopped: the user stopped the agent (a neutral notice, not an error).
              * @enum {string}
              */
-            reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps";
+            reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps" | "stopped";
             retryable: boolean;
         };
         ToggleReactionRequest: {
@@ -1658,7 +1973,16 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"] | components["schemas"]["WsChatCleared"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"] | components["schemas"]["WsChatCleared"] | components["schemas"]["WsTaskRun"];
+        /** @description A task run started or finished */
+        WsTaskRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "task.run";
+            run: components["schemas"]["TaskRun"];
+        };
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2873,6 +3197,243 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    listTaskRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    runTaskNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getSchedule: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schedule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
+    listSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Skills */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    getSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The skill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    saveSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description The saved skill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
+    deleteSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    exportAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The backup */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentsBackup"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    restoreAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentsBackup"];
+            };
+        };
+        responses: {
+            /** @description What was restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
     getPushConfig: {
         parameters: {
             query?: never;
@@ -3208,6 +3769,37 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             /** @description The agent is busy and will pick up pending work on its own */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    stopAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopping */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The agent isn't working */
             409: {
                 headers: {
                     [name: string]: unknown;

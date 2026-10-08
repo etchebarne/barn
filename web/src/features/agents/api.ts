@@ -53,6 +53,24 @@ export function useRetryAgent(agentId: string) {
   })
 }
 
+/**
+ * Stops what the agent is doing right now. A 409 means it already finished, which is what the
+ * user wanted anyway, so it isn't an error.
+ */
+export function useStopAgent(agentId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      try {
+        await unwrap(api.POST("/agents/{agentId}/stop", { params: { path: { agentId } } }))
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) return
+        throw error
+      }
+    },
+    onError: (error) => toast.error(`Couldn't stop: ${error.message}`),
+  })
+}
+
 export type Memory = Schemas["Memory"]
 
 /** An agent's saved memories. Refetched whenever the details sheet opens. */

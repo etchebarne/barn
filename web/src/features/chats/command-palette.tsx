@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import {
   BotIcon,
+  CalendarClockIcon,
   CpuIcon,
   FolderPlusIcon,
   LogOutIcon,
@@ -11,6 +12,7 @@ import {
   PlusIcon,
   SearchIcon,
   SettingsIcon,
+  SparklesIcon,
   SunIcon,
   UsersIcon,
 } from "lucide-react"
@@ -35,6 +37,8 @@ import { chatsQueryOptions } from "./api"
 import { useStartNew } from "./new-chat"
 import { isPaletteShortcut, paletteShortcutLabel, usePaletteStore } from "./palette-store"
 import { chatPreview, dmAgent } from "./preview"
+import { MIN_SEARCH_LENGTH, useSearch } from "./search"
+import { firstResultValue, SearchResultGroups } from "./search-results"
 import { useCategories } from "./sidebar-api"
 
 /** With no query, unread chats come first, then the rest by recent activity (the list order). */
@@ -76,7 +80,20 @@ export function CommandPalette() {
   const logout = useLogout(() => navigate({ to: "/login" }))
   const { creator, start } = useStartNew()
   const [query, setQuery] = useState("")
-  const searching = query.trim() !== ""
+  // Typing at all reveals agents' settings and computers; long enough also searches the server.
+  const typed = query.trim() !== ""
+  const search = useSearch(open ? query : "")
+  const searching = query.trim().length >= MIN_SEARCH_LENGTH
+  const chatsById = new Map(chats.map((c) => [c.id, c]))
+  // The highlighted item. cmdk picks the first match as you type, but results that arrive
+  // later don't get picked: fall back to the first one when nothing is selected.
+  const [selected, setSelected] = useState("")
+  const results = searching ? search.data : undefined
+  const highlighted = selected || (results && firstResultValue(results)) || ""
+  const hasResults =
+    searching &&
+    search.data !== undefined &&
+    search.data.messages.length + search.data.memories.length + search.data.tasks.length > 0
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -114,18 +131,23 @@ export function CommandPalette() {
       }}
       animated={false}
       title="Search openbot"
-      description="Jump to a chat, open an agent's settings, or run an action."
+      description="Search messages, memories and tasks, jump to a chat, open an agent's settings, or run an action."
       className="max-sm:top-0 max-sm:max-w-full max-sm:rounded-none sm:max-w-[40rem]"
     >
-      <Command>
+      <Command value={highlighted} onValueChange={setSelected}>
         <CommandInput
-          placeholder="Search chats, agents and actions…"
+          placeholder="Search messages, chats, agents…"
           value={query}
           onValueChange={setQuery}
           trailing={<Kbd>esc</Kbd>}
         />
         <CommandList>
-          <CommandEmpty>Nothing matches “{query}”.</CommandEmpty>
+          {/* cmdk counts only the items it filters itself, not the server's results. */}
+          {!hasResults && (
+            <CommandEmpty>
+              {searching && search.isFetching ? "Searching…" : `Nothing matches “${query}”.`}
+            </CommandEmpty>
+          )}
           {chats.length > 0 && (
             <CommandGroup heading="Chats">
               {paletteChatOrder(chats).map((chat) => {
@@ -166,7 +188,24 @@ export function CommandPalette() {
               })}
             </CommandGroup>
           )}
-          {searching && agents.size > 0 && (
+          {searching && search.data && (
+            <SearchResultGroups
+              results={search.data}
+              chats={chatsById}
+              agents={agents}
+              onMessage={(hit) =>
+                run(() => {
+                  usePaletteStore.getState().requestJump(hit.chatId, hit.id)
+                  void navigate({ to: "/chats/$chatId", params: { chatId: hit.chatId } })
+                })
+              }
+              onMemory={(agentId) => run(() => openAgentDetails(agentId))}
+              onTask={(taskId) =>
+                run(() => void navigate({ to: "/schedule", search: { task: taskId } }))
+              }
+            />
+          )}
+          {typed && agents.size > 0 && (
             <CommandGroup heading="Agents">
               {[...agents.values()].flatMap((agent) => [
                 <CommandItem
@@ -249,6 +288,22 @@ export function CommandPalette() {
             >
               <PlugIcon />
               Connectors
+            </CommandItem>
+            <CommandItem
+              value="action schedule"
+              keywords={["tasks", "runs", "calendar"]}
+              onSelect={() => run(() => void navigate({ to: "/schedule" }))}
+            >
+              <CalendarClockIcon />
+              Schedule
+            </CommandItem>
+            <CommandItem
+              value="action skills"
+              keywords={["instructions", "procedures"]}
+              onSelect={() => run(() => void navigate({ to: "/skills" }))}
+            >
+              <SparklesIcon />
+              Skills
             </CommandItem>
             <CommandItem
               value="action settings"

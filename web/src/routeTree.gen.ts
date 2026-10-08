@@ -14,7 +14,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppConnectorsRouteImport } from './routes/_app/connectors'
+import { Route as AppScheduleRouteImport } from './routes/_app/schedule'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppSkillsRouteImport } from './routes/_app/skills'
 import { Route as AppChatsChatIdRouteImport } from './routes/_app/chats.$chatId'
 import { Route as AppAgentsAgentIdComputerRouteImport } from './routes/_app/agents.$agentId.computer'
 
@@ -42,9 +44,19 @@ const AppConnectorsRoute = AppConnectorsRouteImport.update({
   path: '/connectors',
   getParentRoute: () => AppRoute,
 } as any)
+const AppScheduleRoute = AppScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSkillsRoute = AppSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
   getParentRoute: () => AppRoute,
 } as any)
 const AppChatsChatIdRoute = AppChatsChatIdRouteImport.update({
@@ -64,7 +76,9 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/connectors': typeof AppConnectorsRoute
+  '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
+  '/skills': typeof AppSkillsRoute
   '/chats/$chatId': typeof AppChatsChatIdRoute
   '/agents/$agentId/computer': typeof AppAgentsAgentIdComputerRoute
 }
@@ -72,7 +86,9 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/connectors': typeof AppConnectorsRoute
+  '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
+  '/skills': typeof AppSkillsRoute
   '/': typeof AppIndexRoute
   '/chats/$chatId': typeof AppChatsChatIdRoute
   '/agents/$agentId/computer': typeof AppAgentsAgentIdComputerRoute
@@ -83,7 +99,9 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/_app/connectors': typeof AppConnectorsRoute
+  '/_app/schedule': typeof AppScheduleRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/skills': typeof AppSkillsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/chats/$chatId': typeof AppChatsChatIdRoute
   '/_app/agents/$agentId/computer': typeof AppAgentsAgentIdComputerRoute
@@ -95,7 +113,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/connectors'
+    | '/schedule'
     | '/settings'
+    | '/skills'
     | '/chats/$chatId'
     | '/agents/$agentId/computer'
   fileRoutesByTo: FileRoutesByTo
@@ -103,7 +123,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/connectors'
+    | '/schedule'
     | '/settings'
+    | '/skills'
     | '/'
     | '/chats/$chatId'
     | '/agents/$agentId/computer'
@@ -113,7 +135,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/_app/connectors'
+    | '/_app/schedule'
     | '/_app/settings'
+    | '/_app/skills'
     | '/_app/'
     | '/_app/chats/$chatId'
     | '/_app/agents/$agentId/computer'
@@ -162,11 +186,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConnectorsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/schedule': {
+      id: '/_app/schedule'
+      path: '/schedule'
+      fullPath: '/schedule'
+      preLoaderRoute: typeof AppScheduleRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/skills': {
+      id: '/_app/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof AppSkillsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/chats/$chatId': {
@@ -188,7 +226,9 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppConnectorsRoute: typeof AppConnectorsRoute
+  AppScheduleRoute: typeof AppScheduleRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppSkillsRoute: typeof AppSkillsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppChatsChatIdRoute: typeof AppChatsChatIdRoute
   AppAgentsAgentIdComputerRoute: typeof AppAgentsAgentIdComputerRoute
@@ -196,7 +236,9 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppConnectorsRoute: AppConnectorsRoute,
+  AppScheduleRoute: AppScheduleRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppSkillsRoute: AppSkillsRoute,
   AppIndexRoute: AppIndexRoute,
   AppChatsChatIdRoute: AppChatsChatIdRoute,
   AppAgentsAgentIdComputerRoute: AppAgentsAgentIdComputerRoute,

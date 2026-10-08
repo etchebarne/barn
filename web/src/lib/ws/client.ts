@@ -27,18 +27,21 @@ export function defaultWsUrl(
   return `${protocol}//${location.host}/api/ws`
 }
 
-const KNOWN_EVENTS = new Set([
-  "message.created",
-  "message.updated",
-  "agent.activity",
-  "agent.created",
-  "agent.updated",
-  "agent.deleted",
-  "chat.created",
-  "chat.read",
-  "chat.cleared",
-  "sidebar.updated",
-])
+// Every event type in the API spec: typing it as a record makes a new one a compile error here
+// until it's listed.
+const KNOWN_EVENTS: Record<WsEvent["type"], true> = {
+  "message.created": true,
+  "message.updated": true,
+  "agent.activity": true,
+  "agent.created": true,
+  "agent.updated": true,
+  "agent.deleted": true,
+  "chat.created": true,
+  "chat.read": true,
+  "chat.cleared": true,
+  "sidebar.updated": true,
+  "task.run": true,
+}
 
 export function parseWsEvent(data: unknown): WsEvent | null {
   if (typeof data !== "string") return null
@@ -49,7 +52,7 @@ export function parseWsEvent(data: unknown): WsEvent | null {
       typeof parsed === "object" &&
       "type" in parsed &&
       typeof parsed.type === "string" &&
-      KNOWN_EVENTS.has(parsed.type)
+      Object.hasOwn(KNOWN_EVENTS, parsed.type)
     ) {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- discriminator checked above
       return parsed as WsEvent

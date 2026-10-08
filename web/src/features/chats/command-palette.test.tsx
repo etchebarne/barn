@@ -25,8 +25,9 @@ const chats: Chat[] = [
   makeChat({ id: "grok", name: "Grok Bot" }),
 ]
 
-async function renderPalette() {
+async function renderPalette(seed?: (client: QueryClient) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
+  seed?.(client)
   client.setQueryData(queryKeys.chats, chats)
   client.setQueryData(queryKeys.sidebarCategories, [
     { id: "casino", name: "casino", collapsed: false },
@@ -53,7 +54,7 @@ async function renderPalette() {
   return router
 }
 
-afterEach(() => usePaletteStore.setState({ open: false, newCategoryRequest: 0 }))
+afterEach(() => usePaletteStore.setState({ open: false, newCategoryRequest: 0, jump: null }))
 
 describe("command palette helpers", () => {
   it("recognises Ctrl+K and ⌘+K, and labels the shortcut per platform", () => {
@@ -112,5 +113,35 @@ describe("command palette", () => {
     await userEvent.click(screen.getByRole("button", { name: "Search" }))
     await userEvent.click(await screen.findByRole("option", { name: /^Settings/ }))
     expect(router.state.location.pathname).toBe("/settings")
+  })
+})
+
+describe("search in the palette", () => {
+  it("shows matching messages and jumps to the one picked", async () => {
+    const router = await renderPalette((client) =>
+      client.setQueryData(["search", "deploy"], {
+        messages: [
+          {
+            id: "m1",
+            chatId: "grok",
+            author: { kind: "agent", agentId: "agent-1" },
+            createdAt: new Date().toISOString(),
+            snippet: "the \u0002deploy\u0003 failed",
+          },
+        ],
+        memories: [],
+        tasks: [],
+      }),
+    )
+    await userEvent.keyboard("{Control>}k{/Control}")
+    await userEvent.type(await screen.findByRole("combobox"), "deploy")
+    const group = await screen.findByRole("group", { name: "Messages" })
+    expect(within(group).getByText("deploy").tagName).toBe("MARK")
+    expect(within(group).getByText(/Tracker in Grok Bot/)).toBeVisible()
+    expect(screen.queryByText("Nothing found.")).not.toBeInTheDocument()
+    // The first result is selected once it arrives, so Enter opens it.
+    await userEvent.keyboard("{Enter}")
+    expect(router.state.location.pathname).toBe("/chats/grok")
+    expect(usePaletteStore.getState().jump).toEqual({ chatId: "grok", messageId: "m1" })
   })
 })
