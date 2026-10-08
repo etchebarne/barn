@@ -38,6 +38,19 @@ Uninstall (keeps your data unless you add `--purge`):
 curl -fsSL https://raw.githubusercontent.com/etchebarne/openbot/main/scripts/uninstall.sh | bash
 ```
 
+## Desktop app
+
+Download the app for your computer from the [latest release](https://github.com/etchebarne/openbot/releases/latest)
+(Linux: AppImage, .deb or .rpm; Windows: installer; macOS: .dmg). On first launch, enter the
+address you open openbot at in your browser (e.g. `http://100.x.y.z:8080` over Tailscale).
+
+It's the same app as in the browser, plus native notifications, an unread badge, and a tray
+icon so it keeps running (and notifying) when you close the window. It tells you when a new
+version is out.
+
+The macOS build isn't signed yet: after moving it to Applications, run
+`xattr -cr /Applications/openbot.app` once, or macOS will say it's damaged.
+
 ## Development
 
 Requires Go 1.26+, Node 22+ and pnpm 10.
@@ -61,6 +74,12 @@ Open http://localhost:5173. The Vite dev server proxies `/api` (including the We
 `openbotd` on `127.0.0.1:8080`. First run walks you through creating your account, connecting
 OpenCode Go and creating your first agent.
 
+To try the desktop app against it (on first launch, enter `http://localhost:5173`):
+
+```bash
+pnpm --filter @openbot/desktop dev
+```
+
 ### Checks
 
 ```bash
@@ -80,4 +99,5 @@ go generate ./internal/api/gen/ && pnpm gen:api
 
 Push a `v*` tag. The release workflow builds `openbotd` with the web app embedded for
 linux/amd64 and linux/arm64 (`scripts/build-release.sh`) and publishes the archives and
-checksums that the installer downloads.
+checksums that the installer downloads, then builds the desktop app on Linux, Windows and
+macOS (`desktop/`, electron-builder) and attaches it to the same release.

@@ -1,2 +1,10 @@
 packages:
   - web
+  - desktop
+
+onlyBuiltDependencies:
+  - electron
+  - esbuild
+
+ignoredBuiltDependencies:
+  - electron-winstaller

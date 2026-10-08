@@ -10,6 +10,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1" # the server build doesn't need Electron
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -28,3 +30,40 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" release/*.tar.gz release/checksums.txt \
             --title "$GITHUB_REF_NAME" --generate-notes
+
+  # The desktop app, for each OS, attached to the release created above.
+  desktop:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Set the version
+        shell: bash
+        run: cd desktop && npm pkg set version="${GITHUB_REF_NAME#v}"
+      - name: Install rpm tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q rpm
+      - name: Build
+        shell: bash
+        env:
+          # Not code-signed yet.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: cd desktop && pnpm dist
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(desktop/release/*.AppImage desktop/release/*.deb desktop/release/*.rpm desktop/release/*.exe desktop/release/*.dmg desktop/release/*.zip)
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber

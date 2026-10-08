@@ -1,0 +1,37 @@
+appId: net.etchebarne.openbot
+productName: openbot
+copyright: Copyright © Martin Etchebarne
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - "!dist/**/*.test.js"
+  - assets/**/*
+  - package.json
+artifactName: openbot-${version}-${os}-${arch}.${ext}
+linux:
+  target: [AppImage, deb, rpm]
+  category: Network
+  maintainer: Martin Etchebarne <martin@etchebarne.net>
+  synopsis: Your persistent AI agents, on the desktop
+  description: openbot for the desktop. Connects to your own openbot server.
+  executableName: openbot
+  syncDesktopName: true
+deb:
+  depends: [libnotify4, libxtst6, libnss3]
+win:
+  target: [nsis]
+nsis:
+  oneClick: true
+  perMachine: false
+  shortcutName: openbot
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.productivity
+  identity: null
+publish: null

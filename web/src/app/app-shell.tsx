@@ -12,6 +12,7 @@ import {
   trackNavigationInput,
 } from "@/lib/mobile-nav"
 
+import { useDesktopIntegration } from "./desktop"
 import { useRealtime } from "./realtime"
 import { useSyncTimezone } from "./timezone"
 
@@ -59,6 +60,7 @@ export function MobileShell() {
 export function AppShell() {
   useRealtime()
   useSyncTimezone()
+  useDesktopIntegration()
   const mobile = useIsMobile()
   return (
     <SidebarProvider className="h-svh overflow-hidden">

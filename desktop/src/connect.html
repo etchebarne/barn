@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <title>openbot</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #171717;
+        --muted: #737373;
+        --border: #e5e5e5;
+        --field: #ffffff;
+        --primary: #171717;
+        --on-primary: #fafafa;
+        --danger: #dc2626;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0a0a0a;
+          --fg: #fafafa;
+          --muted: #a3a3a3;
+          --border: #262626;
+          --field: #171717;
+          --primary: #e5e5e5;
+          --on-primary: #171717;
+          --danger: #f87171;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.5 system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      main {
+        width: 100%;
+        max-width: 360px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 600;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      .brand svg {
+        width: 28px;
+        height: 28px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      label {
+        font-weight: 500;
+      }
+      input {
+        height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--field);
+        color: var(--fg);
+        font: inherit;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      input:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--fg) 35%, transparent);
+        outline-offset: 1px;
+      }
+      button {
+        height: 36px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--primary);
+        color: var(--on-primary);
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active {
+        transform: scale(0.98);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .error {
+        color: var(--danger);
+        min-height: 1.5em;
+      }
+      footer {
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor">
+          <rect x="7" y="8.5" width="18" height="16" rx="5.5" stroke-width="2.6" />
+          <path d="M13 14.5v3M19 14.5v3" stroke-width="2.8" stroke-linecap="round" />
+        </svg>
+        openbot
+      </div>
+      <div>
+        <h1 id="title">Connect to your openbot</h1>
+        <p id="lead">Enter the address you open openbot at in your browser.</p>
+      </div>
+      <form id="form">
+        <label for="address">Server address</label>
+        <input
+          id="address"
+          name="address"
+          placeholder="http://100.64.0.1:8080"
+          autocomplete="url"
+          spellcheck="false"
+          autofocus
+        />
+        <div class="error" id="error" role="alert"></div>
+        <button id="submit" type="submit">Connect</button>
+      </form>
+      <footer id="version"></footer>
+    </main>
+    <script>
+      const form = document.getElementById("form")
+      const input = document.getElementById("address")
+      const error = document.getElementById("error")
+      const submit = document.getElementById("submit")
+      window.openbotConnect.info().then((info) => {
+        if (info.server) input.value = info.server
+        if (info.error) {
+          document.getElementById("title").textContent = "Can't reach your openbot"
+          document.getElementById("lead").textContent =
+            "Check that the server is running and this computer can reach it, then try again."
+          error.textContent = info.error
+          submit.textContent = "Try again"
+        }
+        document.getElementById("version").textContent = "openbot desktop " + info.version
+      })
+      input.addEventListener("input", () => {
+        error.textContent = ""
+        submit.textContent = "Connect"
+      })
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault()
+        submit.disabled = true
+        submit.textContent = "Connecting…"
+        const result = await window.openbotConnect.connect(input.value)
+        if (!result.ok) {
+          error.textContent = result.error
+          submit.disabled = false
+          submit.textContent = "Connect"
+        }
+      })
+    </script>
+  </body>
+</html>

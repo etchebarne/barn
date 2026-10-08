@@ -312,7 +312,18 @@ Messages in a group are visible to every participant; DMs are visible only to th
 - Theme: light / dark / system, **system by default**, switchable in settings and persisted
   per device.
 - **PWA** with Web Push for mobile (iOS requires adding to the Home Screen).
-- **Electron** shell loading the same app, with native notifications and tray icon.
+- **Electron** shell (`desktop/`) loading the user's server, with native notifications, an unread
+  badge and a tray icon:
+  - First launch asks for the server address and checks it (`GET /api/auth/status`). The window
+    only ever shows that origin (other links open in the browser), with context isolation,
+    sandboxed renderers and a permission allowlist. Plain-http servers (Tailscale) are treated as
+    secure contexts so clipboard and crypto APIs work.
+  - A tiny preload bridge (`window.openbotDesktop`): `notify`, `setUnread`, `onNavigate`,
+    `changeServer`. Web Push doesn't exist in Electron, so the web app notifies from its realtime
+    connection instead (agents with notifications on, unless that chat is open and focused).
+  - Closing keeps it running in the tray (configurable). It checks GitHub releases for updates and
+    links to the download; builds for Linux (AppImage, deb, rpm), Windows and macOS (unsigned
+    for now) are attached to each release.
 
 ### 10.2 Stack
 

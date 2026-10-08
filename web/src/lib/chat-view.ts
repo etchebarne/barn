@@ -20,3 +20,8 @@ export function isChatInView(chatId: string): boolean {
     document.visibilityState === "visible"
   )
 }
+
+/** The chat that's open, if any (visible or not). */
+export function openChatId(): string | null {
+  return current?.chatId ?? null
+}
