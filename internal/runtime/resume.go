@@ -87,11 +87,12 @@ func turnState(msgs []model.Message) (interrupted bool, missingResults []string)
 			if !answered[tc.ID] {
 				missingResults = append(missingResults, tc.ID)
 			}
-			if tc.Function.Name == toolAskUser {
-				asked = true
+			switch tc.Function.Name {
+			case toolAskUser, toolRequestSecret, toolConnectApp, toolDone:
+				asked = true // these end the turn
 			}
 		}
-		// Asking the user ends a turn, so a completed reply that asked isn't interrupted.
+		// Asking the user (or calling done) ends a turn, so a completed reply like that isn't interrupted.
 		if asked && len(missingResults) == 0 {
 			return false, nil
 		}

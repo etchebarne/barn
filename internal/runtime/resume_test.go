@@ -49,6 +49,8 @@ func TestTurnState(t *testing.T) {
 		{"asked, a later call cut off", []model.Message{user, calls(toolAskUser, toolSendMessage), result("a")}, true, []string{"b"}},
 		{"waiting for approval", []model.Message{user, calls("github__create_issue"), waiting("a", "waiting_for_approval")}, false, nil},
 		{"waiting on a connect card", []model.Message{user, calls(toolConnectApp), waiting("a", "waiting_for_user")}, false, nil},
+		{"ended with done", []model.Message{user, calls(toolSendMessage, toolDone), result("a"), result("b")}, false, nil},
+		{"asked for a secret", []model.Message{user, calls(toolRequestSecret), result("a")}, false, nil},
 	}
 	for _, c := range cases {
 		interrupted, missing := turnState(c.msgs)
