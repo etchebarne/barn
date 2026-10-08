@@ -98,3 +98,35 @@ export function useConnectPrompt(message: Message) {
     [message.id, message.chatId, queryClient],
   )
 }
+
+/**
+ * Provides the secret a "secret" prompt asks for. Like connecting, deliberately not a
+ * `useMutation` (mutation state would keep the value in the query client) and never
+ * optimistic: only the server's updated message, which has no value, goes in the cache.
+ */
+export function useProvideSecret(message: Message) {
+  const queryClient = useQueryClient()
+  return useCallback(
+    async (value: string) => {
+      try {
+        const updated = await unwrap(
+          api.POST("/messages/{messageId}/secret", {
+            params: { path: { messageId: message.id } },
+            body: { value },
+          }),
+        )
+        updateMessageInCache(queryClient, updated)
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.secrets(message.author.agentId ?? ""),
+        })
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.messages(message.chatId) })
+          return
+        }
+        throw error
+      }
+    },
+    [message.id, message.chatId, message.author.agentId, queryClient],
+  )
+}

@@ -18,7 +18,7 @@ import (
 // Sandboxer runs commands in agents' sandboxes (see package sandbox).
 type Sandboxer interface {
 	Available() bool
-	Exec(ctx context.Context, sandboxID, command, workdir string, stdin []byte, timeout time.Duration) (sandbox.Result, error)
+	Exec(ctx context.Context, sandboxID, command, workdir string, stdin []byte, timeout time.Duration, env map[string]string) (sandbox.Result, error)
 	Status(ctx context.Context, sandboxID string) string
 	Restart(ctx context.Context, sandboxID string) error
 	Remove(ctx context.Context, sandboxID string) error
@@ -140,7 +140,7 @@ func sandboxPath(p string) string {
 	return path.Clean(p)
 }
 
-func (l *loop) sandboxExec(ctx context.Context, agent store.Agent, command, workdir string, stdin []byte, timeout time.Duration) (sandbox.Result, error) {
+func (l *loop) sandboxExec(ctx context.Context, agent store.Agent, command, workdir string, stdin []byte, timeout time.Duration, env map[string]string) (sandbox.Result, error) {
 	if !l.m.sandboxesAvailable() {
 		return sandbox.Result{}, sandbox.ErrUnavailable
 	}
@@ -148,7 +148,7 @@ func (l *loop) sandboxExec(ctx context.Context, agent store.Agent, command, work
 	if err != nil {
 		return sandbox.Result{}, err
 	}
-	return l.m.Sandboxes.Exec(ctx, id, command, workdir, stdin, timeout)
+	return l.m.Sandboxes.Exec(ctx, id, command, workdir, stdin, timeout, env)
 }
 
 func commandResult(res sandbox.Result) string {
@@ -181,7 +181,11 @@ func (l *loop) runSandboxTool(ctx context.Context, agent store.Agent, name strin
 		if a.TimeoutSeconds > 0 {
 			timeout = min(time.Duration(a.TimeoutSeconds)*time.Second, maxCommandTimeout)
 		}
-		res, err := l.sandboxExec(ctx, agent, a.Command, sandboxPath(a.Workdir), nil, timeout)
+		env, err := l.secretEnv(ctx, agent)
+		if err != nil {
+			return toolError("couldn't load your secrets: %v", err), false
+		}
+		res, err := l.sandboxExec(ctx, agent, a.Command, sandboxPath(a.Workdir), nil, timeout, env)
 		if err != nil {
 			return toolError("%v", err), false
 		}
@@ -195,7 +199,7 @@ func (l *loop) runSandboxTool(ctx context.Context, agent store.Agent, name strin
 			return toolError("path is required"), false
 		}
 		p := sandboxPath(a.Path)
-		res, err := l.sandboxExec(ctx, agent, fmt.Sprintf("head -c %d -- %s", maxReadBytes, shellQuote(p)), "", nil, 30*time.Second)
+		res, err := l.sandboxExec(ctx, agent, fmt.Sprintf("head -c %d -- %s", maxReadBytes, shellQuote(p)), "", nil, 30*time.Second, nil)
 		if err != nil {
 			return toolError("%v", err), false
 		}
@@ -217,7 +221,7 @@ func (l *loop) runSandboxTool(ctx context.Context, agent store.Agent, name strin
 		}
 		p := sandboxPath(a.Path)
 		cmd := fmt.Sprintf("mkdir -p -- %s && cat > %s", shellQuote(path.Dir(p)), shellQuote(p))
-		res, err := l.sandboxExec(ctx, agent, cmd, "", []byte(a.Content), 30*time.Second)
+		res, err := l.sandboxExec(ctx, agent, cmd, "", []byte(a.Content), 30*time.Second, nil)
 		if err != nil {
 			return toolError("%v", err), false
 		}
@@ -232,7 +236,7 @@ func (l *loop) runSandboxTool(ctx context.Context, agent store.Agent, name strin
 		}
 		_ = json.Unmarshal(raw, &a)
 		p := sandboxPath(a.Path)
-		res, err := l.sandboxExec(ctx, agent, "ls -la --group-directories-first -- "+shellQuote(p), "", nil, 30*time.Second)
+		res, err := l.sandboxExec(ctx, agent, "ls -la --group-directories-first -- "+shellQuote(p), "", nil, 30*time.Second, nil)
 		if err != nil {
 			return toolError("%v", err), false
 		}

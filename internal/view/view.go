@@ -115,6 +115,9 @@ func prompt(p *store.Prompt) *gen.Prompt {
 		}
 		out.Answer = &a
 	}
+	if p.Secret != nil {
+		out.Secret = &gen.SecretRequest{Name: p.Secret.Name, Description: p.Secret.Description}
+	}
 	if c := p.Connection; c != nil {
 		pc := gen.PromptConnection{Type: c.Type, Name: c.Name, Config: c.Config, AgentIds: c.AgentIDs, SignIn: c.SignIn}
 		if pc.Config == nil {

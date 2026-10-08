@@ -1,6 +1,6 @@
 import { cn } from "cn"
 import { ChevronDownIcon } from "lucide-react"
-import { useEffect, useId, useRef, useState, type ComponentProps } from "react"
+import { useId, useRef, useState, type ComponentProps } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { useEscapeCancel } from "@/hooks/use-escape-cancel"
 
 import type { CreateTaskBody } from "./api"
 import {
@@ -169,21 +170,7 @@ export function TaskForm({
 
   // Escape anywhere in the form closes the form, not the sheet around it.
   const formRef = useRef<HTMLFormElement>(null)
-  const cancelRef = useRef(onCancel)
-  useEffect(() => {
-    cancelRef.current = onCancel
-  })
-  useEffect(() => {
-    const form = formRef.current
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return
-      event.preventDefault()
-      event.stopPropagation()
-      cancelRef.current()
-    }
-    form?.addEventListener("keydown", onKeyDown)
-    return () => form?.removeEventListener("keydown", onKeyDown)
-  }, [])
+  useEscapeCancel(formRef, onCancel)
 
   return (
     <form

@@ -218,7 +218,7 @@ func toolsFor(agent store.Agent, sandboxes bool) []model.Tool {
 	tools := []model.Tool{sendMessageTool, reactTool, doneTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool, allowWithoutAskingTool}
 	tools = append(tools, taskTools()...)
 	if sandboxes {
-		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool)
+		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool, requestSecretTool)
 	}
 	if agent.IsAdmin {
 		tools = append(tools, createAgentTool, deleteAgentTool, createGroupTool, updateGroupTool)
@@ -286,6 +286,8 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 	switch call.Function.Name {
 	case toolDone:
 		return toolOK(map[string]string{"note": "Turn ended."}), true
+	case toolRequestSecret:
+		return l.requestSecret(ctx, agent, args)
 	case toolAllowWithoutAsking:
 		return l.allowWithoutAsking(ctx, agent, args)
 	case toolSendMessage:

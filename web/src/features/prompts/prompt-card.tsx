@@ -16,7 +16,13 @@ import { agentsQueryOptions } from "@/lib/agents"
 import { ApiError, type Message } from "@/lib/api-client"
 
 import { ActionPreviewCard } from "./action-preview-card"
-import { ensureChatLoaded, useAnswerPrompt, useConnectPrompt, useDismissPrompt } from "./api"
+import {
+  ensureChatLoaded,
+  useAnswerPrompt,
+  useConnectPrompt,
+  useDismissPrompt,
+  useProvideSecret,
+} from "./api"
 import { DECLINE_CONNECT } from "./connect"
 import { ConnectCard } from "./connect-card"
 import {
@@ -33,6 +39,7 @@ import {
   type Prompt,
   type PromptAnswer,
 } from "./logic"
+import { DECLINE_SECRET, SecretCard } from "./secret-card"
 
 /*
  * Radii follow the nested rule: the bubble (radius-xl) pads the card by 0.5rem, so rows get
@@ -400,6 +407,37 @@ function ConnectPrompt({
   )
 }
 
+function SecretPrompt({
+  message,
+  prompt,
+  isLatest,
+  disabled,
+  onDecline,
+  onDismiss,
+}: {
+  message: Message
+  prompt: Prompt
+  isLatest: boolean
+  disabled: boolean
+  onDecline: () => void
+  onDismiss: () => void
+}) {
+  const { data: agents } = useQuery(agentsQueryOptions)
+  const provide = useProvideSecret(message)
+  const agentName = agents?.find((a) => a.id === message.author.agentId)?.name ?? "The agent"
+  return (
+    <SecretCard
+      prompt={prompt}
+      agentName={agentName}
+      isLatest={isLatest}
+      disabled={disabled}
+      onSave={provide}
+      onDecline={onDecline}
+      onDismiss={onDismiss}
+    />
+  )
+}
+
 /**
  * An agent's question with clickable answers. Pending: options (single answers on click, multi
  * toggles then submits), optional "type your own", or a text field. Answered: collapses to the
@@ -448,6 +486,26 @@ export function PromptCard({
           isLatest={isLatest}
           disabled={busy}
           onAnswer={onAnswer}
+          onDismiss={() => dismiss.mutate()}
+        />
+        {error && (
+          <p role="alert" className="px-1.5 text-xs text-destructive">
+            {error.message}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  if (prompt.kind === "secret") {
+    return (
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <SecretPrompt
+          message={message}
+          prompt={prompt}
+          isLatest={isLatest}
+          disabled={busy}
+          onDecline={() => onAnswer(DECLINE_SECRET)}
           onDismiss={() => dismiss.mutate()}
         />
         {error && (

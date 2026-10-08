@@ -76,6 +76,14 @@ type Prompt struct {
 	Connection *PendingConnection `json:"connection,omitempty"`
 	// Preview describes the action an approval prompt is about, for the card.
 	Preview *ActionPreview `json:"preview,omitempty"`
+	// Secret is what a secret prompt asks for. The value never goes in the prompt.
+	Secret *SecretRequest `json:"secret,omitempty"`
+}
+
+// SecretRequest is a secret an agent asked the user for.
+type SecretRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // ActionPreview is what an approval card shows: the app, what the action is, its arguments

@@ -21,6 +21,9 @@ type fakeSandbox struct {
 	stdin   []string
 	removed []string
 	files   map[string][]byte
+	env     []map[string]string
+	// exec, when set, answers commands (for tests that need specific output).
+	exec func(command string, env map[string]string) sandbox.Result
 }
 
 func (f *fakeSandbox) Available() bool                       { return true }
@@ -45,9 +48,13 @@ func (f *fakeSandbox) Remove(_ context.Context, id string) error {
 	f.removed = append(f.removed, id)
 	return nil
 }
-func (f *fakeSandbox) Exec(_ context.Context, id, command, workdir string, stdin []byte, timeout time.Duration) (sandbox.Result, error) {
+func (f *fakeSandbox) Exec(_ context.Context, id, command, workdir string, stdin []byte, timeout time.Duration, env map[string]string) (sandbox.Result, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.env = append(f.env, env)
+	if f.exec != nil {
+		return f.exec(command, env), nil
+	}
 	f.calls = append(f.calls, id+"|"+workdir+"|"+command+"|"+timeout.String())
 	f.stdin = append(f.stdin, string(stdin))
 	return sandbox.Result{Output: "ok\n"}, nil

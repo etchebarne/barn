@@ -75,6 +75,9 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	}
 	if !l.m.sandboxesAvailable() {
 		b.WriteString("- Not available on this server: running commands or code (sandboxes aren't set up). Don't promise that.\n")
+	} else if l.m.SecretBox != nil {
+		b.WriteString("- When you need a password, API key or token, ask with request_secret (a secure field), never in chat. If the user pastes one in chat anyway, use it, and suggest saving it as a secret instead.\n")
+		l.writeSecrets(ctx, &b, agent)
 	}
 	b.WriteString("- Use the apps the user connected for you (see Your connected apps); for others, they can connect them in Settings → Connectors.\n\n")
 	if err := l.writeComputer(ctx, &b, agent); err != nil {
@@ -280,6 +283,9 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 
 func renderAnswer(msg store.Message) string {
 	p := msg.Prompt
+	if p.Kind == "secret" && p.Secret != nil {
+		return renderSecretAnswer(msg)
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "<prompt_answer prompt_id=%q chat_id=%q question=%q>\n", msg.ID, msg.ChatID, p.Question)
 	if len(p.Answer.Selected) > 0 {

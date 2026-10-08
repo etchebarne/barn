@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/etchebarne/openbot/internal/secrets"
 	"regexp"
 	"strings"
 	"sync"
@@ -98,6 +99,11 @@ func setup(t *testing.T, responses ...func(model.Request) model.Message) fixture
 	}
 	llm := &fakeModel{responses: responses}
 	rt := New(st, bus.New(), llm)
+	box, err := secrets.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.SecretBox = box
 	if err := rt.Start(ctx); err != nil {
 		t.Fatal(err)
 	}

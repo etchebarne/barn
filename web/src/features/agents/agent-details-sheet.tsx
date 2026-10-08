@@ -23,6 +23,7 @@ import { useAgentsById, useUpdateAgent } from "./api"
 import { ComputerSection } from "./computer-section"
 import { useAgentDetailsStore } from "./details-store"
 import { MemoriesSection } from "./memories-section"
+import { SecretsSection } from "./secrets-section"
 import {
   DangerZone,
   InstructionsSection,
@@ -146,6 +147,7 @@ export function AgentDetailsSheet() {
               <MemoriesSection agent={shown} />
               <TasksSection agent={shown} />
               <ComputerSection agent={shown} onOpen={close} />
+              <SecretsSection agent={shown} />
               <AgentConnections agentId={shown.id} agentName={shown.name} onNavigate={close} />
               <DangerZone agent={shown} />
             </div>

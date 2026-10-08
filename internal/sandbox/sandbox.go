@@ -180,9 +180,10 @@ type Result struct {
 // maxOutput is how much command output goes back to the agent (head and tail are kept).
 const maxOutput = 16 << 10
 
-// Exec runs a shell command in the sandbox. The timeout is enforced inside the container, so
-// a runaway command is killed rather than left running.
-func (m *Manager) Exec(ctx context.Context, sandboxID, command, workdir string, stdin []byte, timeout time.Duration) (Result, error) {
+// Exec runs a shell command in the sandbox, with env set. The timeout is enforced inside the
+// container, so a runaway command is killed rather than left running. Values in env are passed
+// through the docker client's environment, so they don't show up in the host's process list.
+func (m *Manager) Exec(ctx context.Context, sandboxID, command, workdir string, stdin []byte, timeout time.Duration, env map[string]string) (Result, error) {
 	if err := m.Ensure(ctx, sandboxID); err != nil {
 		return Result{}, err
 	}
@@ -194,12 +195,18 @@ func (m *Manager) Exec(ctx context.Context, sandboxID, command, workdir string, 
 	if stdin != nil {
 		args = append(args, "-i")
 	}
+	cmdEnv := os.Environ()
+	for k, v := range env {
+		args = append(args, "-e", k)
+		cmdEnv = append(cmdEnv, k+"="+v)
+	}
 	args = append(args, "-w", workdir, containerName(sandboxID),
 		"timeout", "--signal=KILL", strconv.Itoa(secs), "bash", "-lc", command)
 	// Leave the in-container timeout room to fire first.
 	cctx, cancel := context.WithTimeout(ctx, timeout+15*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, m.docker, args...)
+	cmd.Env = cmdEnv
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}

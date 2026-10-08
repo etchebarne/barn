@@ -273,6 +273,13 @@ Messages in a group are visible to every participant; DMs are visible only to th
   agents are told.
 - The installer installs Docker and adds the `openbot` user to the `docker` group (root-equivalent on
   the host; `--no-docker` skips it).
+- **Secrets.** Agents ask for API keys and tokens with `request_secret` (name like
+  `GITHUB_TOKEN`, plus what it is): a card with a password field in their DM, so secrets never go
+  through chat. The value is sealed with the server key in `agent_secrets` (the prompt only
+  records "provided"), passed to `run_command` as an environment variable (through the docker
+  client's environment, not its arguments), and masked as `[secret NAME]` in every tool result,
+  so the model never sees it. The system prompt lists names only; agent settings list, replace
+  and delete them.
 - **The user's own access ("Computer").** The app opens an agent's sandbox directly: a file
   browser (list, preview, edit, upload, download, move, delete, up to 200 MB per file) and a real
   terminal (`docker exec -it … bash -l` on a host pseudo-terminal, streamed over a same-origin

@@ -183,6 +183,7 @@ const (
 	Approval PromptKind = "approval"
 	Connect  PromptKind = "connect"
 	Multi    PromptKind = "multi"
+	Secret   PromptKind = "secret"
 	Single   PromptKind = "single"
 	Text     PromptKind = "text"
 )
@@ -195,6 +196,8 @@ func (e PromptKind) Valid() bool {
 	case Connect:
 		return true
 	case Multi:
+		return true
+	case Secret:
 		return true
 	case Single:
 		return true
@@ -511,6 +514,14 @@ type AgentActivity struct {
 
 // AgentActivityState defines model for AgentActivity.State.
 type AgentActivityState string
+
+// AgentSecret A secret an agent has (never its value)
+type AgentSecret struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+	Name        string    `json:"name"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
 
 // Attachment defines model for Attachment.
 type Attachment struct {
@@ -900,21 +911,30 @@ type Prompt struct {
 	// agent wants to do something that needs the user's OK (options: Approve, Decline, and
 	// sometimes a third, "Always allow", which approves and stops asking for that action);
 	// connect = the agent proposes connecting an app (see connection; options: Connect,
-	// Decline; connect with POST /messages/{messageId}/connect)
+	// Decline; connect with POST /messages/{messageId}/connect); secret = the agent asks for
+	// a secret (see secret; options: Save, Not now; provide it with
+	// POST /messages/{messageId}/secret, decline by answering option 1). Once provided, the
+	// answer selects option 0; the value is never part of the message.
 	Kind    PromptKind     `json:"kind"`
 	Options []PromptOption `json:"options"`
 
 	// Preview What an approval prompt would do, for the card (approval prompts only)
 	Preview  *ActionPreview `json:"preview,omitempty"`
 	Question string         `json:"question"`
-	Status   PromptStatus   `json:"status"`
+
+	// Secret The secret asked for (secret prompts only)
+	Secret *SecretRequest `json:"secret,omitempty"`
+	Status PromptStatus   `json:"status"`
 }
 
 // PromptKind single = pick one; multi = pick any number; text = free-text answer; approval = the
 // agent wants to do something that needs the user's OK (options: Approve, Decline, and
 // sometimes a third, "Always allow", which approves and stops asking for that action);
 // connect = the agent proposes connecting an app (see connection; options: Connect,
-// Decline; connect with POST /messages/{messageId}/connect)
+// Decline; connect with POST /messages/{messageId}/connect); secret = the agent asks for
+// a secret (see secret; options: Save, Not now; provide it with
+// POST /messages/{messageId}/secret, decline by answering option 1). Once provided, the
+// answer selects option 0; the value is never part of the message.
 type PromptKind string
 
 // PromptStatus defines model for Prompt.Status.
@@ -1021,6 +1041,21 @@ type Sandbox struct {
 // first use)
 type SandboxStatus string
 
+// SecretRequest defines model for SecretRequest.
+type SecretRequest struct {
+	// Description What it is and where to get it
+	Description string `json:"description"`
+
+	// Name Environment variable name, e.g. "GITHUB_TOKEN"
+	Name string `json:"name"`
+}
+
+// SecretValue defines model for SecretValue.
+type SecretValue struct {
+	// Value The secret (surrounding whitespace is trimmed)
+	Value string `json:"value"`
+}
+
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
 	// AttachmentIds Uploaded attachments (from uploadAttachment in this chat) to send with it
@@ -1034,6 +1069,13 @@ type SendMessageRequest struct {
 
 	// ReplyToId An earlier message in this chat to reply to
 	ReplyToId *string `json:"replyToId,omitempty"`
+}
+
+// SetSecretRequest defines model for SetSecretRequest.
+type SetSecretRequest struct {
+	// Description Kept when omitted or empty
+	Description *string `json:"description,omitempty"`
+	Value       string  `json:"value"`
 }
 
 // SetTimezoneRequest defines model for SetTimezoneRequest.
@@ -1374,6 +1416,9 @@ type CreateSandboxFolderJSONRequestBody = PathRequest
 // MoveSandboxFileJSONRequestBody defines body for MoveSandboxFile for application/json ContentType.
 type MoveSandboxFileJSONRequestBody = MoveRequest
 
+// SetAgentSecretJSONRequestBody defines body for SetAgentSecret for application/json ContentType.
+type SetAgentSecretJSONRequestBody = SetSecretRequest
+
 // CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
 type CreateTaskJSONRequestBody = CreateTaskRequest
 
@@ -1412,6 +1457,9 @@ type ConnectPromptJSONRequestBody = ConnectPromptRequest
 
 // ToggleReactionJSONRequestBody defines body for ToggleReaction for application/json ContentType.
 type ToggleReactionJSONRequestBody = ToggleReactionRequest
+
+// ProvideSecretJSONRequestBody defines body for ProvideSecret for application/json ContentType.
+type ProvideSecretJSONRequestBody = SecretValue
 
 // CompleteOnboardingJSONRequestBody defines body for CompleteOnboarding for application/json ContentType.
 type CompleteOnboardingJSONRequestBody = CompleteOnboardingRequest
@@ -1889,6 +1937,15 @@ type ServerInterface interface {
 	// (GET /agents/{agentId}/sandbox/terminal)
 	SandboxTerminal(w http.ResponseWriter, r *http.Request, agentId string, params SandboxTerminalParams)
 
+	// (GET /agents/{agentId}/secrets)
+	ListAgentSecrets(w http.ResponseWriter, r *http.Request, agentId string)
+
+	// (DELETE /agents/{agentId}/secrets/{name})
+	DeleteAgentSecret(w http.ResponseWriter, r *http.Request, agentId string, name string)
+
+	// (PUT /agents/{agentId}/secrets/{name})
+	SetAgentSecret(w http.ResponseWriter, r *http.Request, agentId string, name string)
+
 	// (GET /agents/{agentId}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, agentId string)
 
@@ -1963,6 +2020,9 @@ type ServerInterface interface {
 
 	// (POST /messages/{messageId}/reactions)
 	ToggleReaction(w http.ResponseWriter, r *http.Request, messageId string)
+
+	// (POST /messages/{messageId}/secret)
+	ProvideSecret(w http.ResponseWriter, r *http.Request, messageId string)
 
 	// (GET /models)
 	ListModels(w http.ResponseWriter, r *http.Request)
@@ -2637,6 +2697,102 @@ func (siw *ServerInterfaceWrapper) SandboxTerminal(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListAgentSecrets operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentSecrets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentSecrets(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAgentSecret operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAgentSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAgentSecret(w, r, agentId, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAgentSecret operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentSecret(w, r, agentId, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
@@ -3200,6 +3356,32 @@ func (siw *ServerInterfaceWrapper) ToggleReaction(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ProvideSecret operation middleware
+func (siw *ServerInterfaceWrapper) ProvideSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "messageId" -------------
+	var messageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "messageId", r.PathValue("messageId"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "messageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ProvideSecret(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListModels operation middleware
 func (siw *ServerInterfaceWrapper) ListModels(w http.ResponseWriter, r *http.Request) {
 
@@ -3647,6 +3829,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/connectors/{connectorId}", wrapper.UpdateConnector)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/secret", wrapper.ProvideSecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/secrets", wrapper.ListAgentSecrets)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/secrets/{name}", wrapper.DeleteAgentSecret)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{agentId}/secrets/{name}", wrapper.SetAgentSecret)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/answer", wrapper.AnswerPrompt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/connect", wrapper.ConnectPrompt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/reactions", wrapper.ToggleReaction)

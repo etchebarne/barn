@@ -244,3 +244,47 @@ export function useRemoveStandingApproval(agentId: string) {
       ),
   })
 }
+
+export type AgentSecret = Schemas["AgentSecret"]
+
+/** The agent's secrets: names and descriptions only, never values. */
+export function useSecrets(agentId: string) {
+  return useQuery({
+    queryKey: queryKeys.secrets(agentId),
+    queryFn: () => unwrap(api.GET("/agents/{agentId}/secrets", { params: { path: { agentId } } })),
+    staleTime: 0,
+  })
+}
+
+/** Valid secret names: environment variable style, e.g. GITHUB_TOKEN. */
+export const SECRET_NAME = /^[A-Z][A-Z0-9_]{1,63}$/
+
+/**
+ * Adds or replaces a secret. A plain function rather than a mutation, so the value never sits
+ * in the query client; only the list (without values) is refetched afterwards.
+ */
+export function useSetSecret(agentId: string) {
+  const queryClient = useQueryClient()
+  return async (name: string, value: string, description?: string) => {
+    await unwrap(
+      api.PUT("/agents/{agentId}/secrets/{name}", {
+        params: { path: { agentId, name } },
+        body: description ? { value, description } : { value },
+      }),
+    )
+    await queryClient.invalidateQueries({ queryKey: queryKeys.secrets(agentId) })
+  }
+}
+
+export function useDeleteSecret(agentId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.secrets(agentId)
+  return useMutation({
+    mutationFn: (name: string) =>
+      unwrap(
+        api.DELETE("/agents/{agentId}/secrets/{name}", { params: { path: { agentId, name } } }),
+      ),
+    onSuccess: (_data, name) =>
+      queryClient.setQueryData<AgentSecret[]>(key, (list) => list?.filter((s) => s.name !== name)),
+  })
+}

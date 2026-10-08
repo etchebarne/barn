@@ -803,6 +803,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{messageId}/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Provide the secret a pending secret prompt asks for. It's stored encrypted for the agent
+         *     (replacing one with the same name), the prompt is marked answered (option 0), and the
+         *     agent is told it's available. The value never appears in messages.
+         */
+        post: operations["provideSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The agent's secrets, by name (never their values) */
+        get: operations["listAgentSecrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/secrets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Add a secret for the agent, or replace its value. */
+        put: operations["setAgentSecret"];
+        post?: never;
+        delete: operations["deleteAgentSecret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{messageId}/answer": {
         parameters: {
             query?: never;
@@ -1359,10 +1421,13 @@ export interface components {
              *     agent wants to do something that needs the user's OK (options: Approve, Decline, and
              *     sometimes a third, "Always allow", which approves and stops asking for that action);
              *     connect = the agent proposes connecting an app (see connection; options: Connect,
-             *     Decline; connect with POST /messages/{messageId}/connect)
+             *     Decline; connect with POST /messages/{messageId}/connect); secret = the agent asks for
+             *     a secret (see secret; options: Save, Not now; provide it with
+             *     POST /messages/{messageId}/secret, decline by answering option 1). Once provided, the
+             *     answer selects option 0; the value is never part of the message.
              * @enum {string}
              */
-            kind: "single" | "multi" | "text" | "approval" | "connect";
+            kind: "single" | "multi" | "text" | "approval" | "connect" | "secret";
             question: string;
             options: components["schemas"]["PromptOption"][];
             /** @description Offer "type your own" in addition to the options */
@@ -1374,6 +1439,32 @@ export interface components {
             connection?: components["schemas"]["PromptConnection"] | null;
             /** @description What an approval prompt would do, for the card (approval prompts only) */
             preview?: components["schemas"]["ActionPreview"] | null;
+            /** @description The secret asked for (secret prompts only) */
+            secret?: components["schemas"]["SecretRequest"] | null;
+        };
+        SecretRequest: {
+            /** @description Environment variable name, e.g. "GITHUB_TOKEN" */
+            name: string;
+            /** @description What it is and where to get it */
+            description: string;
+        };
+        /** @description A secret an agent has (never its value) */
+        AgentSecret: {
+            name: string;
+            description: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SecretValue: {
+            /** @description The secret (surrounding whitespace is trimmed) */
+            value: string;
+        };
+        SetSecretRequest: {
+            value: string;
+            /** @description Kept when omitted or empty */
+            description?: string;
         };
         ActionPreview: {
             /** @description Connector type (see /connectors/types); null for openbot's own actions */
@@ -3035,6 +3126,111 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    provideSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretValue"];
+            };
+        };
+        responses: {
+            /** @description The updated message */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listAgentSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Secrets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSecret"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    setAgentSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSecretRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteAgentSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     answerPrompt: {

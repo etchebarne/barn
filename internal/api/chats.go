@@ -411,6 +411,11 @@ func validateAnswer(p store.Prompt, a store.PromptAnswer) error {
 		if len(a.Selected) != 1 || hasText {
 			return bad("approve or decline")
 		}
+	case "secret":
+		// Providing goes through POST /messages/{id}/secret; an answer here is "Not now".
+		if len(a.Selected) != 1 || a.Selected[0] != 1 || hasText {
+			return bad("provide the secret with its own endpoint, or decline")
+		}
 	case "connect":
 		if len(a.Selected) != 1 || a.Selected[0] != 1 || hasText {
 			return bad("connect with POST /messages/{messageId}/connect; answer with option 1 to decline")
@@ -789,6 +794,89 @@ func (s *Server) RevokeStandingApproval(w http.ResponseWriter, r *http.Request, 
 	switch err := s.store.RevokeApproval(r.Context(), agentID, approvalID); {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not found")
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) ProvideSecret(w http.ResponseWriter, r *http.Request, messageID string) {
+	var req gen.SecretValue
+	if !decode(w, r, &req) {
+		return
+	}
+	msg, err := s.runtime.ProvideSecret(r.Context(), messageID, req.Value)
+	var bad *runtime.ErrBadSecret
+	switch {
+	case errors.As(err, &bad):
+		writeError(w, http.StatusBadRequest, bad.Message)
+		return
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "no secret request here")
+		return
+	case errors.Is(err, store.ErrPromptClosed):
+		writeError(w, http.StatusConflict, "this request was already answered")
+		return
+	case err != nil:
+		internalError(w, err)
+		return
+	}
+	if err := s.store.MarkRead(r.Context(), msg.ChatID, msg.ID); err != nil {
+		internalError(w, err)
+		return
+	}
+	out := view.Message(msg)
+	s.bus.Publish(view.MessageUpdated(out))
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) ListAgentSecrets(w http.ResponseWriter, r *http.Request, agentID string) {
+	if !s.agentExists(w, r, agentID) {
+		return
+	}
+	secrets, err := s.store.AgentSecrets(r.Context(), agentID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	out := make([]gen.AgentSecret, 0, len(secrets))
+	for _, a := range secrets {
+		out = append(out, gen.AgentSecret{Name: a.Name, Description: a.Description,
+			CreatedAt: store.Time(a.CreatedAt), UpdatedAt: store.Time(a.UpdatedAt)})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) SetAgentSecret(w http.ResponseWriter, r *http.Request, agentID, name string) {
+	var req gen.SetSecretRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	if !s.agentExists(w, r, agentID) {
+		return
+	}
+	description := ""
+	if req.Description != nil {
+		description = *req.Description
+	}
+	err := s.runtime.SetSecret(r.Context(), agentID, name, description, req.Value)
+	var bad *runtime.ErrBadSecret
+	switch {
+	case errors.As(err, &bad):
+		writeError(w, http.StatusBadRequest, bad.Message)
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) DeleteAgentSecret(w http.ResponseWriter, r *http.Request, agentID, name string) {
+	err := s.store.DeleteAgentSecret(r.Context(), agentID, name)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "secret not found")
 	case err != nil:
 		internalError(w, err)
 	default:

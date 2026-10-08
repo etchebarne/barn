@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/etchebarne/openbot/internal/secrets"
 	"log/slog"
 	"strings"
 	"sync"
@@ -52,6 +53,8 @@ type Manager struct {
 	MaxSteps int
 	// Sandboxes runs agents' commands; nil means no sandbox tools (set before Start).
 	Sandboxes Sandboxer
+	// SecretBox encrypts the secrets users give agents; nil means agents can't ask for them.
+	SecretBox *secrets.Box
 	// Timezone is the user's time zone for schedules and prompts (set before Start).
 	Timezone Timezone
 	// Connectors gives agents tools and signals from external services; nil disables them.

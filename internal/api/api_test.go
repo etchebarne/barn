@@ -55,6 +55,7 @@ func newTestServerWith(t *testing.T, providerURL string, configure func(*runtime
 	b := bus.New()
 	llm := model.New(providerURL, "openbot/test", set.APIKey)
 	rt := runtime.New(st, b, llm)
+	rt.SecretBox = box
 	if configure != nil {
 		configure(rt)
 	}
@@ -935,5 +936,53 @@ func TestEditMemoriesAndTasks(t *testing.T) {
 	}
 	if resp, _ := c.do("POST", "/api/agents/nope/tasks", `{"name":"x","purpose":"y","cron":"0 9 * * *"}`, true); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown agent: %d", resp.StatusCode)
+	}
+}
+
+func TestSecretsAPI(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	a, dm, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	base := "/api/agents/" + a.ID + "/secrets"
+
+	if resp, _ := c.do("PUT", base+"/API_KEY", `{"value":" sk-123456 ","description":"OpenAI key"}`, true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("set: %d", resp.StatusCode)
+	}
+	if resp, body := c.do("PUT", base+"/bad-name", `{"value":"x"}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad name: %d %v", resp.StatusCode, body)
+	}
+	resp, list := c.doList("GET", base)
+	if resp.StatusCode != http.StatusOK || len(list) != 1 || list[0].(map[string]any)["name"] != "API_KEY" ||
+		list[0].(map[string]any)["description"] != "OpenAI key" {
+		t.Fatalf("list: %d %v", resp.StatusCode, list)
+	}
+	if strings.Contains(fmt.Sprint(list), "sk-123456") {
+		t.Fatal("values must never be listed")
+	}
+
+	// A secret card: provide it once; declining goes through answer.
+	card, _ := st.InsertPrompt(ctx, dm, a.ID, store.Prompt{Kind: "secret", Question: "a needs a secret: GH_TOKEN",
+		Options: []store.PromptOption{{Label: "Save"}, {Label: "Not now"}}, Secret: &store.SecretRequest{Name: "GH_TOKEN", Description: "GitHub"}})
+	if resp, _ := c.do("POST", "/api/messages/"+card.ID+"/answer", `{"selected":[0]}`, true); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("saving through answer must be refused: %d", resp.StatusCode)
+	}
+	resp, msg := c.do("POST", "/api/messages/"+card.ID+"/secret", `{"value":"ghp_abcdef"}`, true)
+	p, _ := msg["prompt"].(map[string]any)
+	if resp.StatusCode != http.StatusOK || p["status"] != "answered" || p["secret"].(map[string]any)["name"] != "GH_TOKEN" ||
+		strings.Contains(fmt.Sprint(msg), "ghp_abcdef") {
+		t.Fatalf("provide: %d %v", resp.StatusCode, msg)
+	}
+	if resp, _ := c.do("POST", "/api/messages/"+card.ID+"/secret", `{"value":"again"}`, true); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("second provide: %d", resp.StatusCode)
+	}
+	if _, list = c.doList("GET", base); len(list) != 2 {
+		t.Fatalf("after provide: %v", list)
+	}
+
+	if resp, _ := c.do("DELETE", base+"/API_KEY", "", true); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %d", resp.StatusCode)
+	}
+	if resp, _ := c.do("DELETE", base+"/API_KEY", "", true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("delete twice: %d", resp.StatusCode)
 	}
 }

@@ -120,7 +120,7 @@ func TestComputer(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the shell didn't exit")
 	}
-	res, _ := m.Exec(ctx, id, "ls /tmp | grep -c openbot-shell || true", "", nil, 10*time.Second)
+	res, _ := m.Exec(ctx, id, "ls /tmp | grep -c openbot-shell || true", "", nil, 10*time.Second, nil)
 	if strings.TrimSpace(res.Output) != "0" {
 		t.Fatalf("pid file left behind: %q", res.Output)
 	}

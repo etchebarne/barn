@@ -171,11 +171,13 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 				spoke = spoke || ok
 			} else {
 				result, ok = l.runTool(ctx, agent, call)
+				result = l.maskSecrets(ctx, agent.ID, result)
 			}
-			if ok && (call.Function.Name == toolSendMessage || call.Function.Name == toolAskUser || call.Function.Name == toolReact || call.Function.Name == toolConnectApp) {
+			asks := call.Function.Name == toolAskUser || call.Function.Name == toolConnectApp || call.Function.Name == toolRequestSecret
+			if ok && (asks || call.Function.Name == toolSendMessage || call.Function.Name == toolReact) {
 				spoke = true
 			}
-			if ok && (call.Function.Name == toolAskUser || call.Function.Name == toolConnectApp) {
+			if ok && asks {
 				asked = true
 			}
 			if err := l.appendEntries(ctx, model.Message{

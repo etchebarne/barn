@@ -1063,6 +1063,88 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /messages/{messageId}/secret:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: provideSecret
+      tags: [chats]
+      description: |
+        Provide the secret a pending secret prompt asks for. It's stored encrypted for the agent
+        (replacing one with the same name), the prompt is marked answered (option 0), and the
+        agent is told it's available. The value never appears in messages.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecretValue" }
+      responses:
+        "200":
+          description: The updated message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/secrets:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listAgentSecrets
+      tags: [agents]
+      description: The agent's secrets, by name (never their values)
+      responses:
+        "200":
+          description: Secrets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentSecret" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /agents/{agentId}/secrets/{name}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: setAgentSecret
+      tags: [agents]
+      description: Add a secret for the agent, or replace its value.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetSecretRequest" }
+      responses:
+        "204": { description: Saved }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteAgentSecret
+      tags: [agents]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /messages/{messageId}/answer:
     parameters:
       - name: messageId
@@ -1920,13 +2002,16 @@ components:
       properties:
         kind:
           type: string
-          enum: [single, multi, text, approval, connect]
+          enum: [single, multi, text, approval, connect, secret]
           description: |
             single = pick one; multi = pick any number; text = free-text answer; approval = the
             agent wants to do something that needs the user's OK (options: Approve, Decline, and
             sometimes a third, "Always allow", which approves and stops asking for that action);
             connect = the agent proposes connecting an app (see connection; options: Connect,
-            Decline; connect with POST /messages/{messageId}/connect)
+            Decline; connect with POST /messages/{messageId}/connect); secret = the agent asks for
+            a secret (see secret; options: Save, Not now; provide it with
+            POST /messages/{messageId}/secret, decline by answering option 1). Once provided, the
+            answer selects option 0; the value is never part of the message.
         question: { type: string }
         options:
           type: array
@@ -1946,6 +2031,44 @@ components:
           allOf: [{ $ref: "#/components/schemas/ActionPreview" }]
           nullable: true
           description: What an approval prompt would do, for the card (approval prompts only)
+        secret:
+          allOf: [{ $ref: "#/components/schemas/SecretRequest" }]
+          nullable: true
+          description: The secret asked for (secret prompts only)
+
+    SecretRequest:
+      type: object
+      required: [name, description]
+      properties:
+        name: { type: string, description: 'Environment variable name, e.g. "GITHUB_TOKEN"' }
+        description: { type: string, description: What it is and where to get it }
+
+    AgentSecret:
+      type: object
+      required: [name, description, createdAt, updatedAt]
+      description: A secret an agent has (never its value)
+      properties:
+        name: { type: string }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SecretValue:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          description: The secret (surrounding whitespace is trimmed)
+
+    SetSecretRequest:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, minLength: 1, maxLength: 65536 }
+        description: { type: string, maxLength: 300, description: Kept when omitted or empty }
 
     ActionPreview:
       type: object
