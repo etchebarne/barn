@@ -27,6 +27,7 @@ import (
 	"github.com/etchebarne/openbot/internal/secrets"
 	"github.com/etchebarne/openbot/internal/settings"
 	"github.com/etchebarne/openbot/internal/store"
+	"github.com/etchebarne/openbot/internal/websearch"
 	"github.com/etchebarne/openbot/internal/webui"
 )
 
@@ -104,6 +105,22 @@ func run() error {
 			connectors.SetLocalRunner(func(ctx context.Context, command string, env map[string]string) (connectors.LocalProcess, error) {
 				return mcpBox.Start(ctx, "mcp", command, env)
 			})
+		}
+	}
+	switch {
+	case cfg.Search == "off":
+	case cfg.SearXNGURL != "":
+		rt.Search = websearch.NewExternal(cfg.SearXNGURL)
+	default:
+		if search := websearch.NewManaged(); search.Available() {
+			rt.Search = search
+			go func() {
+				if err := search.Prepare(ctx); err != nil {
+					slog.Warn("preparing web search", "err", err)
+				}
+			}()
+		} else {
+			slog.Warn("Docker isn't available; agents won't have web search (set OPENBOT_SEARXNG_URL to use an instance of your own)")
 		}
 	}
 	conns := connectors.NewManager(st, box)

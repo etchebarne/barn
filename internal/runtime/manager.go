@@ -59,6 +59,8 @@ type Manager struct {
 	SecretBox *secrets.Box
 	// Timezone is the user's time zone for schedules and prompts (set before Start).
 	Timezone Timezone
+	// Search lets agents search the web; nil means no web_search tool.
+	Search Searcher
 	// Connectors gives agents tools and signals from external services; nil disables them.
 	Connectors *connectors.Manager
 	// Files stores attachments (nil: none).

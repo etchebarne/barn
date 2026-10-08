@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -31,6 +32,11 @@ type Config struct {
 	// Sandboxes: "docker" (default) or "off". SandboxImage overrides the default image.
 	Sandboxes    string
 	SandboxImage string
+
+	// Web search: "searxng" (default) runs a SearXNG container, or uses SearXNGURL when set;
+	// "off" disables it.
+	Search     string
+	SearXNGURL string
 }
 
 func Load() (Config, error) {
@@ -42,9 +48,19 @@ func Load() (Config, error) {
 		Sandboxes:       env("OPENBOT_SANDBOX", "docker"),
 		PublicURL:       getenv("OPENBOT_PUBLIC_URL"),
 		SandboxImage:    getenv("OPENBOT_SANDBOX_IMAGE"),
+		Search:          env("OPENBOT_SEARCH", "searxng"),
+		SearXNGURL:      getenv("OPENBOT_SEARXNG_URL"),
 	}
 	if c.Sandboxes != "docker" && c.Sandboxes != "off" {
 		return c, fmt.Errorf("OPENBOT_SANDBOX must be docker or off")
+	}
+	if c.Search != "searxng" && c.Search != "off" {
+		return c, fmt.Errorf("OPENBOT_SEARCH must be searxng or off")
+	}
+	if c.SearXNGURL != "" {
+		if u, err := url.Parse(c.SearXNGURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return c, fmt.Errorf("OPENBOT_SEARXNG_URL must be an http(s) URL")
+		}
 	}
 
 	var err error
