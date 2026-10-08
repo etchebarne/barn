@@ -99,17 +99,42 @@ top of the message, so "yes, this one" is unambiguous even in a busy group.
 ### 4.3 Context assembly and compaction
 Each model call is built from:
 
-1. **System prompt**: identity, purpose/instructions, personality, language, trust mode, current time,
+1. **System prompt**: identity, purpose/instructions, personality, language, trust mode, the date,
    chat roster, its tasks, granted connectors, sandbox info, and all its memories
    (memories are expected to stay small; add retrieval later if needed).
 2. **Summary** of older history (from previous compactions).
 3. **Recent event log**: all chats interleaved chronologically, origin-tagged, plus tool calls
-   and results.
+   and results. Every event carries when it was sent or received.
 
-When the token estimate passes ~75% of the model's context window, the oldest part of the event
-log is summarized (preserving per-chat threads, open commitments, and pending prompts) and
-replaced with the summary. Full messages remain in the store; only the agent's working context
-is compacted. Compaction may use a cheaper model.
+**Keeping requests cheap.** Every step resends the whole context, so:
+- *Prompt caching.* Providers cache a request's unchanged start. The system prompt is frozen per
+  agent (`agents.prompt_snapshot`) and rebuilt only when what it's built from changes
+  (instructions, chats, tasks, connections, secrets, approvals: a fingerprint of everything but
+  memories), after compaction, or when the user edits memories; memories an agent saves itself
+  wait (it already knows them). It carries the date, not the time, and task lists have no
+  next-run times. Anthropic-protocol requests mark the end of the system prompt and the last two
+  messages with `cache_control`.
+- *Tool output limits.* Results over 100k characters (50k for app tools, 200k per turn) are saved
+  to a file in the agent's computer and replaced by a preview and the path; clipped command output
+  is saved in full; `read_file` reads in pages of 2,000 lines / 100k characters and answers a
+  reread of an unchanged file briefly.
+- *Large app toolsets* (over 15 tools or ~4k tokens of definitions) load on demand: a one-line
+  catalog in the prompt plus `app_tool_info` / `app_tool_call` (unwrapped into the real call, so
+  approvals and limits apply).
+- *Subagents.* `delegate` hands a job to a helper with its own fresh context (the agent's computer
+  and read-only apps; no messaging, approvals, scheduling or further delegation); only its report
+  (≤24k characters) comes back. Several delegate calls in one step run in parallel.
+- *Usage.* Every model call's tokens (input, cached, cache writes, output, reasoning) are recorded
+  per agent and purpose (`model_usage`) and shown per agent and in Settings.
+
+**Compaction** triggers at half the model's context window (from models.dev), capped at 64k tokens
+(`OPENBOT_COMPACT_AT_TOKENS`), measured with estimates calibrated by the provider's real counts.
+First, old tool results over 1,000 characters become one-line stubs (calls kept, so the context
+stays valid); if that frees enough, no summary is written. Otherwise the oldest part is folded
+into a structured summary (goals, done, in progress, promises and open questions per chat,
+decisions, people, errors, files), keeping a verbatim tail of 2.5% of the window (10k–25k tokens,
+at least 8 entries). Secrets are masked before summarizing. Full messages remain in the store;
+only the agent's working context is compacted.
 
 **Clearing a DM.** The user can clear their DM with an agent: its messages are deleted, and the
 agent forgets that conversation. Between turns (never during one), its context loses each turn
@@ -127,9 +152,12 @@ agents in no groups. Saved memories, personality, settings and tasks are kept.
 | `connect_app(type, name?, config?, agent_ids?, reason?)` | Propose a connection; the user adds secrets on the card. Ends the turn. |
 | `memory_save`, `memory_forget` | Durable memories, always shown in the agent's instructions. The user can add, edit and delete them too, in the agent's settings. |
 | `update_agent`, `list_agents`, `list_models` | Change own settings (admins: any agent's); find teammates and models. |
-| `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events). The user can create and edit `at`/`cron` tasks in the agent's settings (same validation). |
+| `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events), optionally gated by a `check`. The user can create and edit `at`/`cron` tasks in the agent's settings (same validation). |
 | `run_command`, `read_file`, `write_file`, `list_files` | The agent's sandbox (when Docker is available). |
-| `<account>__<tool>` | Tools of connector accounts the agent was granted. |
+| `<account>__<tool>` | Tools of connector accounts the agent was granted (or `app_tool_info` / `app_tool_call` when they're many). |
+| `delegate(task, context?, model?)` | Hand a job to a helper with its own context; only its report comes back. |
+| `request_secret(name, description)` | Ask the user for a secret through a secure field. Ends the turn. |
+| `done` | End the turn. |
 | `create_agent`, `delete_agent`, `create_group`, `update_group` | Admin agents only (the starter agent is admin). |
 
 ### 4.5 Approvals and trust
@@ -190,6 +218,15 @@ Messages in a group are visible to every participant; DMs are visible only to th
 - Firing enqueues a `task_fired` event (with the signal's fields for signal tasks). Agents with
   `notifications` on get their messages pushed to the user's devices (Web Push, VAPID keys stored
   encrypted; the service worker skips the chat that's open).
+- **Separate runs.** Task events run outside the agent's main conversation: the same frozen system
+  prompt and summary (sharing their cache), a digest of the latest 10 DM messages, and the event.
+  A quiet run leaves no trace. A run that messages or acts leaves a short `task_report` that joins
+  the main conversation with the next real event (it doesn't start a turn), so the agent can
+  follow up when the user replies. A burst of events for one task is one run.
+- **Checks.** A cron or once task can have a `check`: a shell command run on the schedule in the
+  agent's computer (with its secrets), at no token cost. The agent is woken only when the output
+  differs from the previous run's (stored in `tasks.check_output`; the output at creation is the
+  baseline), and then sees before and after.
 
 ## 7. Connectors
 
