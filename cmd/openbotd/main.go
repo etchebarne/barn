@@ -26,6 +26,7 @@ import (
 	"github.com/etchebarne/openbot/internal/sandbox"
 	"github.com/etchebarne/openbot/internal/secrets"
 	"github.com/etchebarne/openbot/internal/settings"
+	"github.com/etchebarne/openbot/internal/skills"
 	"github.com/etchebarne/openbot/internal/store"
 	"github.com/etchebarne/openbot/internal/websearch"
 	"github.com/etchebarne/openbot/internal/webui"
@@ -123,6 +124,8 @@ func run() error {
 			slog.Warn("Docker isn't available; agents won't have web search (set OPENBOT_SEARXNG_URL to use an instance of your own)")
 		}
 	}
+	// Skills live in the shared folder, which every sandbox mounts at /shared.
+	rt.Skills = &skills.Library{Dir: filepath.Join(cfg.DataDir, "shared", "skills")}
 	conns := connectors.NewManager(st, box)
 	conns.OnSignal = rt.DeliverSignal
 	rt.Connectors = conns

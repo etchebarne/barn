@@ -128,7 +128,7 @@ func (l *loop) toolParams(ctx context.Context, agent store.Agent, tool string) [
 	if t, ok := l.connectorTool(ctx, agent, tool); ok {
 		schema = t.Tool.Parameters
 	} else {
-		for _, t := range toolsFor(agent, l.m.sandboxesAvailable(), l.m.searchAvailable()) {
+		for _, t := range l.m.toolsFor(agent) {
 			if t.Function.Name == tool {
 				schema = t.Function.Parameters
 			}

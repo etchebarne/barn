@@ -16,6 +16,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppConnectorsRouteImport } from './routes/_app/connectors'
 import { Route as AppScheduleRouteImport } from './routes/_app/schedule'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppSkillsRouteImport } from './routes/_app/skills'
 import { Route as AppChatsChatIdRouteImport } from './routes/_app/chats.$chatId'
 import { Route as AppAgentsAgentIdComputerRouteImport } from './routes/_app/agents.$agentId.computer'
 
@@ -53,6 +54,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSkillsRoute = AppSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppChatsChatIdRoute = AppChatsChatIdRouteImport.update({
   id: '/chats/$chatId',
   path: '/chats/$chatId',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/connectors': typeof AppConnectorsRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
+  '/skills': typeof AppSkillsRoute
   '/chats/$chatId': typeof AppChatsChatIdRoute
   '/agents/$agentId/computer': typeof AppAgentsAgentIdComputerRoute
 }
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/connectors': typeof AppConnectorsRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
+  '/skills': typeof AppSkillsRoute
   '/': typeof AppIndexRoute
   '/chats/$chatId': typeof AppChatsChatIdRoute
   '/agents/$agentId/computer': typeof AppAgentsAgentIdComputerRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/_app/connectors': typeof AppConnectorsRoute
   '/_app/schedule': typeof AppScheduleRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/skills': typeof AppSkillsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/chats/$chatId': typeof AppChatsChatIdRoute
   '/_app/agents/$agentId/computer': typeof AppAgentsAgentIdComputerRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/connectors'
     | '/schedule'
     | '/settings'
+    | '/skills'
     | '/chats/$chatId'
     | '/agents/$agentId/computer'
   fileRoutesByTo: FileRoutesByTo
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/connectors'
     | '/schedule'
     | '/settings'
+    | '/skills'
     | '/'
     | '/chats/$chatId'
     | '/agents/$agentId/computer'
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/_app/connectors'
     | '/_app/schedule'
     | '/_app/settings'
+    | '/_app/skills'
     | '/_app/'
     | '/_app/chats/$chatId'
     | '/_app/agents/$agentId/computer'
@@ -188,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/skills': {
+      id: '/_app/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof AppSkillsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/chats/$chatId': {
       id: '/_app/chats/$chatId'
       path: '/chats/$chatId'
@@ -209,6 +228,7 @@ interface AppRouteChildren {
   AppConnectorsRoute: typeof AppConnectorsRoute
   AppScheduleRoute: typeof AppScheduleRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppSkillsRoute: typeof AppSkillsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppChatsChatIdRoute: typeof AppChatsChatIdRoute
   AppAgentsAgentIdComputerRoute: typeof AppAgentsAgentIdComputerRoute
@@ -218,6 +238,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConnectorsRoute: AppConnectorsRoute,
   AppScheduleRoute: AppScheduleRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppSkillsRoute: AppSkillsRoute,
   AppIndexRoute: AppIndexRoute,
   AppChatsChatIdRoute: AppChatsChatIdRoute,
   AppAgentsAgentIdComputerRoute: AppAgentsAgentIdComputerRoute,

@@ -910,6 +910,67 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
 
+  /skills:
+    get:
+      operationId: listSkills
+      tags: [skills]
+      description: |
+        The skill library (/shared/skills), by name. Folders that aren't usable skills are listed
+        with the problem.
+      responses:
+        "200":
+          description: Skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Skill" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /skills/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getSkill
+      tags: [skills]
+      description: A skill with its instructions and files.
+      responses:
+        "200":
+          description: The skill
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: saveSkill
+      tags: [skills]
+      description: Create or rewrite a skill's SKILL.md (other files in its folder stay).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveSkillRequest" }
+      responses:
+        "200":
+          description: The saved skill
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteSkill
+      tags: [skills]
+      description: Delete a skill's folder and everything in it.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /push/config:
     get:
       operationId: getPushConfig
@@ -1751,6 +1812,34 @@ components:
         id: { type: string }
         agentId: { type: string }
         text: { type: string }
+
+    Skill:
+      type: object
+      required: [name, description, path, updatedAt]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        path:
+          type: string
+          description: Its folder as agents see it, e.g. /shared/skills/weekly-report
+        instructions:
+          type: string
+          description: SKILL.md after the frontmatter (getSkill only)
+        files:
+          type: array
+          items: { type: string }
+          description: Other files in its folder, relative to it (getSkill only)
+        updatedAt: { type: string, format: date-time }
+        problem:
+          type: string
+          description: Why the folder isn't a usable skill, if it isn't
+
+    SaveSkillRequest:
+      type: object
+      required: [description, instructions]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 1024 }
+        instructions: { type: string, minLength: 1 }
 
     ConnectorField:
       type: object

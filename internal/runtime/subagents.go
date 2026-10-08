@@ -70,6 +70,9 @@ func (l *loop) subagentTools(ctx context.Context, agent store.Agent) (tools []mo
 	if l.m.searchAvailable() {
 		tools = append(tools, webSearchTool)
 	}
+	if l.m.skillsAvailable() {
+		tools = append(tools, useSkillTool)
+	}
 	var readOnly []connectors.AgentTool
 	for _, t := range l.connectorTools(ctx, agent) {
 		if !t.Tool.External {

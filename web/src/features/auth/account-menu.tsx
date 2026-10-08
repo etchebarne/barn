@@ -6,6 +6,7 @@ import {
   LogOutIcon,
   PlugIcon,
   SettingsIcon,
+  SparklesIcon,
 } from "lucide-react"
 
 import {
@@ -39,7 +40,7 @@ export function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   const logout = useLogout(() => navigate({ to: "/login" }))
   const username = data?.user?.username ?? "Account"
 
-  function go(to: "/settings" | "/connectors" | "/schedule") {
+  function go(to: "/settings" | "/connectors" | "/schedule" | "/skills") {
     onNavigate?.()
     void navigate({ to })
   }
@@ -73,6 +74,10 @@ export function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
           <DropdownMenuItem onClick={() => go("/schedule")}>
             <CalendarClockIcon />
             Schedule
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => go("/skills")}>
+            <SparklesIcon />
+            Skills
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

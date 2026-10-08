@@ -263,6 +263,8 @@ func (l *loop) reportLine(ctx context.Context, agent store.Agent, call model.Too
 		return "Proposed connecting an app (the outcome arrives here)"
 	case toolRemember:
 		return fmt.Sprintf("Saved a memory: %q", truncate(str("text"), 200))
+	case toolSaveSkill:
+		return "Saved the skill " + str("name")
 	case toolForget:
 		return "Forgot memory " + str("memory_id")
 	case toolTaskCreate, toolTaskUpdate, toolTaskDelete, toolUpdateAgent, toolCreateAgent, toolDeleteAgent,

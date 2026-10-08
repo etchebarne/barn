@@ -10,6 +10,7 @@ import {
   PlusIcon,
   SearchIcon,
   SettingsIcon,
+  SparklesIcon,
   SunIcon,
 } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -235,6 +236,14 @@ export function CommandPalette() {
             >
               <CalendarClockIcon />
               Schedule
+            </CommandItem>
+            <CommandItem
+              value="action skills"
+              keywords={["instructions", "procedures"]}
+              onSelect={() => run(() => void navigate({ to: "/skills" }))}
+            >
+              <SparklesIcon />
+              Skills
             </CommandItem>
             <CommandItem
               value="action settings"

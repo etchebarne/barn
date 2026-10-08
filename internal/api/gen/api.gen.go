@@ -1187,6 +1187,12 @@ type Sandbox struct {
 // first use)
 type SandboxStatus string
 
+// SaveSkillRequest defines model for SaveSkillRequest.
+type SaveSkillRequest struct {
+	Description  string `json:"description"`
+	Instructions string `json:"instructions"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	Recent   []TaskRun      `json:"recent"`
@@ -1285,6 +1291,25 @@ type SignInResult struct {
 	// ChatId The chat whose connect card this answered
 	ChatId    *string   `json:"chatId"`
 	Connector Connector `json:"connector"`
+}
+
+// Skill defines model for Skill.
+type Skill struct {
+	Description string `json:"description"`
+
+	// Files Other files in its folder, relative to it (getSkill only)
+	Files *[]string `json:"files,omitempty"`
+
+	// Instructions SKILL.md after the frontmatter (getSkill only)
+	Instructions *string `json:"instructions,omitempty"`
+	Name         string  `json:"name"`
+
+	// Path Its folder as agents see it, e.g. /shared/skills/weekly-report
+	Path string `json:"path"`
+
+	// Problem Why the folder isn't a usable skill, if it isn't
+	Problem   *string   `json:"problem,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // StandingApproval defines model for StandingApproval.
@@ -1759,6 +1784,9 @@ type UpdateSidebarCategoryJSONRequestBody = UpdateSidebarCategoryRequest
 
 // SetSidebarLayoutJSONRequestBody defines body for SetSidebarLayout for application/json ContentType.
 type SetSidebarLayoutJSONRequestBody = SidebarLayout
+
+// SaveSkillJSONRequestBody defines body for SaveSkill for application/json ContentType.
+type SaveSkillJSONRequestBody = SaveSkillRequest
 
 // UpdateTaskJSONRequestBody defines body for UpdateTask for application/json ContentType.
 type UpdateTaskJSONRequestBody = UpdateTaskRequest
@@ -2388,6 +2416,18 @@ type ServerInterface interface {
 
 	// (PUT /sidebar/layout)
 	SetSidebarLayout(w http.ResponseWriter, r *http.Request)
+
+	// (GET /skills)
+	ListSkills(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /skills/{name})
+	DeleteSkill(w http.ResponseWriter, r *http.Request, name string)
+
+	// (GET /skills/{name})
+	GetSkill(w http.ResponseWriter, r *http.Request, name string)
+
+	// (PUT /skills/{name})
+	SaveSkill(w http.ResponseWriter, r *http.Request, name string)
 
 	// (DELETE /tasks/{taskId})
 	DeleteTask(w http.ResponseWriter, r *http.Request, taskId string)
@@ -4081,6 +4121,98 @@ func (siw *ServerInterfaceWrapper) SetSidebarLayout(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListSkills operation middleware
+func (siw *ServerInterfaceWrapper) ListSkills(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSkills(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSkill operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSkill(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSkill operation middleware
+func (siw *ServerInterfaceWrapper) GetSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSkill(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveSkill operation middleware
+func (siw *ServerInterfaceWrapper) SaveSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveSkill(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteTask operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTask(w http.ResponseWriter, r *http.Request) {
 
@@ -4384,6 +4516,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tasks/{taskId}/run", wrapper.RunTaskNow)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedule", wrapper.GetSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/search", wrapper.Search)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/skills", wrapper.ListSkills)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/skills/{name}", wrapper.DeleteSkill)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/skills/{name}", wrapper.GetSkill)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/skills/{name}", wrapper.SaveSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/push/subscriptions", wrapper.UnsubscribePush)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)

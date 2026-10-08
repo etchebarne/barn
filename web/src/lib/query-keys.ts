@@ -11,6 +11,8 @@ export const queryKeys = {
   memories: (agentId: string) => ["agents", agentId, "memories"] as const,
   tasks: (agentId: string) => ["agents", agentId, "tasks"] as const,
   schedule: ["schedule"] as const,
+  skills: ["skills"] as const,
+  skill: (name: string) => ["skills", name] as const,
   taskRuns: (taskId: string) => ["schedule", "runs", taskId] as const,
   standingApprovals: (agentId: string) => ["agents", agentId, "approvals"] as const,
   secrets: (agentId: string) => ["agents", agentId, "secrets"] as const,

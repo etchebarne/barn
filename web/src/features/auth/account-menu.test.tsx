@@ -42,7 +42,7 @@ describe("AccountMenu", () => {
     expect(screen.getByText("martin")).toBeVisible()
     await userEvent.click(screen.getByRole("button", { name: "Account: martin" }))
     const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent)
-    expect(items).toEqual(["Settings", "Connectors", "Schedule", "Log out"])
+    expect(items).toEqual(["Settings", "Connectors", "Schedule", "Skills", "Log out"])
     expect(screen.getAllByRole("menuitemradio").map((i) => i.textContent)).toEqual([
       "Light",
       "Dark",

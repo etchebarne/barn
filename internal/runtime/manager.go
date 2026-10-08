@@ -18,6 +18,7 @@ import (
 	"github.com/etchebarne/openbot/internal/bus"
 	"github.com/etchebarne/openbot/internal/connectors"
 	"github.com/etchebarne/openbot/internal/model"
+	"github.com/etchebarne/openbot/internal/skills"
 	"github.com/etchebarne/openbot/internal/store"
 	"github.com/etchebarne/openbot/internal/view"
 )
@@ -61,6 +62,8 @@ type Manager struct {
 	Timezone Timezone
 	// Search lets agents search the web; nil means no web_search tool.
 	Search Searcher
+	// Skills is the shared skill library; nil means no skills.
+	Skills *skills.Library
 	// Connectors gives agents tools and signals from external services; nil disables them.
 	Connectors *connectors.Manager
 	// Files stores attachments (nil: none).

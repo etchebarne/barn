@@ -386,7 +386,7 @@ func (l *loop) head(ctx context.Context, agent store.Agent) ([]model.Message, er
 
 // tools are the tools the agent can call: its own, then its apps' (in a stable order).
 func (l *loop) tools(ctx context.Context, agent store.Agent) []model.Tool {
-	tools := toolsFor(agent, l.m.sandboxesAvailable(), l.m.searchAvailable())
+	tools := l.m.toolsFor(agent)
 	if l.m.Connectors != nil {
 		tools = append(tools, connectAppTool())
 	}

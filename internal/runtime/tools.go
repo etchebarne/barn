@@ -214,11 +214,15 @@ var (
 )
 
 // toolsFor returns the tools an agent may use.
-func toolsFor(agent store.Agent, sandboxes, search bool) []model.Tool {
+func (m *Manager) toolsFor(agent store.Agent) []model.Tool {
+	sandboxes, search := m.sandboxesAvailable(), m.searchAvailable()
 	tools := []model.Tool{sendMessageTool, reactTool, doneTool, askUserTool, delegateTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool, allowWithoutAskingTool}
 	tools = append(tools, taskTools()...)
 	if search {
 		tools = append(tools, webSearchTool)
+	}
+	if m.skillsAvailable() {
+		tools = append(tools, useSkillTool, saveSkillTool)
 	}
 	if sandboxes {
 		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool, requestSecretTool)
@@ -273,6 +277,10 @@ func toolLabel(name string) string {
 		return "asking to stop asking"
 	case toolWebSearch:
 		return "searching the web"
+	case toolUseSkill:
+		return "reading a skill"
+	case toolSaveSkill:
+		return "saving a skill"
 	default:
 		return "using " + name
 	}
@@ -290,7 +298,7 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 	case toolAppToolCall:
 		return toolError("app_tool_call needs the name of an app tool (like linear__list_issues) and its arguments"), false
 	}
-	if !slices.ContainsFunc(toolsFor(agent, l.m.sandboxesAvailable(), l.m.searchAvailable()), func(t model.Tool) bool { return t.Function.Name == call.Function.Name }) {
+	if !slices.ContainsFunc(l.m.toolsFor(agent), func(t model.Tool) bool { return t.Function.Name == call.Function.Name }) {
 		if _, ok := l.connectorTool(ctx, agent, call.Function.Name); ok {
 			return l.callConnector(ctx, agent, call.Function.Name, args)
 		}
@@ -309,6 +317,10 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 		return l.sendMessage(ctx, agent, args)
 	case toolWebSearch:
 		return l.webSearch(ctx, agent, args)
+	case toolUseSkill:
+		return l.useSkill(args)
+	case toolSaveSkill:
+		return l.saveSkill(args)
 	case toolReact:
 		return l.react(ctx, agent, args)
 	case toolAskUser:

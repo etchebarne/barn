@@ -155,6 +155,7 @@ agents in no groups. Saved memories, personality, settings and tasks are kept.
 | `task_create`, `task_update`, `task_delete` | Schedule work: `at` (once), `cron` (repeating), or `on_signal` (connector events), optionally gated by a `check`. The user can create and edit `at`/`cron` tasks in the agent's settings (same validation). |
 | `run_command`, `read_file`, `write_file`, `list_files` | The agent's sandbox (when Docker is available). |
 | `web_search(query, category?, time_range?, language?, page?)` | Search the web through SearXNG (§8b). Helpers get it too. |
+| `use_skill(name)`, `save_skill(name, description, instructions)` | Read a shared skill before a job it covers; propose a new or rewritten one (needs approval unless trusted) (§8c). Helpers can read skills. |
 | `<account>__<tool>` | Tools of connector accounts the agent was granted (or `app_tool_info` / `app_tool_call` when they're many). |
 | `delegate(task, context?, model?)` | Hand a job to a helper with its own context; only its report comes back. |
 | `request_secret(name, description)` | Ask the user for a secret through a secure field. Ends the turn. |
@@ -377,6 +378,25 @@ Messages in a group are visible to every participant; DMs are visible only to th
     data; the tool tells agents never to put secrets or private details in them. Secrets are
     also never in the agent's context (§8), so it can't leak those.
 
+## 8c. Skills
+
+- Skills are reusable instructions for a kind of job, shared by every agent: one folder each in
+  `/shared/skills` (host `<data>/shared/skills`), in the Agent Skills format Claude Code and
+  Codex use: a `SKILL.md` with YAML frontmatter (`name`, `description`) and Markdown
+  instructions, plus any scripts or templates it refers to. Skills can be copied in from
+  elsewhere as they are.
+- The system prompt lists each usable skill's name and description (progressive disclosure);
+  `use_skill` returns the instructions and the folder's files when a job fits. They're read from
+  the host, so skills work without Docker; only bundled scripts need a sandbox.
+- `save_skill` writes `SKILL.md` (other files in the folder stay) and is gated like external
+  actions: a skill steers every agent from then on, so one written under the influence of
+  something an agent read (prompt injection) must not slip in unnoticed. The card previews the
+  instructions; "Always allow" works as for other gated tools. (Agents can still write files in
+  `/shared/skills` from their sandbox; the gate covers the tool, not the folder.)
+- The Skills page (account menu or palette) lists skills, flags folders that aren't usable
+  (missing or broken frontmatter, name/folder mismatch) and lets the user read, write, edit and
+  delete them (`/skills` API).
+
 ## 9. Models
 
 - OpenCode Go serves each model through one of three APIs: `/v1/chat/completions` (Kimi, GLM,
@@ -573,6 +593,7 @@ internal/
   connectors/         interface + slack/, linear/, github/, render/, mcp/
   sandbox/            Docker manager
   websearch/          SearXNG (managed container or your own instance)
+  skills/             the shared skill library (/shared/skills)
   model/              OpenCode Go client
   push/               Web Push
 web/                  React app (also the PWA), pnpm package

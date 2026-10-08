@@ -694,6 +694,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The skill library (/shared/skills), by name. Folders that aren't usable skills are listed
+         *     with the problem.
+         */
+        get: operations["listSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /** @description A skill with its instructions and files. */
+        get: operations["getSkill"];
+        /** @description Create or rewrite a skill's SKILL.md (other files in its folder stay). */
+        put: operations["saveSkill"];
+        post?: never;
+        /** @description Delete a skill's folder and everything in it. */
+        delete: operations["deleteSkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/config": {
         parameters: {
             query?: never;
@@ -1309,6 +1350,24 @@ export interface components {
             id: string;
             agentId: string;
             text: string;
+        };
+        Skill: {
+            name: string;
+            description: string;
+            /** @description Its folder as agents see it, e.g. /shared/skills/weekly-report */
+            path: string;
+            /** @description SKILL.md after the frontmatter (getSkill only) */
+            instructions?: string;
+            /** @description Other files in its folder, relative to it (getSkill only) */
+            files?: string[];
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Why the folder isn't a usable skill, if it isn't */
+            problem?: string;
+        };
+        SaveSkillRequest: {
+            description: string;
+            instructions: string;
         };
         ConnectorField: {
             key: string;
@@ -3131,6 +3190,101 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+        };
+    };
+    listSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Skills */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    getSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The skill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    saveSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description The saved skill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
+    deleteSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     getPushConfig: {
