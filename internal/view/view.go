@@ -230,3 +230,14 @@ func Idle() gen.AgentActivity { return gen.AgentActivity{State: "idle"} }
 func Working(label string) gen.AgentActivity {
 	return gen.AgentActivity{State: "working", Label: &label}
 }
+
+// TaskRun is one run of a scheduled task.
+func TaskRun(r store.TaskRun) gen.TaskRun {
+	out := gen.TaskRun{Id: r.ID, TaskId: r.TaskID, AgentId: r.AgentID, Trigger: gen.TaskRunTrigger(r.Trigger),
+		Outcome: gen.TaskRunOutcome(r.Outcome), Detail: r.Detail, StartedAt: store.Time(r.StartedAt)}
+	if r.FinishedAt != nil {
+		t := store.Time(*r.FinishedAt)
+		out.FinishedAt = &t
+	}
+	return out
+}

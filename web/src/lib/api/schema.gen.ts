@@ -613,6 +613,67 @@ export interface paths {
         patch: operations["updateTask"];
         trace?: never;
     };
+    "/tasks/{taskId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The task's latest runs (up to 100), newest first. */
+        get: operations["listTaskRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{taskId}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Run the task now, outside its schedule (a test run). A task with a check runs its check and
+         *     wakes the agent whatever the output. Signal tasks can't: they need an event.
+         */
+        post: operations["runTaskNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every agent's tasks, when the enabled ones run in the coming days, and the latest runs
+         *     (unchanged checks left out).
+         */
+        get: operations["getSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/config": {
         parameters: {
             query?: never;
@@ -1173,6 +1234,40 @@ export interface components {
             /** Format: date-time */
             lastFiredAt: string | null;
         };
+        TaskRun: {
+            id: string;
+            taskId: string;
+            agentId: string;
+            /**
+             * @description What started it: the schedule, an app event, or the user (Run now)
+             * @enum {string}
+             */
+            trigger: "schedule" | "signal" | "manual";
+            /**
+             * @description quiet: ran and found nothing worth doing; acted: did something others can see (detail
+             *     lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+             *     failed: detail says why; stopped: the user stopped it.
+             * @enum {string}
+             */
+            outcome: "running" | "quiet" | "acted" | "unchanged" | "failed" | "stopped";
+            detail: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
+        };
+        UpcomingRuns: {
+            taskId: string;
+            /** @description The next runs in the window, earliest first (at most 50) */
+            times: string[];
+            /** @description Runs in the window beyond those listed */
+            more: number;
+        };
+        Schedule: {
+            tasks: components["schemas"]["Task"][];
+            upcoming: components["schemas"]["UpcomingRuns"][];
+            recent: components["schemas"]["TaskRun"][];
+        };
         ConnectorField: {
             key: string;
             label: string;
@@ -1677,7 +1772,16 @@ export interface components {
         Model: {
             id: string;
         };
-        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"] | components["schemas"]["WsChatCleared"];
+        WsEvent: components["schemas"]["WsMessageCreated"] | components["schemas"]["WsAgentActivity"] | components["schemas"]["WsChatRead"] | components["schemas"]["WsAgentUpdated"] | components["schemas"]["WsMessageUpdated"] | components["schemas"]["WsAgentCreated"] | components["schemas"]["WsChatCreated"] | components["schemas"]["WsAgentDeleted"] | components["schemas"]["WsSidebarUpdated"] | components["schemas"]["WsChatCleared"] | components["schemas"]["WsTaskRun"];
+        /** @description A task run started or finished */
+        WsTaskRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "task.run";
+            run: components["schemas"]["TaskRun"];
+        };
         WsMessageCreated: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2890,6 +2994,76 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    listTaskRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    runTaskNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getSchedule: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schedule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            401: components["responses"]["Error"];
         };
     };
     getPushConfig: {

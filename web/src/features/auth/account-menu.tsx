@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { ChevronsUpDownIcon, LogOutIcon, PlugIcon, SettingsIcon } from "lucide-react"
+import {
+  CalendarClockIcon,
+  ChevronsUpDownIcon,
+  LogOutIcon,
+  PlugIcon,
+  SettingsIcon,
+} from "lucide-react"
 
 import {
   DropdownMenu,
@@ -33,7 +39,7 @@ export function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   const logout = useLogout(() => navigate({ to: "/login" }))
   const username = data?.user?.username ?? "Account"
 
-  function go(to: "/settings" | "/connectors") {
+  function go(to: "/settings" | "/connectors" | "/schedule") {
     onNavigate?.()
     void navigate({ to })
   }
@@ -63,6 +69,10 @@ export function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
           <DropdownMenuItem onClick={() => go("/connectors")}>
             <PlugIcon />
             Connectors
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => go("/schedule")}>
+            <CalendarClockIcon />
+            Schedule
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

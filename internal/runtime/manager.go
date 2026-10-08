@@ -102,6 +102,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := m.store.InterruptTaskRuns(ctx); err != nil {
+		return err
+	}
 	for _, a := range agents {
 		if err := m.resumeIfInterrupted(ctx, a.ID); err != nil {
 			logger(a.ID).Error("check for an interrupted turn", "err", err)

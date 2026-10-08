@@ -828,6 +828,64 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /tasks/{taskId}/runs:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listTaskRuns
+      tags: [agents]
+      description: The task's latest runs (up to 100), newest first.
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TaskRun" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /tasks/{taskId}/run:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: runTaskNow
+      tags: [agents]
+      description: |
+        Run the task now, outside its schedule (a test run). A task with a check runs its check and
+        wakes the agent whatever the output. Signal tasks can't: they need an event.
+      responses:
+        "202": { description: Started }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /schedule:
+    get:
+      operationId: getSchedule
+      tags: [agents]
+      description: |
+        Every agent's tasks, when the enabled ones run in the coming days, and the latest runs
+        (unchanged checks left out).
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 31, default: 7 }
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /push/config:
     get:
       operationId: getPushConfig
@@ -1584,6 +1642,55 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    TaskRun:
+      type: object
+      required: [id, taskId, agentId, trigger, outcome, detail, startedAt, finishedAt]
+      properties:
+        id: { type: string }
+        taskId: { type: string }
+        agentId: { type: string }
+        trigger:
+          type: string
+          enum: [schedule, signal, manual]
+          description: "What started it: the schedule, an app event, or the user (Run now)"
+        outcome:
+          type: string
+          enum: [running, quiet, acted, unchanged, failed, stopped]
+          description: |
+            quiet: ran and found nothing worth doing; acted: did something others can see (detail
+            lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+            failed: detail says why; stopped: the user stopped it.
+        detail: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    UpcomingRuns:
+      type: object
+      required: [taskId, times, more]
+      properties:
+        taskId: { type: string }
+        times:
+          type: array
+          items: { type: string, format: date-time }
+          description: The next runs in the window, earliest first (at most 50)
+        more:
+          type: integer
+          description: Runs in the window beyond those listed
+
+    Schedule:
+      type: object
+      required: [tasks, upcoming, recent]
+      properties:
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+        upcoming:
+          type: array
+          items: { $ref: "#/components/schemas/UpcomingRuns" }
+        recent:
+          type: array
+          items: { $ref: "#/components/schemas/TaskRun" }
 
     ConnectorField:
       type: object
@@ -2379,6 +2486,7 @@ components:
         - $ref: "#/components/schemas/WsAgentDeleted"
         - $ref: "#/components/schemas/WsSidebarUpdated"
         - $ref: "#/components/schemas/WsChatCleared"
+        - $ref: "#/components/schemas/WsTaskRun"
       discriminator:
         propertyName: type
         mapping:
@@ -2392,6 +2500,15 @@ components:
           agent.deleted: "#/components/schemas/WsAgentDeleted"
           sidebar.updated: "#/components/schemas/WsSidebarUpdated"
           chat.cleared: "#/components/schemas/WsChatCleared"
+          task.run: "#/components/schemas/WsTaskRun"
+
+    WsTaskRun:
+      type: object
+      required: [type, run]
+      description: A task run started or finished
+      properties:
+        type: { type: string, enum: [task.run] }
+        run: { $ref: "#/components/schemas/TaskRun" }
 
     WsMessageCreated:
       type: object

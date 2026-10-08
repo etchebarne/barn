@@ -47,7 +47,7 @@ func TestTaskChecks(t *testing.T) {
 	fire := func() {
 		t.Helper()
 		got, _ := f.store.GetTask(ctx, task.ID)
-		f.rt.fireCheck(ctx, got, time.Now().UnixMilli())
+		f.rt.fireCheck(ctx, got, time.Now().UnixMilli(), false)
 		f.waitIdle(t)
 	}
 

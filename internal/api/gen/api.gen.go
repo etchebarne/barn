@@ -273,19 +273,70 @@ func (e SandboxStatus) Valid() bool {
 
 // Defines values for TaskKind.
 const (
-	Cron   TaskKind = "cron"
-	Once   TaskKind = "once"
-	Signal TaskKind = "signal"
+	TaskKindCron   TaskKind = "cron"
+	TaskKindOnce   TaskKind = "once"
+	TaskKindSignal TaskKind = "signal"
 )
 
 // Valid indicates whether the value is a known member of the TaskKind enum.
 func (e TaskKind) Valid() bool {
 	switch e {
-	case Cron:
+	case TaskKindCron:
 		return true
-	case Once:
+	case TaskKindOnce:
 		return true
-	case Signal:
+	case TaskKindSignal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskRunOutcome.
+const (
+	TaskRunOutcomeActed     TaskRunOutcome = "acted"
+	TaskRunOutcomeFailed    TaskRunOutcome = "failed"
+	TaskRunOutcomeQuiet     TaskRunOutcome = "quiet"
+	TaskRunOutcomeRunning   TaskRunOutcome = "running"
+	TaskRunOutcomeStopped   TaskRunOutcome = "stopped"
+	TaskRunOutcomeUnchanged TaskRunOutcome = "unchanged"
+)
+
+// Valid indicates whether the value is a known member of the TaskRunOutcome enum.
+func (e TaskRunOutcome) Valid() bool {
+	switch e {
+	case TaskRunOutcomeActed:
+		return true
+	case TaskRunOutcomeFailed:
+		return true
+	case TaskRunOutcomeQuiet:
+		return true
+	case TaskRunOutcomeRunning:
+		return true
+	case TaskRunOutcomeStopped:
+		return true
+	case TaskRunOutcomeUnchanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskRunTrigger.
+const (
+	TaskRunTriggerManual   TaskRunTrigger = "manual"
+	TaskRunTriggerSchedule TaskRunTrigger = "schedule"
+	TaskRunTriggerSignal   TaskRunTrigger = "signal"
+)
+
+// Valid indicates whether the value is a known member of the TaskRunTrigger enum.
+func (e TaskRunTrigger) Valid() bool {
+	switch e {
+	case TaskRunTriggerManual:
+		return true
+	case TaskRunTriggerSchedule:
+		return true
+	case TaskRunTriggerSignal:
 		return true
 	default:
 		return false
@@ -454,6 +505,21 @@ const (
 func (e WsSidebarUpdatedType) Valid() bool {
 	switch e {
 	case SidebarUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WsTaskRunType.
+const (
+	WsTaskRunTypeTaskRun WsTaskRunType = "task.run"
+)
+
+// Valid indicates whether the value is a known member of the WsTaskRunType enum.
+func (e WsTaskRunType) Valid() bool {
+	switch e {
+	case WsTaskRunTypeTaskRun:
 		return true
 	default:
 		return false
@@ -1102,6 +1168,13 @@ type Sandbox struct {
 // first use)
 type SandboxStatus string
 
+// Schedule defines model for Schedule.
+type Schedule struct {
+	Recent   []TaskRun      `json:"recent"`
+	Tasks    []Task         `json:"tasks"`
+	Upcoming []UpcomingRuns `json:"upcoming"`
+}
+
 // SecretRequest defines model for SecretRequest.
 type SecretRequest struct {
 	// Description What it is and where to get it
@@ -1250,9 +1323,45 @@ type Task struct {
 // TaskKind defines model for Task.Kind.
 type TaskKind string
 
+// TaskRun defines model for TaskRun.
+type TaskRun struct {
+	AgentId    string     `json:"agentId"`
+	Detail     string     `json:"detail"`
+	FinishedAt *time.Time `json:"finishedAt"`
+	Id         string     `json:"id"`
+
+	// Outcome quiet: ran and found nothing worth doing; acted: did something others can see (detail
+	// lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+	// failed: detail says why; stopped: the user stopped it.
+	Outcome   TaskRunOutcome `json:"outcome"`
+	StartedAt time.Time      `json:"startedAt"`
+	TaskId    string         `json:"taskId"`
+
+	// Trigger What started it: the schedule, an app event, or the user (Run now)
+	Trigger TaskRunTrigger `json:"trigger"`
+}
+
+// TaskRunOutcome quiet: ran and found nothing worth doing; acted: did something others can see (detail
+// lists it); unchanged: the check's output hadn't changed, so the agent wasn't woken;
+// failed: detail says why; stopped: the user stopped it.
+type TaskRunOutcome string
+
+// TaskRunTrigger What started it: the schedule, an app event, or the user (Run now)
+type TaskRunTrigger string
+
 // ToggleReactionRequest defines model for ToggleReactionRequest.
 type ToggleReactionRequest struct {
 	Emoji string `json:"emoji"`
+}
+
+// UpcomingRuns defines model for UpcomingRuns.
+type UpcomingRuns struct {
+	// More Runs in the window beyond those listed
+	More   int    `json:"more"`
+	TaskId string `json:"taskId"`
+
+	// Times The next runs in the window, earliest first (at most 50)
+	Times []time.Time `json:"times"`
 }
 
 // UpdateAgentRequest defines model for UpdateAgentRequest.
@@ -1457,6 +1566,15 @@ type WsSidebarUpdated struct {
 // WsSidebarUpdatedType defines model for WsSidebarUpdated.Type.
 type WsSidebarUpdatedType string
 
+// WsTaskRun A task run started or finished
+type WsTaskRun struct {
+	Run  TaskRun       `json:"run"`
+	Type WsTaskRunType `json:"type"`
+}
+
+// WsTaskRunType defines model for WsTaskRun.Type.
+type WsTaskRunType string
+
 // ChatId defines model for ChatId.
 type ChatId = string
 
@@ -1513,6 +1631,11 @@ type ListMessagesParams struct {
 	// Before Return messages older than this message id
 	Before *string `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetScheduleParams defines parameters for GetSchedule.
+type GetScheduleParams struct {
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
 }
 
 // GetUsageParams defines parameters for GetUsage.
@@ -1948,6 +2071,40 @@ func (t *WsEvent) MergeWsChatCleared(v WsChatCleared) error {
 	return err
 }
 
+// AsWsTaskRun returns the union data inside the WsEvent as a WsTaskRun
+func (t WsEvent) AsWsTaskRun() (WsTaskRun, error) {
+	var body WsTaskRun
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWsTaskRun overwrites any union data inside the WsEvent as the provided WsTaskRun
+func (t *WsEvent) FromWsTaskRun(v WsTaskRun) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"task.run"}`))
+	t.union = b
+	return err
+}
+
+// MergeWsTaskRun performs a merge with any union data inside the WsEvent, using the provided WsTaskRun
+func (t *WsEvent) MergeWsTaskRun(v WsTaskRun) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"task.run"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t WsEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -1982,6 +2139,8 @@ func (t WsEvent) ValueByDiscriminator() (interface{}, error) {
 		return t.AsWsMessageUpdated()
 	case "sidebar.updated":
 		return t.AsWsSidebarUpdated()
+	case "task.run":
+		return t.AsWsTaskRun()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
@@ -2168,6 +2327,9 @@ type ServerInterface interface {
 	// (POST /push/subscriptions)
 	SubscribePush(w http.ResponseWriter, r *http.Request)
 
+	// (GET /schedule)
+	GetSchedule(w http.ResponseWriter, r *http.Request, params GetScheduleParams)
+
 	// (GET /settings/provider)
 	GetProviderSettings(w http.ResponseWriter, r *http.Request)
 
@@ -2197,6 +2359,12 @@ type ServerInterface interface {
 
 	// (PATCH /tasks/{taskId})
 	UpdateTask(w http.ResponseWriter, r *http.Request, taskId string)
+
+	// (POST /tasks/{taskId}/run)
+	RunTaskNow(w http.ResponseWriter, r *http.Request, taskId string)
+
+	// (GET /tasks/{taskId}/runs)
+	ListTaskRuns(w http.ResponseWriter, r *http.Request, taskId string)
 
 	// (GET /usage)
 	GetUsage(w http.ResponseWriter, r *http.Request, params GetUsageParams)
@@ -3663,6 +3831,39 @@ func (siw *ServerInterfaceWrapper) SubscribePush(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetSchedule operation middleware
+func (siw *ServerInterfaceWrapper) GetSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetScheduleParams
+
+	// ------------- Optional query parameter "days" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "days", r.URL.Query(), &params.Days, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "days"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "days", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSchedule(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProviderSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetProviderSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -3842,6 +4043,58 @@ func (siw *ServerInterfaceWrapper) UpdateTask(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunTaskNow operation middleware
+func (siw *ServerInterfaceWrapper) RunTaskNow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunTaskNow(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTaskRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListTaskRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTaskRuns(w, r, taskId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4046,6 +4299,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/tasks", wrapper.CreateTask)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/tasks/{taskId}", wrapper.DeleteTask)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/tasks/{taskId}", wrapper.UpdateTask)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tasks/{taskId}/runs", wrapper.ListTaskRuns)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tasks/{taskId}/run", wrapper.RunTaskNow)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedule", wrapper.GetSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/push/subscriptions", wrapper.UnsubscribePush)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import {
+  CalendarClockIcon,
   FolderPlusIcon,
   LogOutIcon,
   MonitorIcon,
@@ -181,6 +182,14 @@ export function CommandPalette() {
             >
               <PlugIcon />
               Connectors
+            </CommandItem>
+            <CommandItem
+              value="action schedule"
+              keywords={["tasks", "runs", "calendar"]}
+              onSelect={() => run(() => void navigate({ to: "/schedule" }))}
+            >
+              <CalendarClockIcon />
+              Schedule
             </CommandItem>
             <CommandItem
               value="action settings"

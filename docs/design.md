@@ -240,6 +240,17 @@ Messages in a group are visible to every participant; DMs are visible only to th
   agent's computer (with its secrets), at no token cost. The agent is woken only when the output
   differs from the previous run's (stored in `tasks.check_output`; the output at creation is the
   baseline), and then sees before and after.
+- **Run history.** Every run is recorded in `task_runs` (latest 100 per task): what started it
+  (schedule, app event, or the user), how it went (`quiet`, `acted` with what the agent did,
+  `unchanged` for a check that found nothing new, `failed` with why, `stopped`), and when. Runs
+  a restart cut short are marked failed at startup. A `task.run` WebSocket event keeps clients
+  live.
+- **Schedule page** (account menu or palette → Schedule): every agent's tasks in one place. The
+  coming 7 days by day (`GET /schedule` expands cron schedules server-side, in the user's time
+  zone; tasks that run more than a few times a day are listed once, with their next run), tasks
+  that run on app events, paused tasks, and the latest runs. A task's sheet has its run history,
+  Run now (`POST /tasks/{id}/run`: a test run; a check task runs its check and wakes the agent
+  whatever the output), a pause switch, and a link to edit it in the agent's settings.
 
 ## 7. Connectors
 

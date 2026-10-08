@@ -70,7 +70,7 @@ func (l *loop) runTasks(ctx context.Context, events []store.Event) {
 	}
 }
 
-func (l *loop) runTask(ctx, base context.Context, taskID string, events []store.Event) error {
+func (l *loop) runTask(ctx, base context.Context, taskID string, events []store.Event) (err error) {
 	agent, err := l.m.store.GetAgent(ctx, l.agentID)
 	if err != nil {
 		return err
@@ -91,6 +91,22 @@ func (l *loop) runTask(ctx, base context.Context, taskID string, events []store.
 	}
 	if len(parts) == 0 {
 		return nil
+	}
+
+	// The run's history entry: how it went is settled when it returns.
+	outcome, detail := "quiet", ""
+	run, runErr := l.m.store.StartTaskRun(base, store.TaskRun{TaskID: task.ID, AgentID: agent.ID, Trigger: runTrigger(events)})
+	if runErr == nil {
+		l.m.publishTaskRun(run)
+		defer func() {
+			switch {
+			case ctx.Err() != nil && l.wasStopped():
+				outcome, detail = "stopped", ""
+			case err != nil:
+				outcome, detail = "failed", err.Error()
+			}
+			l.m.finishTaskRun(base, run, outcome, detail)
+		}()
 	}
 
 	l.m.setActivity(agent.ID, view.Working("running "+task.Name))
@@ -181,6 +197,7 @@ func (l *loop) runTask(ctx, base context.Context, taskID string, events []store.
 	if len(report) == 0 {
 		return nil // a quiet run leaves no trace
 	}
+	outcome, detail = "acted", strings.Join(report, "\n")
 	text := fmt.Sprintf("<task_report task_id=%q name=%q>\nYou ran this in a separate run (not shown here). What you did:\n- %s\n</task_report>",
 		task.ID, task.Name, strings.Join(report, "\n- "))
 	_, err = l.m.store.InsertEvent(base, agent.ID, EventTaskReport, map[string]string{"text": text})
@@ -256,4 +273,20 @@ func (l *loop) reportLine(ctx context.Context, agent store.Agent, call model.Too
 		return "Used " + call.Function.Name + " " + truncate(call.Function.Arguments, 300)
 	}
 	return ""
+}
+
+// runTrigger is what started a task run: the user (Run now), an app event, or the schedule.
+func runTrigger(events []store.Event) string {
+	var p struct {
+		SignalID string `json:"signalId"`
+		Manual   bool   `json:"manual"`
+	}
+	_ = json.Unmarshal(events[0].Payload, &p)
+	switch {
+	case p.Manual:
+		return "manual"
+	case p.SignalID != "":
+		return "signal"
+	}
+	return "schedule"
 }
