@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { AgentConnections } from "@/features/connectors"
+import { AgentUsageSection } from "@/features/usage"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { Agent } from "@/lib/api-client"
 
@@ -146,6 +147,7 @@ export function AgentDetailsSheet() {
               <StandingApprovalsSection agent={shown} />
               <MemoriesSection agent={shown} />
               <TasksSection agent={shown} />
+              <AgentUsageSection agent={shown} />
               <ComputerSection agent={shown} onOpen={close} />
               <SecretsSection agent={shown} />
               <AgentConnections agentId={shown.id} agentName={shown.name} onNavigate={close} />

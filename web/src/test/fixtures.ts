@@ -1,4 +1,4 @@
-import type { Agent, Chat, Message } from "@/lib/api-client"
+import type { Agent, Chat, Message, Schemas } from "@/lib/api-client"
 
 let seq = 0
 
@@ -50,6 +50,39 @@ export function makeAgent(overrides: Partial<Agent> = {}): Agent {
     isAdmin: true,
     activity: { state: "idle", label: null },
     createdAt: "2026-10-01T00:00:00.000Z",
+    ...overrides,
+  }
+}
+
+export function makeUsageTotals(
+  overrides: Partial<Schemas["UsageTotals"]> = {},
+): Schemas["UsageTotals"] {
+  return {
+    calls: 0,
+    promptTokens: 0,
+    cachedTokens: 0,
+    cacheWriteTokens: 0,
+    completionTokens: 0,
+    reasoningTokens: 0,
+    ...overrides,
+  }
+}
+
+/** A usage report over `days` days ending 2026-10-08 (oldest first), empty unless overridden. */
+export function makeUsageReport(
+  overrides: Partial<Schemas["UsageReport"]> = {},
+  days = 7,
+): Schemas["UsageReport"] {
+  const end = Date.UTC(2026, 9, 8)
+  return {
+    today: makeUsageTotals(),
+    total: makeUsageTotals(),
+    days: Array.from({ length: days }, (_, i) => ({
+      date: new Date(end - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10),
+      ...makeUsageTotals(),
+    })),
+    byPurpose: [],
+    byAgent: [],
     ...overrides,
   }
 }

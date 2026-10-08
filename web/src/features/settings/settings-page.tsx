@@ -6,6 +6,7 @@ import { AppearanceSection } from "./appearance-section"
 import { DesktopAppSection, DesktopNotificationsSection } from "./desktop-sections"
 import { NotificationsSection } from "./notifications-section"
 import { ProviderSection } from "./provider-section"
+import { UsageSection } from "./usage-section"
 
 export function SettingsPage({ onLoggedOut }: { onLoggedOut: () => Promise<void> }) {
   return (
@@ -20,6 +21,7 @@ export function SettingsPage({ onLoggedOut }: { onLoggedOut: () => Promise<void>
           {isDesktop() ? <DesktopNotificationsSection /> : <NotificationsSection />}
           <DesktopAppSection />
           <ProviderSection />
+          <UsageSection />
           <AccountSection onLoggedOut={onLoggedOut} />
         </div>
       </div>
