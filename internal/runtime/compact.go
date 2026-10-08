@@ -98,7 +98,11 @@ func (l *loop) compact(ctx context.Context, agent store.Agent, limit int) error 
 		return fmt.Errorf("compactor returned an empty summary")
 	}
 	logger(agent.ID).Info("compacted context", "entries", cut, "kept", len(msgs)-cut)
-	return l.m.store.Compact(ctx, agent.ID, entries[cut].ID, summary)
+	if err := l.m.store.Compact(ctx, agent.ID, entries[cut].ID, summary); err != nil {
+		return err
+	}
+	// The cache restarts here anyway: a good moment to bring memories in the prompt up to date.
+	return l.m.store.InvalidatePrompt(ctx, agent.ID)
 }
 
 // compactionCut returns the index of the first entry to keep: the most recent entries totaling

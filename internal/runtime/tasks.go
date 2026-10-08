@@ -384,12 +384,10 @@ func (l *loop) writeTasks(ctx context.Context, b *strings.Builder, agent store.A
 		b.WriteString("(none)\n")
 	}
 	for _, t := range tasks {
-		state := "next: never"
-		switch {
-		case !t.Enabled:
+		// No next-run times: they change after every run, and this prompt stays frozen.
+		state := "active"
+		if !t.Enabled {
 			state = "paused"
-		case t.NextFireAt != nil:
-			state = "next: " + time.UnixMilli(*t.NextFireAt).In(loc).Format("Mon 2 Jan 15:04")
 		}
 		fmt.Fprintf(b, "- [%s] %s (%s; %s): %s\n", t.ID, t.Name, describeSchedule(t, loc), state, truncate(t.Purpose, 300))
 	}

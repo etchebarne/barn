@@ -116,11 +116,15 @@ func TestMemories(t *testing.T) {
 		func(req model.Request) model.Message {
 			res := req.Messages[len(req.Messages)-1].Text()
 			memoryID = strings.Split(strings.Split(res, `"memory_id":"`)[1], `"`)[0]
+			// The prompt is frozen: a memory the agent just saved waits for the next rebuild.
+			if strings.Contains(req.Messages[0].Text(), "Martin prefers lowercase replies.") {
+				t.Errorf("saving a memory shouldn't rebuild the system prompt")
+			}
 			return model.Text("assistant", "")
 		},
 		func(req model.Request) model.Message {
 			if !strings.Contains(req.Messages[0].Text(), "Martin prefers lowercase replies.") {
-				t.Errorf("memories should be in the system prompt")
+				t.Errorf("memories should be in the system prompt after a rebuild")
 			}
 			return toolCall(toolForget, map[string]string{"memory_id": memoryID})
 		},
@@ -138,8 +142,11 @@ func TestMemories(t *testing.T) {
 	if len(mems) != 1 || mems[0].SourceChatID == nil || *mems[0].SourceChatID != f.chatID {
 		t.Fatalf("expected one memory from this chat, got %+v", mems)
 	}
+	// A rebuild (compaction, or the user editing memories) brings it in.
+	f.store.InvalidatePrompt(context.Background(), f.agent.ID)
 	f.userSays(t, "actually, forget that")
 	f.waitIdle(t)
+	f.store.InvalidatePrompt(context.Background(), f.agent.ID)
 	f.userSays(t, "hi")
 	f.waitIdle(t)
 	if mems, _ := f.store.Memories(context.Background(), f.agent.ID); len(mems) != 0 {

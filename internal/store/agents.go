@@ -265,3 +265,26 @@ func (s *Store) SandboxMembers(ctx context.Context, sandboxID string) ([]Agent, 
 	}
 	return out, rows.Err()
 }
+
+// PromptSnapshot returns an agent's frozen system prompt and what it was built from.
+func (s *Store) PromptSnapshot(ctx context.Context, agentID string) (prompt, fingerprint string, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT prompt_snapshot, prompt_fingerprint FROM agents WHERE id = ?`, agentID).
+		Scan(&prompt, &fingerprint)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return prompt, fingerprint, err
+}
+
+// SavePromptSnapshot freezes an agent's system prompt.
+func (s *Store) SavePromptSnapshot(ctx context.Context, agentID, prompt, fingerprint string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE agents SET prompt_snapshot = ?, prompt_fingerprint = ? WHERE id = ?`,
+		prompt, fingerprint, agentID)
+	return err
+}
+
+// InvalidatePrompt makes an agent's next request rebuild its system prompt.
+func (s *Store) InvalidatePrompt(ctx context.Context, agentID string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE agents SET prompt_fingerprint = '' WHERE id = ?`, agentID)
+	return err
+}

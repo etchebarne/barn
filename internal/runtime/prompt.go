@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -11,18 +13,43 @@ import (
 	"github.com/etchebarne/openbot/internal/store"
 )
 
+// systemPrompt is the agent's system prompt, frozen between rebuilds: providers cache the start
+// of a request, so a prompt that changes every request would make them reprocess the whole
+// conversation after it each time. It's rebuilt when what it's built from changes (instructions,
+// chats, tasks, connections…), after compaction, and when the user edits memories or tasks;
+// memories the agent saves itself wait for one of those (it already knows them).
 func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, error) {
-	user, err := l.m.store.PrimaryUser(ctx)
+	fresh, fingerprint, err := l.buildSystemPrompt(ctx, agent)
 	if err != nil {
 		return "", err
+	}
+	frozen, saved, err := l.m.store.PromptSnapshot(ctx, agent.ID)
+	if err != nil {
+		return "", err
+	}
+	if frozen != "" && saved == fingerprint {
+		return frozen, nil
+	}
+	if err := l.m.store.SavePromptSnapshot(ctx, agent.ID, fresh, fingerprint); err != nil {
+		return "", err
+	}
+	return fresh, nil
+}
+
+// buildSystemPrompt writes the system prompt as of now, and a fingerprint of what it's built
+// from (everything but memories and the date).
+func (l *loop) buildSystemPrompt(ctx context.Context, agent store.Agent) (prompt, fingerprint string, err error) {
+	user, err := l.m.store.PrimaryUser(ctx)
+	if err != nil {
+		return "", "", err
 	}
 	chats, err := l.m.store.AgentChats(ctx, agent.ID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	names, err := l.agentNames(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	var b strings.Builder
@@ -81,33 +108,35 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	}
 	b.WriteString("- Use the apps the user connected for you (see Your connected apps); for others, they can connect them in Settings → Connectors.\n\n")
 	if err := l.writeComputer(ctx, &b, agent); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := l.writeTasks(ctx, &b, agent); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := l.writeConnectedApps(ctx, &b, agent); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := l.writeAllConnections(ctx, &b, agent); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	memories, err := l.m.store.Memories(ctx, agent.ID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	b.WriteString("# Your memories\n")
-	b.WriteString("Durable facts you chose to remember (memory_save / memory_forget). Your conversation history " +
+	var mem strings.Builder
+	mem.WriteString("# Your memories\n")
+	mem.WriteString("Durable facts you chose to remember (memory_save / memory_forget). Your conversation history " +
 		"gets summarized over time, so save anything you must not lose: people's preferences, decisions, " +
-		"recurring details. Don't save things that only matter right now.\n")
+		"recurring details. Don't save things that only matter right now. Memories you saved after this " +
+		"list was written are in your conversation instead.\n")
 	if len(memories) == 0 {
-		b.WriteString("(none yet)\n")
+		mem.WriteString("(none yet)\n")
 	}
-	for _, mem := range memories {
-		fmt.Fprintf(&b, "- [%s] %s\n", mem.ID, mem.Text)
+	for _, m := range memories {
+		fmt.Fprintf(&mem, "- [%s] %s\n", m.ID, m.Text)
 	}
-	b.WriteString("\n")
+	mem.WriteString("\n")
 
 	b.WriteString("# Your chats\n")
 	for _, c := range chats {
@@ -116,8 +145,12 @@ func (l *loop) systemPrompt(ctx context.Context, agent store.Agent) (string, err
 	b.WriteString("\n")
 
 	loc := l.m.location(ctx)
-	fmt.Fprintf(&b, "Current time: %s (the user's time zone: %s)\n", time.Now().In(loc).Format("Monday, 2 January 2006 15:04 MST"), loc)
-	return b.String(), nil
+	// The date, not the time: this prompt stays the same until it's rebuilt. Every incoming
+	// message, notice and answer carries its own timestamp.
+	date := fmt.Sprintf("This was written on %s (the user's time zone: %s). Everything you receive shows "+
+		"when it was sent or received; the newest tells you the current time.\n", time.Now().In(loc).Format("Monday, 2 January 2006"), loc)
+	sum := sha256.Sum256([]byte(b.String()))
+	return b.String() + mem.String() + date, hex.EncodeToString(sum[:]), nil
 }
 
 // writeComputer describes the agent's sandbox, if sandboxes are available.

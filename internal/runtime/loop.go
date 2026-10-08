@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/etchebarne/openbot/internal/model"
 	"github.com/etchebarne/openbot/internal/store"
@@ -258,6 +260,7 @@ func (l *loop) consume(ctx context.Context, events []store.Event) (int, error) {
 		if text == "" {
 			continue
 		}
+		text = l.stamp(ctx, text, e.CreatedAt)
 		entry := model.Text("user", text)
 		entry.ImageRefs = l.images
 		b, err := json.Marshal(entry)
@@ -353,4 +356,24 @@ func describeFailure(agent store.Agent, err error, maxSteps int) (reason, text s
 	default:
 		return "provider_error", fmt.Sprintf("%s couldn't finish responding: %v", agent.Name, err)
 	}
+}
+
+var openingTag = regexp.MustCompile(`^<([a-z_]+)`)
+
+// stamp adds when an event arrived to its opening tag (received_at), unless it already carries a
+// time: the system prompt only has the date, so this is how the agent knows the time.
+func (l *loop) stamp(ctx context.Context, text string, at int64) string {
+	tag := openingTag.FindStringIndex(text)
+	if tag == nil {
+		return text
+	}
+	end := strings.IndexByte(text, '>')
+	if end < 0 {
+		return text
+	}
+	if head := text[:end]; strings.Contains(head, "sent_at=") || strings.Contains(head, " at=") || strings.Contains(head, "received_at=") {
+		return text
+	}
+	when := store.Time(at).In(l.m.location(ctx)).Format(time.RFC3339)
+	return text[:end] + fmt.Sprintf(" received_at=%q", when) + text[end:]
 }

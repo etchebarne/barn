@@ -473,6 +473,7 @@ func (s *Server) CreateMemory(w http.ResponseWriter, r *http.Request, agentID st
 		internalError(w, err)
 		return
 	}
+	s.memoriesChanged(r, agentID)
 	writeJSON(w, http.StatusCreated, gen.Memory{Id: m.ID, Text: m.Text, CreatedAt: store.Time(m.CreatedAt)})
 }
 
@@ -494,6 +495,7 @@ func (s *Server) UpdateMemory(w http.ResponseWriter, r *http.Request, agentID, m
 		internalError(w, err)
 		return
 	}
+	s.memoriesChanged(r, agentID)
 	writeJSON(w, http.StatusOK, gen.Memory{Id: m.ID, Text: m.Text, CreatedAt: store.Time(m.CreatedAt)})
 }
 
@@ -517,6 +519,7 @@ func (s *Server) DeleteMemory(w http.ResponseWriter, r *http.Request, agentID, m
 		internalError(w, err)
 		return
 	}
+	s.memoriesChanged(r, agentID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -881,5 +884,12 @@ func (s *Server) DeleteAgentSecret(w http.ResponseWriter, r *http.Request, agent
 		internalError(w, err)
 	default:
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// memoriesChanged has the agent's prompt rebuilt, so it sees memories the user edited.
+func (s *Server) memoriesChanged(r *http.Request, agentID string) {
+	if err := s.store.InvalidatePrompt(r.Context(), agentID); err != nil {
+		slog.Warn("invalidate prompt", "agent", agentID, "err", err)
 	}
 }
