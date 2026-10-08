@@ -32,6 +32,10 @@ const taskRunNote = "This is a separate run for a task or app event, outside you
 
 // runTasks runs task events: each task's events (a burst of app events, say) in one run.
 func (l *loop) runTasks(ctx context.Context, events []store.Event) {
+	// Stop cancels the runs (ctx); what they record about that uses base.
+	base := ctx
+	ctx, finish := l.beginWork(base)
+	defer finish()
 	ids := make([]string, len(events))
 	for i, e := range events {
 		ids[i] = e.ID
@@ -60,13 +64,13 @@ func (l *loop) runTasks(ctx context.Context, events []store.Event) {
 		if ctx.Err() != nil {
 			return
 		}
-		if err := l.runTask(ctx, id, byTask[id]); err != nil && ctx.Err() == nil {
+		if err := l.runTask(ctx, base, id, byTask[id]); err != nil && ctx.Err() == nil {
 			logger(l.agentID).Warn("task run failed", "task", id, "err", err)
 		}
 	}
 }
 
-func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event) error {
+func (l *loop) runTask(ctx, base context.Context, taskID string, events []store.Event) error {
 	agent, err := l.m.store.GetAgent(ctx, l.agentID)
 	if err != nil {
 		return err
@@ -110,9 +114,15 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 			stopped = fmt.Sprintf("Stopped after %d steps without finishing.", step)
 			break
 		}
+		if ctx.Err() != nil {
+			break
+		}
 		resp, err := l.m.chat(ctx, agent.ID, "task", model.Request{
 			Session: "openbot-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools,
 		})
+		if ctx.Err() != nil {
+			break
+		}
 		if err != nil {
 			return err
 		}
@@ -125,6 +135,9 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 		asked := false
 		delegated := l.prefetchDelegates(ctx, agent, reply.ToolCalls)
 		for _, call := range reply.ToolCalls {
+			if ctx.Err() != nil {
+				break
+			}
 			call = unwrapAppCall(call)
 			call.Function.Arguments = l.fixProse(ctx, agent, call)
 			l.m.setActivity(agent.ID, view.Working(l.activity(ctx, agent, call)))
@@ -158,6 +171,10 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 			break
 		}
 	}
+	if ctx.Err() != nil && l.wasStopped() {
+		stopped = "The user stopped this run before it finished."
+		l.postStopped(base, agent, fmt.Sprintf("run of %q", task.Name))
+	}
 	if stopped != "" {
 		report = append(report, stopped)
 	}
@@ -166,7 +183,7 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 	}
 	text := fmt.Sprintf("<task_report task_id=%q name=%q>\nYou ran this in a separate run (not shown here). What you did:\n- %s\n</task_report>",
 		task.ID, task.Name, strings.Join(report, "\n- "))
-	_, err = l.m.store.InsertEvent(ctx, agent.ID, EventTaskReport, map[string]string{"text": text})
+	_, err = l.m.store.InsertEvent(base, agent.ID, EventTaskReport, map[string]string{"text": text})
 	return err
 }
 

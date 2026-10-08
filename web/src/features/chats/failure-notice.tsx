@@ -3,6 +3,7 @@ import { cn } from "cn"
 import {
   CircleAlertIcon,
   CirclePauseIcon,
+  CircleStopIcon,
   PlayIcon,
   RotateCwIcon,
   TriangleAlertIcon,
@@ -63,15 +64,21 @@ export function FailureNotice({
 }) {
   const tone = failureTone(failure.reason)
   const actions = failureActions(failure, { isLatest, agent })
-  const Icon =
-    tone === "neutral" ? CirclePauseIcon : tone === "warning" ? TriangleAlertIcon : CircleAlertIcon
+  const stopped = failure.reason === "stopped"
+  const Icon = stopped
+    ? CircleStopIcon
+    : tone === "neutral"
+      ? CirclePauseIcon
+      : tone === "warning"
+        ? TriangleAlertIcon
+        : CircleAlertIcon
   const hasActions = actions.retry || actions.changeModel || actions.openSettings
 
   return (
     // Nested radius: container radius = button radius (--radius-md) + padding (p-3).
     <div
       role="note"
-      aria-label={tone === "neutral" ? "Agent paused" : "Agent error"}
+      aria-label={stopped ? "Agent stopped" : tone === "neutral" ? "Agent paused" : "Agent error"}
       className={cn(
         "mx-auto flex w-full max-w-lg flex-col gap-2 rounded-[calc(var(--radius-md)+0.75rem)] border p-3 text-sm",
         tone === "neutral" && "bg-muted/50 text-muted-foreground",

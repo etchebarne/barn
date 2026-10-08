@@ -803,6 +803,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Stop what the agent is doing right now (its turn or task run, with the model call,
+         *     helpers and commands in its computer). A "stopped" notice is posted in its DM. Messages and
+         *     tasks queued after it still run.
+         */
+        post: operations["stopAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{messageId}/secret": {
         parameters: {
             query?: never;
@@ -1447,9 +1470,10 @@ export interface components {
             /**
              * @description model_blocked: OpenCode refuses the agent's model (its provider trains on request
              *     data and the workspace's privacy settings forbid that). Offer to change the model.
+             *     stopped: the user stopped the agent (a neutral notice, not an error).
              * @enum {string}
              */
-            reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps";
+            reason: "no_key" | "invalid_key" | "model_blocked" | "provider_error" | "too_many_steps" | "stopped";
             retryable: boolean;
         };
         ToggleReactionRequest: {
@@ -3203,6 +3227,37 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             /** @description The agent is busy and will pick up pending work on its own */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    stopAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopping */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The agent isn't working */
             409: {
                 headers: {
                     [name: string]: unknown;

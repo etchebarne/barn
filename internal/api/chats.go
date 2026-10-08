@@ -288,6 +288,21 @@ func (s *Server) RetryAgent(w http.ResponseWriter, r *http.Request, agentID stri
 	w.WriteHeader(http.StatusAccepted)
 }
 
+func (s *Server) StopAgent(w http.ResponseWriter, r *http.Request, agentID string) {
+	if _, err := s.store.GetAgent(r.Context(), agentID); errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	} else if err != nil {
+		internalError(w, err)
+		return
+	}
+	if err := s.runtime.Stop(agentID); errors.Is(err, runtime.ErrNotWorking) {
+		writeError(w, http.StatusConflict, "the agent isn't working")
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
 // checkModel verifies a model exists and is usable with the saved key (a one-token request),
 // writing a user-facing error and returning false if not.
 func (s *Server) checkModel(w http.ResponseWriter, r *http.Request, id string) bool {

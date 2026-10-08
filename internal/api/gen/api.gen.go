@@ -153,25 +153,28 @@ func (e MessageEventKind) Valid() bool {
 
 // Defines values for MessageFailureReason.
 const (
-	InvalidKey    MessageFailureReason = "invalid_key"
-	ModelBlocked  MessageFailureReason = "model_blocked"
-	NoKey         MessageFailureReason = "no_key"
-	ProviderError MessageFailureReason = "provider_error"
-	TooManySteps  MessageFailureReason = "too_many_steps"
+	MessageFailureReasonInvalidKey    MessageFailureReason = "invalid_key"
+	MessageFailureReasonModelBlocked  MessageFailureReason = "model_blocked"
+	MessageFailureReasonNoKey         MessageFailureReason = "no_key"
+	MessageFailureReasonProviderError MessageFailureReason = "provider_error"
+	MessageFailureReasonStopped       MessageFailureReason = "stopped"
+	MessageFailureReasonTooManySteps  MessageFailureReason = "too_many_steps"
 )
 
 // Valid indicates whether the value is a known member of the MessageFailureReason enum.
 func (e MessageFailureReason) Valid() bool {
 	switch e {
-	case InvalidKey:
+	case MessageFailureReasonInvalidKey:
 		return true
-	case ModelBlocked:
+	case MessageFailureReasonModelBlocked:
 		return true
-	case NoKey:
+	case MessageFailureReasonNoKey:
 		return true
-	case ProviderError:
+	case MessageFailureReasonProviderError:
 		return true
-	case TooManySteps:
+	case MessageFailureReasonStopped:
+		return true
+	case MessageFailureReasonTooManySteps:
 		return true
 	default:
 		return false
@@ -246,22 +249,22 @@ func (e ProviderSettingsProvider) Valid() bool {
 
 // Defines values for SandboxStatus.
 const (
-	None        SandboxStatus = "none"
-	Running     SandboxStatus = "running"
-	Stopped     SandboxStatus = "stopped"
-	Unavailable SandboxStatus = "unavailable"
+	SandboxStatusNone        SandboxStatus = "none"
+	SandboxStatusRunning     SandboxStatus = "running"
+	SandboxStatusStopped     SandboxStatus = "stopped"
+	SandboxStatusUnavailable SandboxStatus = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the SandboxStatus enum.
 func (e SandboxStatus) Valid() bool {
 	switch e {
-	case None:
+	case SandboxStatusNone:
 		return true
-	case Running:
+	case SandboxStatusRunning:
 		return true
-	case Stopped:
+	case SandboxStatusStopped:
 		return true
-	case Unavailable:
+	case SandboxStatusUnavailable:
 		return true
 	default:
 		return false
@@ -886,12 +889,14 @@ type MessageFailure struct {
 
 	// Reason model_blocked: OpenCode refuses the agent's model (its provider trains on request
 	// data and the workspace's privacy settings forbid that). Offer to change the model.
+	// stopped: the user stopped the agent (a neutral notice, not an error).
 	Reason    MessageFailureReason `json:"reason"`
 	Retryable bool                 `json:"retryable"`
 }
 
 // MessageFailureReason model_blocked: OpenCode refuses the agent's model (its provider trains on request
 // data and the workspace's privacy settings forbid that). Offer to change the model.
+// stopped: the user stopped the agent (a neutral notice, not an error).
 type MessageFailureReason string
 
 // MessagePage defines model for MessagePage.
@@ -2061,6 +2066,9 @@ type ServerInterface interface {
 	// (PUT /agents/{agentId}/secrets/{name})
 	SetAgentSecret(w http.ResponseWriter, r *http.Request, agentId string, name string)
 
+	// (POST /agents/{agentId}/stop)
+	StopAgent(w http.ResponseWriter, r *http.Request, agentId string)
+
 	// (GET /agents/{agentId}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, agentId string)
 
@@ -2905,6 +2913,32 @@ func (siw *ServerInterfaceWrapper) SetAgentSecret(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetAgentSecret(w, r, agentId, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopAgent operation middleware
+func (siw *ServerInterfaceWrapper) StopAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopAgent(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4025,6 +4059,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/connectors/{connectorId}", wrapper.UpdateConnector)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/stop", wrapper.StopAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/secret", wrapper.ProvideSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/usage", wrapper.GetAgentUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/usage", wrapper.GetUsage)

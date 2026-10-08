@@ -5,7 +5,9 @@ package sandbox
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -205,12 +207,30 @@ func (m *Manager) Exec(ctx context.Context, sandboxID, command, workdir string, 
 		args = append(args, "-e", k)
 		cmdEnv = append(cmdEnv, k+"="+v)
 	}
-	args = append(args, "-w", workdir, containerName(sandboxID),
-		"timeout", "--signal=KILL", strconv.Itoa(secs), "bash", "-lc", command)
+	// The shell records its pid so a cancelled command (the user pressed Stop) can be killed
+	// with everything it started: killing the docker client doesn't stop what runs inside.
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	pidFile := "/tmp/openbot-exec-" + hex.EncodeToString(b) + ".pid"
+	args = append(args, "-w", workdir, containerName(sandboxID), "sh", "-c",
+		`echo $$ > "$1"; timeout --signal=KILL "$2" bash -lc "$3"; s=$?; rm -f "$1"; exit $s`,
+		"sh", pidFile, strconv.Itoa(secs), command)
 	// Leave the in-container timeout room to fire first.
-	cctx, cancel := context.WithTimeout(ctx, timeout+15*time.Second)
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout+15*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, m.docker, args...)
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		select {
+		case <-ctx.Done():
+			kctx, kcancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer kcancel()
+			m.killTree(kctx, sandboxID, pidFile, "KILL")
+			_, _ = m.run(kctx, nil, "exec", containerName(sandboxID), "rm", "-f", pidFile)
+		case <-finished:
+		}
+	}()
 	cmd.Env = cmdEnv
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
@@ -235,6 +255,9 @@ func (m *Manager) Exec(ctx context.Context, sandboxID, command, workdir string, 
 		res.ExitCode, res.TimedOut = -1, true
 	default:
 		return res, err
+	}
+	if ctx.Err() != nil {
+		return res, ctx.Err()
 	}
 	res.Output, res.Dropped = clip(out.Bytes())
 	if res.Dropped > 0 {

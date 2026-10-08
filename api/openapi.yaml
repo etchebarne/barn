@@ -1063,6 +1063,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /agents/{agentId}/stop:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: stopAgent
+      tags: [agents]
+      description: |
+        Stop what the agent is doing right now (its turn or task run, with the model call,
+        helpers and commands in its computer). A "stopped" notice is posted in its DM. Messages and
+        tasks queued after it still run.
+      responses:
+        "202": { description: Stopping }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The agent isn't working
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /messages/{messageId}/secret:
     parameters:
       - name: messageId
@@ -2030,10 +2053,11 @@ components:
         agentId: { type: string }
         reason:
           type: string
-          enum: [no_key, invalid_key, model_blocked, provider_error, too_many_steps]
+          enum: [no_key, invalid_key, model_blocked, provider_error, too_many_steps, stopped]
           description: |
             model_blocked: OpenCode refuses the agent's model (its provider trains on request
             data and the workspace's privacy settings forbid that). Offer to change the model.
+            stopped: the user stopped the agent (a neutral notice, not an error).
         retryable: { type: boolean }
 
     ToggleReactionRequest:

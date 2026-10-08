@@ -172,6 +172,18 @@ agents in no groups. Saved memories, personality, settings and tasks are kept.
 - Agents can still ask for confirmation themselves with `ask_user` whenever they're unsure.
 - `trusted` mode skips the gate (turning it on is confirmed in the UI).
 
+### 4.6 Stopping
+- While an agent works, the activity line has a **Stop** button (`POST /agents/{id}/stop`). It
+  cancels the current turn or task run: the model call, helpers, connector calls, and commands
+  in the sandbox. Commands record their pid inside the container, so their whole process tree is
+  killed (killing the docker client alone leaves them running).
+- Tool calls that hadn't finished get a "stopped by the user" result, so the context stays valid,
+  and a note tells the agent it was stopped and not to pick the work up again unless asked. A
+  stopped task run says so in its task report.
+- The DM gets a neutral "You stopped X." notice (a failure with reason `stopped`, not
+  retryable), which also keeps a restart from resuming the stopped turn.
+- Only the current work stops: messages and tasks queued after it still run.
+
 ## 5. Group chats
 
 Groups contain the user and an ordered list of agents. Coordination is **turn-based**:

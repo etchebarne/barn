@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/etchebarne/openbot/internal/model"
@@ -49,6 +50,11 @@ type loop struct {
 	// calibration is the provider's real prompt size over openbot's estimate, from the last call.
 	calibration float64
 	images      []string // image attachments of the event being rendered
+
+	// The current turn or task run, which the user can stop (see stop.go).
+	workMu     sync.Mutex
+	cancelWork context.CancelFunc
+	stopped    bool
 }
 
 func (l *loop) poke() {
@@ -118,6 +124,10 @@ func (l *loop) drain(ctx context.Context) {
 // calling tools. New events that arrive mid-turn are injected between model steps.
 func (l *loop) turn(ctx context.Context, events []store.Event) {
 	log := logger(l.agentID)
+	// The turn works in ctx, which Stop cancels; what it records about that uses base.
+	base := ctx
+	ctx, finish := l.beginWork(base)
+	defer finish()
 	agent, err := l.m.store.GetAgent(ctx, l.agentID)
 	if err != nil {
 		log.Error("load agent", "err", err)
@@ -129,6 +139,11 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 	// Whoever is waiting on these events (a group's turn coordinator) learns the turn is over.
 	l.handled = l.handled[:0]
 	defer func() { l.m.eventsHandled(l.handled) }()
+	defer func() {
+		if l.wasStopped() {
+			l.afterStoppedTurn(base, agent)
+		}
+	}()
 	l.fresh = map[string]bool{}
 	l.sent = map[string]string{}
 	l.aside = nil
@@ -147,6 +162,9 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 
 	spoke, nudged := false, false
 	for range l.m.maxSteps() {
+		if ctx.Err() != nil {
+			return
+		}
 		l.maybeCompact(ctx, agent)
 		req, err := l.request(ctx, agent)
 		if err != nil {
@@ -175,7 +193,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			l.aside = []model.Message{reply, model.Text("user", nudgeText)}
 			continue
 		}
-		if err := l.appendEntries(ctx, reply); err != nil {
+		if err := l.appendEntries(base, reply); err != nil {
 			log.Error("append reply", "err", err)
 			return
 		}
@@ -186,6 +204,9 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 		asked := false
 		delegated := l.prefetchDelegates(ctx, agent, reply.ToolCalls)
 		for _, call := range reply.ToolCalls {
+			if ctx.Err() != nil {
+				break // stopped: the calls left are answered afterwards (afterStoppedTurn)
+			}
 			call = unwrapAppCall(call)
 			call.Function.Arguments = l.fixProse(ctx, agent, call)
 			l.m.setActivity(agent.ID, view.Working(l.activity(ctx, agent, call)))
@@ -204,6 +225,9 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 				}
 				result = l.limitResult(ctx, agent, call, l.maskSecrets(ctx, agent.ID, result))
 			}
+			if ctx.Err() != nil {
+				result, ok = stoppedResult, false
+			}
 			asks := call.Function.Name == toolAskUser || call.Function.Name == toolConnectApp || call.Function.Name == toolRequestSecret
 			if ok && (asks || call.Function.Name == toolSendMessage || call.Function.Name == toolReact) {
 				spoke = true
@@ -211,12 +235,15 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			if ok && asks {
 				asked = true
 			}
-			if err := l.appendEntries(ctx, model.Message{
+			if err := l.appendEntries(base, model.Message{
 				Role: "tool", Content: &result, ToolCallID: call.ID,
 			}); err != nil {
 				log.Error("append tool result", "err", err)
 				return
 			}
+		}
+		if ctx.Err() != nil {
+			return
 		}
 
 		// Asking the user a question ends the turn: the answer arrives later as an event. Models
