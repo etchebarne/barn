@@ -87,7 +87,8 @@ function ChatHeader({ chat, members }: { chat: Chat; members: Agent[] }) {
             <h1 className="sr-only">{chat.name}</h1>
             <Button
               variant="ghost"
-              className="-ml-1.5 h-11 min-w-0 justify-start gap-3 rounded-xl px-1.5"
+              // shrink: buttons don't by default, and a long status would run under the actions.
+              className="-ml-1.5 h-11 max-w-full min-w-0 shrink justify-start gap-3 overflow-hidden rounded-xl px-1.5"
               aria-haspopup="dialog"
               aria-label={`${agent.name}: agent details`}
               onClick={() => openAgentDetails(agent.id)}
