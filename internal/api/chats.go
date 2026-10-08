@@ -562,6 +562,10 @@ func (s *Server) writeSandbox(w http.ResponseWriter, r *http.Request, agentID st
 // taskView describes a task; accounts names connector accounts for signal tasks.
 func taskView(t store.Task, accounts map[string]string) gen.Task {
 	out := gen.Task{Id: t.ID, AgentId: t.AgentID, Name: t.Name, Purpose: t.Purpose, Kind: gen.TaskKind(t.Kind), Enabled: t.Enabled}
+	if t.Check != "" {
+		check := t.Check
+		out.Check = &check
+	}
 	switch t.Kind {
 	case "cron":
 		c := t.Cron
@@ -635,7 +639,7 @@ func (s *Server) CreateTask(w http.ResponseWriter, r *http.Request, agentID stri
 		return
 	}
 	t, err := s.runtime.SaveTask(r.Context(), agentID, "", runtime.TaskChange{
-		Name: &req.Name, Purpose: &req.Purpose, Cron: req.Cron, At: req.At,
+		Name: &req.Name, Purpose: &req.Purpose, Cron: req.Cron, At: req.At, Check: req.Check,
 	})
 	s.writeTask(w, r, t, err, http.StatusCreated)
 }
@@ -648,7 +652,7 @@ func (s *Server) UpdateTask(w http.ResponseWriter, r *http.Request, taskID strin
 	t, err := s.store.GetTask(r.Context(), taskID)
 	if err == nil {
 		t, err = s.runtime.SaveTask(r.Context(), t.AgentID, taskID, runtime.TaskChange{
-			Name: req.Name, Purpose: req.Purpose, Cron: req.Cron, At: req.At, Enabled: req.Enabled,
+			Name: req.Name, Purpose: req.Purpose, Cron: req.Cron, At: req.At, Enabled: req.Enabled, Check: req.Check,
 		})
 	}
 	s.writeTask(w, r, t, err, http.StatusOK)

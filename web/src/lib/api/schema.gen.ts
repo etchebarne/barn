@@ -1140,6 +1140,11 @@ export interface components {
             enabled: boolean;
             /** @description kind signal: the event that runs it, e.g. "slack.app_mention in Slack — work where channel contains alerts" */
             signal: string | null;
+            /**
+             * @description A shell command run on the schedule in the agent's computer; the agent is woken only when
+             *     its output changes (cron and once tasks)
+             */
+            check?: string | null;
             /** Format: date-time */
             nextFireAt: string | null;
             /** Format: date-time */
@@ -1249,6 +1254,8 @@ export interface components {
             cron?: string;
             /** @description Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time */
             at?: string;
+            /** @description Wake the agent only when this command's output changes (empty removes it) */
+            check?: string;
         };
         CreateTaskRequest: {
             name: string;
@@ -1258,6 +1265,8 @@ export interface components {
             cron?: string;
             /** @description Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time */
             at?: string;
+            /** @description Wake the agent only when this command's output changes (empty removes it) */
+            check?: string;
         };
         MemoryRequest: {
             text: string;

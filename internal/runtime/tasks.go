@@ -34,7 +34,10 @@ var (
 			"<task_fired> and act on it (e.g. message the user). Give exactly one of: cron (repeating, "+
 			"5 fields: minute hour day-of-month month day-of-week, in the user's time zone; e.g. "+
 			"\"1 10 * * 1-5\" is weekdays at 10:01), at (once, local date-time \"2026-10-09 15:30\" "+
-			"or RFC 3339), or on_signal (whenever a connected app sends a matching event).",
+			"or RFC 3339), or on_signal (whenever a connected app sends a matching event). To watch "+
+			"something regularly (a page, an API, a channel), give a check: a shell command run on "+
+			"the schedule in your computer that wakes you only when its output changes, so polling "+
+			"costs nothing until there's news.",
 		`{
 			"type": "object",
 			"properties": {
@@ -42,6 +45,7 @@ var (
 				"purpose": {"type": "string", "description": "What to do when it fires, in enough detail to act on it later."},
 				"cron": {"type": "string"},
 				"at": {"type": "string"},
+				"check": {"type": "string", "description": "Optional, for cron/at: a shell command (with your secrets as env vars), e.g. curl -s https://api.example.com/status | jq .state. You're woken only when its output differs from the last run's, and see before and after. Its output now is the baseline."},
 				"on_signal": {
 					"type": "object",
 					"description": "Run when a connected app sends this kind of event.",
@@ -69,6 +73,7 @@ var (
 				"cron": {"type": "string"},
 				"at": {"type": "string"},
 				"on_signal": {"type": "object", "description": "Same shape as in task_create."},
+				"check": {"type": "string", "description": "Same as in task_create; empty removes it."},
 				"enabled": {"type": "boolean"}
 			},
 			"required": ["task_id"],
@@ -204,6 +209,11 @@ func (m *Manager) fireDueTasks(ctx context.Context) {
 		if !won {
 			continue // fired by someone else already
 		}
+		if t.Check != "" {
+			// Off the scheduler's loop: a check can take up to a minute.
+			go m.fireCheck(context.WithoutCancel(ctx), t, scheduled)
+			continue
+		}
 		if _, err := m.store.InsertEvent(ctx, t.AgentID, EventTask, map[string]any{
 			"taskId": t.ID, "scheduledFor": scheduled,
 		}); err != nil {
@@ -226,6 +236,7 @@ func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, 
 		At       *string         `json:"at"`
 		OnSignal json.RawMessage `json:"on_signal"`
 		Enabled  *bool           `json:"enabled"`
+		Check    *string         `json:"check"`
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return toolError("invalid arguments: %v", err), false
@@ -243,7 +254,7 @@ func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, 
 			return toolOK(map[string]string{"deleted": t.Name}), true
 		}
 	}
-	c := TaskChange{Name: a.Name, Purpose: a.Purpose, Cron: a.Cron, At: a.At, Enabled: a.Enabled}
+	c := TaskChange{Name: a.Name, Purpose: a.Purpose, Cron: a.Cron, At: a.At, Enabled: a.Enabled, Check: a.Check}
 	if len(a.OnSignal) > 0 && string(a.OnSignal) != "null" {
 		accountID, typ, match, err := l.resolveSignal(ctx, agent, a.OnSignal)
 		if err != nil {
@@ -261,6 +272,10 @@ func (l *loop) runTaskTool(ctx context.Context, agent store.Agent, name string, 
 	}
 	loc := l.m.location(ctx)
 	out := map[string]any{"task_id": t.ID, "name": t.Name, "schedule": describeSchedule(t, loc), "enabled": t.Enabled}
+	if t.Check != "" && a.Check != nil && t.CheckOutput != nil {
+		out["check_output_now"] = truncate(*t.CheckOutput, 1500)
+		out["note"] = "That's the baseline: you're woken when the check's output changes from it."
+	}
 	if t.NextFireAt != nil && t.Enabled {
 		out["next_run"] = time.UnixMilli(*t.NextFireAt).In(loc).Format("Mon 2 Jan 2006 15:04 MST")
 	}
@@ -275,6 +290,8 @@ type TaskChange struct {
 	At            *string // once: local "2026-10-09 15:30" or RFC 3339
 	Signal        *TaskSignal
 	Enabled       *bool
+	// Check is a shell command that gates the task ("" removes it); see checks.go.
+	Check *string
 }
 
 // TaskSignal runs a task on a connected app's events.
@@ -352,6 +369,31 @@ func (m *Manager) SaveTask(ctx context.Context, agentID, taskID string, c TaskCh
 	if c.Enabled != nil {
 		t.Enabled = *c.Enabled
 	}
+	checkChanged := false
+	if c.Check != nil {
+		check := strings.TrimSpace(*c.Check)
+		if len(check) > maxCheckLength {
+			return t, &ModelError{fmt.Sprintf("a check can be at most %d characters", maxCheckLength)}
+		}
+		checkChanged = check != t.Check
+		t.Check = check
+	}
+	if t.Check != "" {
+		if t.Kind == "signal" {
+			return t, &ModelError{"checks are for scheduled tasks (cron or at); app events already wake you only when something happens"}
+		}
+		if !m.sandboxesAvailable() {
+			return t, &ModelError{"checks run in your computer, and this server has none"}
+		}
+	}
+	if checkChanged {
+		t.CheckOutput = nil
+		if t.Check != "" {
+			// Its current output is the baseline: you're woken when it changes from this.
+			out := m.runCheck(ctx, t)
+			t.CheckOutput = &out
+		}
+	}
 	next, err := nextFire(t, time.Now(), loc)
 	if err != nil {
 		return t, &ModelError{err.Error()}
@@ -389,7 +431,11 @@ func (l *loop) writeTasks(ctx context.Context, b *strings.Builder, agent store.A
 		if !t.Enabled {
 			state = "paused"
 		}
-		fmt.Fprintf(b, "- [%s] %s (%s; %s): %s\n", t.ID, t.Name, describeSchedule(t, loc), state, truncate(t.Purpose, 300))
+		check := ""
+		if t.Check != "" {
+			check = "; wakes you only when its check changes: `" + truncate(t.Check, 200) + "`"
+		}
+		fmt.Fprintf(b, "- [%s] %s (%s; %s%s): %s\n", t.ID, t.Name, describeSchedule(t, loc), state, check, truncate(t.Purpose, 300))
 	}
 	b.WriteString("\n")
 	return nil
@@ -400,6 +446,8 @@ func (l *loop) renderTask(ctx context.Context, payload json.RawMessage) (string,
 		TaskID       string `json:"taskId"`
 		ScheduledFor int64  `json:"scheduledFor"`
 		SignalID     string `json:"signalId"`
+		CheckBefore  string `json:"checkBefore"`
+		CheckAfter   string `json:"checkAfter"`
 	}
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return "", err
@@ -419,6 +467,9 @@ func (l *loop) renderTask(ctx context.Context, payload json.RawMessage) (string,
 			fields, _ := json.MarshalIndent(payload.Fields, "", "  ")
 			event = fmt.Sprintf("\n\nThe event (%s):\n%s", sig.Type, truncate(string(fields), 6000))
 		}
+	}
+	if p.CheckAfter != "" {
+		event += renderCheckChange(p.CheckBefore, p.CheckAfter)
 	}
 	return fmt.Sprintf("<task_fired task_id=%q name=%q at=%q>\n%s%s\n\nDo this now. If there's something "+
 		"to tell the user, message them (usually in your DM); if not, end your turn quietly.\n</task_fired>",

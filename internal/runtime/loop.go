@@ -88,10 +88,23 @@ func (l *loop) drain(ctx context.Context) {
 			logger(l.agentID).Error("load pending events", "err", err)
 			return
 		}
-		if len(events) == 0 {
+		// Tasks and app events run separately; their reports wait for the next real turn.
+		var tasks, rest []store.Event
+		for _, e := range events {
+			if e.Kind == EventTask {
+				tasks = append(tasks, e)
+			} else {
+				rest = append(rest, e)
+			}
+		}
+		if len(tasks) > 0 {
+			l.runTasks(ctx, tasks)
+			continue
+		}
+		if !slices.ContainsFunc(rest, func(e store.Event) bool { return e.Kind != EventTaskReport }) {
 			return
 		}
-		l.turn(ctx, events)
+		l.turn(ctx, rest)
 	}
 }
 
@@ -202,6 +215,8 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			log.Error("load pending events", "err", err)
 			return
 		}
+		// Tasks that came up meanwhile run on their own once this turn ends.
+		pending = slices.DeleteFunc(pending, func(e store.Event) bool { return e.Kind == EventTask })
 		if len(pending) > 0 {
 			if _, err := l.consume(ctx, pending); err != nil {
 				log.Error("consume events", "err", err)
@@ -286,23 +301,13 @@ func (l *loop) appendEntries(ctx context.Context, msgs ...model.Message) error {
 
 // request assembles the model request from the system prompt and the agent's context.
 func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, error) {
-	system, err := l.systemPrompt(ctx, agent)
+	msgs, err := l.head(ctx, agent)
 	if err != nil {
 		return model.Request{}, err
 	}
 	entries, err := l.m.store.Context(ctx, agent.ID)
 	if err != nil {
 		return model.Request{}, err
-	}
-	summary, err := l.m.store.ContextSummary(ctx, agent.ID)
-	if err != nil {
-		return model.Request{}, err
-	}
-	msgs := make([]model.Message, 0, len(entries)+2)
-	msgs = append(msgs, model.Text("system", system))
-	if summary != "" {
-		msgs = append(msgs, model.Text("user", "<context_summary>\nA summary of your earlier conversations, "+
-			"written by you when they were trimmed from your context:\n\n"+summary+"\n</context_summary>"))
 	}
 	for _, e := range entries {
 		var m model.Message
@@ -314,12 +319,35 @@ func (l *loop) request(ctx context.Context, agent store.Agent) (model.Request, e
 	msgs = append(msgs, l.aside...)
 	l.loadImages(ctx, msgs)
 	// Each agent is one continuous conversation, so its id is a stable session id.
+	return model.Request{Session: "openbot-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: l.tools(ctx, agent)}, nil
+}
+
+// head is how every request starts: the frozen system prompt, then the summary of older context.
+// Task runs start the same way, so they share the provider's cache of it.
+func (l *loop) head(ctx context.Context, agent store.Agent) ([]model.Message, error) {
+	system, err := l.systemPrompt(ctx, agent)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := l.m.store.ContextSummary(ctx, agent.ID)
+	if err != nil {
+		return nil, err
+	}
+	msgs := []model.Message{model.Text("system", system)}
+	if summary != "" {
+		msgs = append(msgs, model.Text("user", "<context_summary>\nA summary of your earlier conversations, "+
+			"written by you when they were trimmed from your context:\n\n"+summary+"\n</context_summary>"))
+	}
+	return msgs, nil
+}
+
+// tools are the tools the agent can call: its own, then its apps' (in a stable order).
+func (l *loop) tools(ctx context.Context, agent store.Agent) []model.Tool {
 	tools := toolsFor(agent, l.m.sandboxesAvailable())
 	if l.m.Connectors != nil {
 		tools = append(tools, connectAppTool())
 	}
-	tools = append(tools, asModelTools(ctx, l.m, l.connectorTools(ctx, agent))...)
-	return model.Request{Session: "openbot-agent-" + agent.ID, Model: agent.Model, Messages: msgs, Tools: tools}, nil
+	return append(tools, asModelTools(ctx, l.m, l.connectorTools(ctx, agent))...)
 }
 
 // reportError tells the user, in the agent's DM, that the agent couldn't finish its turn. The

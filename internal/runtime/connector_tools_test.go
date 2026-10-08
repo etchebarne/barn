@@ -56,7 +56,13 @@ func TestAgentUsesConnectedApps(t *testing.T) {
 	f.llm.handler = func(req model.Request) model.Message {
 		last := req.Messages[len(req.Messages)-1]
 		text := last.Text()
+		// Task runs carry the recent DM too, so the task case comes first.
 		switch {
+		case last.Role == "user" && strings.Contains(text, "<task_fired"):
+			mu.Lock()
+			sawEvent = text
+			mu.Unlock()
+			return sendCall(f.chatID, "The site is down!")
 		case last.Role == "user" && strings.Contains(text, "what's open?"):
 			if !strings.Contains(req.Messages[0].Text(), "GitHub (GitHub, account_id") {
 				t.Errorf("connected apps should be in the system prompt")
@@ -72,11 +78,6 @@ func TestAgentUsesConnectedApps(t *testing.T) {
 		case last.Role == "user" && strings.Contains(text, "watch uptime"):
 			return toolCall(toolTaskCreate, map[string]any{"name": "Outage", "purpose": "Tell Martin the site is down.",
 				"on_signal": map[string]any{"account": "Uptime", "type": "webhook.received", "match": map[string]string{"status": "down"}}})
-		case last.Role == "user" && strings.Contains(text, "<task_fired"):
-			mu.Lock()
-			sawEvent = text
-			mu.Unlock()
-			return sendCall(f.chatID, "The site is down!")
 		}
 		return model.Text("assistant", "")
 	}

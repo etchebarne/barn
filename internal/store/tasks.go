@@ -21,19 +21,23 @@ type Task struct {
 	SignalAccountID string
 	SignalType      string
 	SignalMatch     map[string]string
-	Enabled         bool
-	NextFireAt      *int64
-	LastFiredAt     *int64
-	CreatedAt       int64
+	// Check is a shell command run on schedule (cron/once tasks): the agent is woken only when
+	// its output differs from CheckOutput, the previous run's ("" means always wake).
+	Check       string
+	CheckOutput *string
+	Enabled     bool
+	NextFireAt  *int64
+	LastFiredAt *int64
+	CreatedAt   int64
 }
 
-const taskColumns = `id, agent_id, name, purpose, kind, spec, enabled, next_fire_at, last_fired_at, created_at`
+const taskColumns = `id, agent_id, name, purpose, kind, spec, enabled, next_fire_at, last_fired_at, created_at, check_output`
 
 func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 	var t Task
 	var spec string
 	err := row.Scan(&t.ID, &t.AgentID, &t.Name, &t.Purpose, &t.Kind, &spec, &t.Enabled,
-		&t.NextFireAt, &t.LastFiredAt, &t.CreatedAt)
+		&t.NextFireAt, &t.LastFiredAt, &t.CreatedAt, &t.CheckOutput)
 	if err != nil {
 		return t, err
 	}
@@ -43,11 +47,12 @@ func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 		AccountID string            `json:"accountId"`
 		Type      string            `json:"type"`
 		Match     map[string]string `json:"match"`
+		Check     string            `json:"check"`
 	}
 	if err := unmarshalString(spec, &s); err != nil {
 		return t, err
 	}
-	t.Cron, t.At = s.Cron, s.At
+	t.Cron, t.At, t.Check = s.Cron, s.At, s.Check
 	t.SignalAccountID, t.SignalType, t.SignalMatch = s.AccountID, s.Type, s.Match
 	return t, nil
 }
@@ -55,11 +60,11 @@ func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 func taskSpec(t Task) (string, error) {
 	switch t.Kind {
 	case "cron":
-		return marshalString(map[string]string{"cron": t.Cron})
+		return marshalString(map[string]string{"cron": t.Cron, "check": t.Check})
 	case "signal":
 		return marshalString(map[string]any{"accountId": t.SignalAccountID, "type": t.SignalType, "match": t.SignalMatch})
 	}
-	return marshalString(map[string]int64{"at": t.At})
+	return marshalString(map[string]any{"at": t.At, "check": t.Check})
 }
 
 func (s *Store) CreateTask(ctx context.Context, t Task) (Task, error) {
@@ -68,8 +73,8 @@ func (s *Store) CreateTask(ctx context.Context, t Task) (Task, error) {
 	if err != nil {
 		return t, err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO tasks (`+taskColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.AgentID, t.Name, t.Purpose, t.Kind, spec, t.Enabled, t.NextFireAt, t.LastFiredAt, t.CreatedAt)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO tasks (`+taskColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.AgentID, t.Name, t.Purpose, t.Kind, spec, t.Enabled, t.NextFireAt, t.LastFiredAt, t.CreatedAt, t.CheckOutput)
 	return t, err
 }
 
@@ -80,8 +85,8 @@ func (s *Store) SaveTask(ctx context.Context, t Task) error {
 		return err
 	}
 	res, err := s.db.ExecContext(ctx, `UPDATE tasks SET name = ?, purpose = ?, kind = ?, spec = ?, enabled = ?,
-		next_fire_at = ?, last_fired_at = ? WHERE id = ?`,
-		t.Name, t.Purpose, t.Kind, spec, t.Enabled, t.NextFireAt, t.LastFiredAt, t.ID)
+		next_fire_at = ?, last_fired_at = ?, check_output = ? WHERE id = ?`,
+		t.Name, t.Purpose, t.Kind, spec, t.Enabled, t.NextFireAt, t.LastFiredAt, t.CheckOutput, t.ID)
 	if err != nil {
 		return err
 	}
@@ -157,4 +162,10 @@ func (s *Store) ClaimTaskFire(ctx context.Context, t Task, prevNext int64) (bool
 	}
 	n, err := res.RowsAffected()
 	return n == 1, err
+}
+
+// SetTaskCheckOutput records a task check's latest output.
+func (s *Store) SetTaskCheckOutput(ctx context.Context, taskID, output string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE tasks SET check_output = ? WHERE id = ?`, output, taskID)
+	return err
 }

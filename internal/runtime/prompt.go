@@ -273,6 +273,15 @@ func (l *loop) renderEvent(ctx context.Context, e store.Event) (string, error) {
 	case EventTask:
 		return l.renderTask(ctx, e.Payload)
 
+	case EventTaskReport:
+		var p struct {
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return "", err
+		}
+		return p.Text, nil
+
 	case EventGroupTurn:
 		return l.renderGroupTurn(ctx, e.Payload)
 

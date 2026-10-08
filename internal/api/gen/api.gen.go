@@ -738,6 +738,9 @@ type CreateTaskRequest struct {
 	// At Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
 	At *string `json:"at,omitempty"`
 
+	// Check Wake the agent only when this command's output changes (empty removes it)
+	Check *string `json:"check,omitempty"`
+
 	// Cron Repeat on this 5-field cron schedule, in the user's time zone
 	Cron *string `json:"cron,omitempty"`
 	Name string  `json:"name"`
@@ -1219,6 +1222,10 @@ type Task struct {
 	// At When a one-off task runs (kind once)
 	At *time.Time `json:"at"`
 
+	// Check A shell command run on the schedule in the agent's computer; the agent is woken only when
+	// its output changes (cron and once tasks)
+	Check *string `json:"check,omitempty"`
+
 	// Cron 5-field cron in the user's time zone (kind cron)
 	Cron        *string    `json:"cron"`
 	Enabled     bool       `json:"enabled"`
@@ -1290,6 +1297,9 @@ type UpdateSidebarCategoryRequest struct {
 type UpdateTaskRequest struct {
 	// At Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
 	At *string `json:"at,omitempty"`
+
+	// Check Wake the agent only when this command's output changes (empty removes it)
+	Check *string `json:"check,omitempty"`
 
 	// Cron Repeat on this 5-field cron schedule, in the user's time zone
 	Cron    *string `json:"cron,omitempty"`

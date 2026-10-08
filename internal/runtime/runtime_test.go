@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/etchebarne/openbot/internal/secrets"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -150,6 +151,8 @@ func (f fixture) waitIdle(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		pending, _ := f.store.PendingEvents(context.Background(), f.agent.ID)
+		// Task reports wait for the next real turn by design.
+		pending = slices.DeleteFunc(pending, func(e store.Event) bool { return e.Kind == EventTaskReport })
 		if len(pending) == 0 && f.rt.Activity(f.agent.ID).State == "idle" {
 			return
 		}

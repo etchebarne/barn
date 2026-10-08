@@ -1547,6 +1547,12 @@ components:
           type: string
           nullable: true
           description: 'kind signal: the event that runs it, e.g. "slack.app_mention in Slack — work where channel contains alerts"'
+        check:
+          type: string
+          nullable: true
+          description: |
+            A shell command run on the schedule in the agent's computer; the agent is woken only when
+            its output changes (cron and once tasks)
         nextFireAt:
           type: string
           format: date-time
@@ -1714,6 +1720,10 @@ components:
         at:
           type: string
           description: Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
+        check:
+          type: string
+          maxLength: 2000
+          description: Wake the agent only when this command's output changes (empty removes it)
 
     CreateTaskRequest:
       type: object
@@ -1731,6 +1741,10 @@ components:
         at:
           type: string
           description: Run once at this local date-time ("2026-10-09 15:30") or RFC 3339 time
+        check:
+          type: string
+          maxLength: 2000
+          description: Wake the agent only when this command's output changes (empty removes it)
 
     MemoryRequest:
       type: object

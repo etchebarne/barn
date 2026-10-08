@@ -45,9 +45,6 @@ func TestTaskFires(t *testing.T) {
 	f.llm.handler = func(req model.Request) model.Message {
 		last := req.Messages[len(req.Messages)-1]
 		switch {
-		case last.Role == "user" && strings.Contains(last.Text(), "remind me"):
-			at := time.Now().Add(1500 * time.Millisecond).UTC().Format(time.RFC3339)
-			return toolCall(toolTaskCreate, map[string]string{"name": "Stretch", "purpose": "Remind Martin to stretch.", "at": at})
 		case last.Role == "user" && strings.Contains(last.Text(), "<task_fired"):
 			mu.Lock()
 			fired = last.Text()
@@ -56,6 +53,9 @@ func TestTaskFires(t *testing.T) {
 				t.Errorf("the task should be listed in the system prompt")
 			}
 			return sendCall(f.chatID, "Time to stretch!")
+		case last.Role == "user" && strings.Contains(last.Text(), "remind me"):
+			at := time.Now().Add(1500 * time.Millisecond).UTC().Format(time.RFC3339)
+			return toolCall(toolTaskCreate, map[string]string{"name": "Stretch", "purpose": "Remind Martin to stretch.", "at": at})
 		}
 		return model.Text("assistant", "")
 	}
@@ -96,9 +96,10 @@ func TestMissedRunsCollapse(t *testing.T) {
 				n++
 			}
 		}
-		entries, _ := f.store.Context(ctx, f.agent.ID)
-		for _, e := range entries {
-			if strings.Contains(string(e.Entry), "task_fired task_id") {
+		// Task runs happen outside the main conversation: count their model calls.
+		usage, _ := f.store.UsageSince(ctx, f.agent.ID, 0)
+		for _, u := range usage {
+			if u.Purpose == "task" {
 				n++
 			}
 		}
