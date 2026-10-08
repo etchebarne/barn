@@ -12,6 +12,9 @@ files:
 artifactName: openbot-${version}-${os}-${arch}.${ext}
 linux:
   target: [AppImage, deb, rpm]
+  # Every standard size: the hicolor theme has no 1024x1024 folder, so a single big icon is
+  # never found by desktops.
+  icon: build/icons
   category: Network
   maintainer: Martin Etchebarne <martin@etchebarne.net>
   synopsis: Your persistent AI agents, on the desktop
