@@ -163,6 +163,7 @@ export function TaskForm({
   const [draft, setDraft] = useState<ScheduleDraft>(() =>
     task ? draftFromTask(task, now) : defaultDraft(now),
   )
+  const [check, setCheck] = useState(task?.check ?? "")
   const signal = task?.kind === "signal"
   const preview = signal ? null : describeDraft(draft)
   const canSave = name.trim() !== "" && purpose.trim() !== "" && !pending
@@ -181,7 +182,12 @@ export function TaskForm({
         event.preventDefault()
         if (!canSave) return
         const base = { name: name.trim(), purpose: purpose.trim() }
-        onSubmit(signal ? base : { ...base, ...scheduleBody(draft) })
+        if (signal) return onSubmit(base)
+        // New tasks send a check only when there is one; edits send it only when it changed
+        // (an empty string removes it).
+        const nextCheck = check.trim()
+        const sendCheck = task ? nextCheck !== (task.check ?? "") : nextCheck !== ""
+        onSubmit({ ...base, ...scheduleBody(draft), ...(sendCheck && { check: nextCheck }) })
       }}
     >
       <Field>
@@ -259,6 +265,25 @@ export function TaskForm({
               (draft.mode === "repeat" && draft.preset === "custom"
                 ? "Not a valid cron expression yet."
                 : "")}
+          </FieldDescription>
+        </Field>
+      )}
+      {!signal && (
+        <Field>
+          <FieldLabel htmlFor={`${id}-check`}>Only wake when this changes</FieldLabel>
+          <Input
+            id={`${id}-check`}
+            className="font-mono"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            placeholder="curl -s https://status.example.com | jq .state"
+            value={check}
+            onChange={(event) => setCheck(event.target.value)}
+          />
+          <FieldDescription>
+            A command run on the schedule in the agent's computer. The agent is only woken when its
+            output changes, so watching something costs nothing until there's news.
           </FieldDescription>
         </Field>
       )}

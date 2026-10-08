@@ -50,6 +50,20 @@ function TaskItem({
           </button>
         )}
         <span className="text-xs text-muted-foreground">{describeSchedule(task)}</span>
+        {task.check && (
+          <span className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
+            <span className="shrink-0">Only wakes when this changes:</span>
+            <Tooltip>
+              <TooltipTrigger
+                render={<code />}
+                className="min-w-0 truncate font-mono text-foreground/80"
+              >
+                {task.check}
+              </TooltipTrigger>
+              <TooltipContent className="font-mono break-all">{task.check}</TooltipContent>
+            </Tooltip>
+          </span>
+        )}
         {next &&
           (task.enabled && task.nextFireAt ? (
             <Tooltip>

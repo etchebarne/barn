@@ -64,6 +64,17 @@ describe("TaskList", () => {
     expect(screen.getByRole("switch", { name: "Resume task Weekday check-in" })).not.toBeChecked()
   })
 
+  it("shows what a task's check watches", () => {
+    renderList([task({ check: "curl -s https://status.example.com | jq .state" })])
+    expect(screen.getByText("Only wakes when this changes:")).toBeVisible()
+    expect(screen.getByText("curl -s https://status.example.com | jq .state")).toBeVisible()
+  })
+
+  it("shows no check line for a task without one", () => {
+    renderList([task()])
+    expect(screen.queryByText(/Only wakes when this changes/)).not.toBeInTheDocument()
+  })
+
   it("toggles and deletes (after confirming)", async () => {
     const onToggle = vi.fn<(task: Task, enabled: boolean) => void>()
     const onDelete = vi.fn<(task: Task) => void>()

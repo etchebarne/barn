@@ -206,6 +206,45 @@ describe("tasks", () => {
     expect(calls[0]?.body).toMatchObject({ cron: "15 * * * *" })
   })
 
+  it("creates a task with a check and sends it", async () => {
+    const calls = mockApi({ tasks: [] })
+    renderSection("tasks")
+    await userEvent.click(await screen.findByRole("button", { name: "New task" }))
+    const form = screen.getByRole("form", { name: "New task" })
+    await userEvent.type(within(form).getByLabelText("Name"), "Status watch")
+    await userEvent.type(within(form).getByLabelText("What it does"), "Tell Martin what changed")
+    await userEvent.selectOptions(within(form).getByLabelText("Repeats"), "Every hour")
+    await userEvent.type(
+      within(form).getByLabelText("Only wake when this changes"),
+      "  curl -s https://status.example.com | jq .state ",
+    )
+    await userEvent.click(within(form).getByRole("button", { name: "Create task" }))
+    expect(calls[0]?.body).toEqual({
+      name: "Status watch",
+      purpose: "Tell Martin what changed",
+      cron: "0 * * * *",
+      check: "curl -s https://status.example.com | jq .state",
+    })
+  })
+
+  it("removes a task's check by sending an empty one, and leaves it alone otherwise", async () => {
+    const calls = mockApi({ tasks: [task({ check: "cat /tmp/state" })] })
+    renderSection("tasks")
+    await userEvent.click(await screen.findByRole("button", { name: "Edit task Weekday check-in" }))
+    let form = screen.getByRole("form", { name: "Edit Weekday check-in" })
+    const check = within(form).getByLabelText("Only wake when this changes")
+    expect(check).toHaveValue("cat /tmp/state")
+    await userEvent.clear(check)
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }))
+    expect(calls[0]?.body).toMatchObject({ check: "" })
+
+    await waitFor(() => expect(screen.queryByRole("form")).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole("button", { name: "Edit task Weekday check-in" }))
+    form = screen.getByRole("form", { name: "Edit Weekday check-in" })
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }))
+    expect(calls[1]?.body).not.toHaveProperty("check")
+  })
+
   it("switches a task to Once and sends `at` instead of cron", async () => {
     const calls = mockApi()
     renderSection("tasks")
@@ -246,6 +285,7 @@ describe("tasks", () => {
     const form = screen.getByRole("form", { name: "Edit Weekday check-in" })
     expect(within(form).getByText(/When slack\.app_mention in Slack \(work\)/)).toBeVisible()
     expect(within(form).queryByRole("button", { name: "Once" })).not.toBeInTheDocument()
+    expect(within(form).queryByLabelText("Only wake when this changes")).not.toBeInTheDocument()
 
     const name = within(form).getByLabelText("Name")
     await userEvent.clear(name)
