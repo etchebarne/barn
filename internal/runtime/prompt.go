@@ -129,6 +129,10 @@ func (l *loop) writeComputer(ctx context.Context, b *strings.Builder, agent stor
 	b.WriteString("You have your own Linux computer: a Debian sandbox where you're root, used through run_command, read_file, write_file and list_files. ")
 	b.WriteString("Use it to actually do the work (run code, fetch things from the internet, process files) instead of describing how. ")
 	b.WriteString("/home/agent is yours and persists; /shared is a folder every agent can read and write, for handing files to each other.\n")
+	b.WriteString("Treat /home/agent as your home: keep it tidy, so it's pleasant to work in and easy to find things in later (the user can browse it too). " +
+		"Give each project or job its own folder (e.g. ~/projects/<name>), keep scripts you'll reuse in ~/scripts with names that say what they do, " +
+		"and update a script instead of making numbered copies. One-off commands go straight into run_command (a heredoc works for longer ones) " +
+		"or into /tmp, not your home. When you finish something, delete the scratch files it left behind.\n")
 	if agent.SandboxID != nil {
 		members, err := l.m.store.SandboxMembers(ctx, *agent.SandboxID)
 		if err != nil {
