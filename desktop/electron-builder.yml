@@ -20,6 +20,10 @@ linux:
   syncDesktopName: true
 deb:
   depends: [libnotify4, libxtst6, libnss3]
+rpm:
+  # No /usr/lib/.build-id links: other Electron apps (Slack, VS Code…) ship identical helper
+  # binaries, and their links would conflict on install.
+  fpm: ["--rpm-rpmbuild-define=_build_id_links none"]
 win:
   target: [nsis]
 nsis:
