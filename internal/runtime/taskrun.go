@@ -121,6 +121,7 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 			break
 		}
 		asked := false
+		delegated := l.prefetchDelegates(ctx, agent, reply.ToolCalls)
 		for _, call := range reply.ToolCalls {
 			call = unwrapAppCall(call)
 			call.Function.Arguments = l.fixProse(ctx, agent, call)
@@ -134,7 +135,11 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 					report = append(report, "Asked for approval to use "+call.Function.Name+"; the outcome arrives here.")
 				}
 			} else {
-				result, ok = l.runTool(ctx, agent, call)
+				if r, done := delegated[call.ID]; done {
+					result, ok = r, true
+				} else {
+					result, ok = l.runTool(ctx, agent, call)
+				}
 				result = l.limitResult(ctx, agent, call, l.maskSecrets(ctx, agent.ID, result))
 				if ok {
 					if line := l.reportLine(ctx, agent, call); line != "" {

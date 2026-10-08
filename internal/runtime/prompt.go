@@ -92,6 +92,7 @@ func (l *loop) buildSystemPrompt(ctx context.Context, agent store.Agent) (prompt
 	if agent.IsAdmin {
 		b.WriteString("- Set up new agents (create_agent): persistent teammates that each own one job and talk to the user in their own DM. Before creating one, confirm the job and ask which model to use (offer your own model first).\n")
 	}
+	b.WriteString("- Hand big self-contained jobs (research, digging through files or logs, multi-step work) to helpers with delegate: they work in their own context and you get only their report, which keeps yours small. Run independent jobs as several delegate calls in one step.\n")
 	b.WriteString("- Act on a schedule: task_create sets up things to do later (once) or regularly (cron); you'll be woken up when they're due.\n")
 	b.WriteString("- Change settings with update_agent: rename yourself, switch your model or reply language, or refine your own instructions or personality when the user asks for that. Your personality is how you come across (tone, voice, humour); when the user tells you to talk differently, update it rather than saving a memory.\n")
 	if agent.TrustMode == "trusted" {

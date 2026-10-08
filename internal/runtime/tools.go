@@ -215,7 +215,7 @@ var (
 
 // toolsFor returns the tools an agent may use.
 func toolsFor(agent store.Agent, sandboxes bool) []model.Tool {
-	tools := []model.Tool{sendMessageTool, reactTool, doneTool, askUserTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool, allowWithoutAskingTool}
+	tools := []model.Tool{sendMessageTool, reactTool, doneTool, askUserTool, delegateTool, rememberTool, forgetTool, updateAgentTool, listAgentsTool, listModelsTool, allowWithoutAskingTool}
 	tools = append(tools, taskTools()...)
 	if sandboxes {
 		tools = append(tools, runCommandTool, readFileTool, writeFileTool, listFilesTool, requestSecretTool)
@@ -234,6 +234,8 @@ func toolLabel(name string) string {
 		return "reacting"
 	case toolDone:
 		return "wrapping up"
+	case toolDelegate:
+		return "working with a helper"
 	case toolAskUser:
 		return "asking a question"
 	case toolRemember:
@@ -292,6 +294,8 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 	switch call.Function.Name {
 	case toolDone:
 		return toolOK(map[string]string{"note": "Turn ended."}), true
+	case toolDelegate:
+		return l.delegate(ctx, agent, args)
 	case toolRequestSecret:
 		return l.requestSecret(ctx, agent, args)
 	case toolAllowWithoutAsking:
