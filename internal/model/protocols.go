@@ -255,7 +255,7 @@ const defaultMaxTokens = 16384
 
 type anthropicRequest struct {
 	Model     string             `json:"model"`
-	System    string             `json:"system,omitempty"`
+	System    []anthropicBlock   `json:"system,omitempty"`
 	Messages  []anthropicMessage `json:"messages"`
 	Tools     []anthropicTool    `json:"tools,omitempty"`
 	MaxTokens int                `json:"max_tokens"`
@@ -275,6 +275,12 @@ type anthropicBlock struct {
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   string          `json:"content,omitempty"`
 	Source    *anthropicImage `json:"source,omitempty"`
+	// CacheControl marks the end of a prefix the provider should cache.
+	CacheControl *anthropicCache `json:"cache_control,omitempty"`
+}
+
+type anthropicCache struct {
+	Type string `json:"type"` // "ephemeral"
 }
 
 type anthropicImage struct {
@@ -335,7 +341,22 @@ func toAnthropicRequest(req Request) anthropicRequest {
 			add("user", anthropicBlock{Type: "tool_result", ToolUseID: m.ToolCallID, Content: m.Text()})
 		}
 	}
-	out.System = strings.Join(system, "\n\n")
+	// Cache markers (Anthropic caches only up to marked points): the end of the system prompt,
+	// which covers the tools before it, and the last two messages, so each step reuses the
+	// conversation up to the previous one.
+	ephemeral := &anthropicCache{Type: "ephemeral"}
+	if text := strings.Join(system, "\n\n"); text != "" {
+		out.System = []anthropicBlock{{Type: "text", Text: text, CacheControl: ephemeral}}
+	}
+	for i := max(len(out.Messages)-2, 0); i < len(out.Messages); i++ {
+		blocks := out.Messages[i].Content
+		for j := len(blocks) - 1; j >= 0; j-- {
+			if blocks[j].Type != "text" || blocks[j].Text != "" {
+				blocks[j].CacheControl = ephemeral
+				break
+			}
+		}
+	}
 	for _, t := range req.Tools {
 		out.Tools = append(out.Tools, anthropicTool{
 			Name: t.Function.Name, Description: t.Function.Description, InputSchema: t.Function.Parameters,

@@ -54,7 +54,7 @@ func TestToAnthropicRequestMergesRoles(t *testing.T) {
 	msgs := conversation()
 	msgs[3].ToolCallID = "call_1"
 	got := toAnthropicRequest(Request{Model: "qwen-x", Messages: msgs})
-	if got.System != "be brief" || got.MaxTokens != defaultMaxTokens {
+	if len(got.System) != 1 || got.System[0].Text != "be brief" || got.MaxTokens != defaultMaxTokens {
 		t.Fatalf("unexpected header fields: %+v", got)
 	}
 	// user, assistant(tool_use), user(tool_result + text): roles must alternate.
@@ -74,6 +74,13 @@ func TestToAnthropicRequestMergesRoles(t *testing.T) {
 	last := got.Messages[2].Content
 	if len(last) != 2 || last[0].Type != "tool_result" || last[0].ToolUseID != "call_1" || last[1].Text != "thanks" {
 		t.Fatalf("merged user message = %+v", last)
+	}
+	// Cache markers: the system prompt, and the last block of the last two messages only.
+	if got.System[0].CacheControl == nil || got.Messages[0].Content[0].CacheControl != nil ||
+		got.Messages[1].Content[len(got.Messages[1].Content)-1].CacheControl == nil ||
+		last[1].CacheControl == nil || last[0].CacheControl != nil {
+		t.Fatalf("cache markers: system=%v m0=%v m1=%v last=%v", got.System[0].CacheControl,
+			got.Messages[0].Content[0].CacheControl, got.Messages[1].Content, last)
 	}
 }
 

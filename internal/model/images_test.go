@@ -31,7 +31,7 @@ func TestImagesOnTheWire(t *testing.T) {
 	}
 	// Anthropic: a base64 image block.
 	b, _ = json.Marshal(toAnthropicRequest(withImage()))
-	if !strings.Contains(string(b), `{"type":"image","source":{"type":"base64","media_type":"image/png","data":"UE5H"}}`) {
+	if !strings.Contains(string(b), `{"type":"image","source":{"type":"base64","media_type":"image/png","data":"UE5H"}`) {
 		t.Fatalf("anthropic: %s", b)
 	}
 	// Images never reach the stored context.
