@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -46,12 +45,15 @@ func (m *Manager) resumeIfInterrupted(ctx context.Context, agentID string) error
 		}
 	}
 	logger(agentID).Info("resuming a turn interrupted by a restart")
-	// Events already waiting start the next turn, which carries on from the same context.
-	if err := m.Retry(ctx, agentID); !errors.Is(err, ErrBusy) {
-		return err
-	}
-	return nil
+	// Say what happened: with nothing new to respond to, models tend to improvise.
+	_, err = m.store.InsertEvent(ctx, agentID, EventSystem, map[string]string{"text": resumeNotice})
+	return err
 }
+
+// resumeNotice starts a turn that a restart interrupted.
+const resumeNotice = "The server restarted in the middle of your last turn. If something from that turn is " +
+	"unfinished, finish just that (check what's already done above before redoing anything). " +
+	"Don't start anything new; if nothing is left, call done."
 
 // turnState reports whether the context ends mid-turn, and which tool calls of the last
 // assistant message have no result yet.

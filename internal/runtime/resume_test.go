@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/etchebarne/openbot/internal/bus"
@@ -78,8 +79,12 @@ func TestInterruptedTurnResumesOnStart(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	var resumedWith string
 	llm := &fakeModel{responses: []func(model.Request) model.Message{
-		func(model.Request) model.Message { return sendCall(chatID, "hi, I'm Notes") },
+		func(req model.Request) model.Message {
+			resumedWith = req.Messages[len(req.Messages)-1].Text()
+			return sendCall(chatID, "hi, I'm Notes")
+		},
 		func(model.Request) model.Message { return model.Text("assistant", "") },
 	}}
 	runCtx, cancel := context.WithCancel(ctx)
@@ -92,5 +97,9 @@ func TestInterruptedTurnResumesOnStart(t *testing.T) {
 	f := fixture{store: st, rt: rt, llm: llm, agent: agent, chatID: chatID}
 	if msgs := f.waitForMessages(t, 1); msgs[0].Body != "hi, I'm Notes" {
 		t.Fatalf("expected the interrupted intro to be sent, got %+v", msgs)
+	}
+	// The agent is told what happened, so it finishes rather than improvises.
+	if !strings.Contains(resumedWith, "restarted in the middle of your last turn") {
+		t.Fatalf("a resumed turn should explain itself: %q", resumedWith)
 	}
 }
