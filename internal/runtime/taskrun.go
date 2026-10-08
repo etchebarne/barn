@@ -36,6 +36,9 @@ func (l *loop) runTasks(ctx context.Context, events []store.Event) {
 	for i, e := range events {
 		ids[i] = e.ID
 	}
+	// Working before the events are consumed: never idle with work in hand (until all runs end).
+	l.m.setActivity(l.agentID, view.Working("thinking"))
+	defer l.m.setActivity(l.agentID, view.Idle())
 	// Consumed up front: a run that's cut short (a restart) isn't repeated with its side effects.
 	if err := l.m.store.ConsumeEvents(ctx, l.agentID, ids, nil); err != nil {
 		logger(l.agentID).Error("consume task events", "err", err)
@@ -87,7 +90,6 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 	}
 
 	l.m.setActivity(agent.ID, view.Working("running "+task.Name))
-	defer l.m.setActivity(agent.ID, view.Idle())
 	l.fresh, l.sent, l.aside, l.turnChars = map[string]bool{}, map[string]string{}, nil, 0
 
 	msgs, err := l.head(ctx, agent)

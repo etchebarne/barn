@@ -26,12 +26,19 @@ type fakeModel struct {
 	failNext  error
 	// handler, if set, answers every request (used when several agents share the model).
 	handler func(req model.Request) model.Message
+	// concurrent lets handler run for several requests at once (it must do its own locking).
+	concurrent bool
 }
 
 func (f *fakeModel) Chat(_ context.Context, req model.Request) (model.Response, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.requests = append(f.requests, req)
+	if f.concurrent && f.handler != nil && f.failNext == nil {
+		h := f.handler
+		f.mu.Unlock()
+		return model.Response{Message: h(req)}, nil
+	}
+	defer f.mu.Unlock()
 	if err := f.failNext; err != nil {
 		f.failNext = nil
 		return model.Response{}, err

@@ -20,6 +20,9 @@ func TestDelegate(t *testing.T) {
 		return sandbox.Result{Output: "found 3 TODOs in " + command + "\n"}
 	}}
 	var parentResult string
+	f.llm.concurrent = true
+	both := make(chan struct{})
+	var bothOnce sync.Once
 	f.llm.handler = func(req model.Request) model.Message {
 		sys := req.Messages[0].Text()
 		last := req.Messages[len(req.Messages)-1]
@@ -30,8 +33,15 @@ func TestDelegate(t *testing.T) {
 				mu.Lock()
 				running++
 				maxRunning = max(maxRunning, running)
+				if running == 2 {
+					bothOnce.Do(func() { close(both) })
+				}
 				mu.Unlock()
-				time.Sleep(50 * time.Millisecond)
+				// Wait (briefly) for the other helper: they should be running at the same time.
+				select {
+				case <-both:
+				case <-time.After(3 * time.Second):
+				}
 				// Helpers can't message anyone.
 				m := toolCall(toolRunCommand, map[string]string{"command": "grep -rn TODO " + job})
 				m.ToolCalls = append(m.ToolCalls, sendCall("x", "hi").ToolCalls...)
@@ -54,7 +64,9 @@ func TestDelegate(t *testing.T) {
 			m.ToolCalls[1].ID = "call_2"
 			return m
 		case last.Role == "tool":
+			mu.Lock()
 			parentResult = last.Text()
+			mu.Unlock()
 		}
 		return model.Text("assistant", "")
 	}
@@ -66,6 +78,8 @@ func TestDelegate(t *testing.T) {
 		t.Errorf("two delegate calls in one step should run in parallel (max running: %d)", maxRunning)
 	}
 	mu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 	if !strings.Contains(parentResult, "Report for docs/: 3 TODOs.") {
 		t.Fatalf("the parent should get the helper's report: %s", parentResult)
 	}
