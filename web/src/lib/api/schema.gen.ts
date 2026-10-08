@@ -826,6 +826,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Tokens the agent used (as providers reported them), and how full its context is. */
+        get: operations["getAgentUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Tokens all agents used, per day and per agent. */
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/secrets": {
         parameters: {
             query?: never;
@@ -1441,6 +1477,46 @@ export interface components {
             preview?: components["schemas"]["ActionPreview"] | null;
             /** @description The secret asked for (secret prompts only) */
             secret?: components["schemas"]["SecretRequest"] | null;
+        };
+        UsageTotals: {
+            calls: number;
+            /** @description All input */
+            promptTokens: number;
+            /** @description Input read from the provider's cache (cheaper) */
+            cachedTokens: number;
+            cacheWriteTokens: number;
+            completionTokens: number;
+            /** @description Part of completionTokens */
+            reasoningTokens: number;
+        };
+        DayUsage: components["schemas"]["UsageTotals"] & {
+            /** Format: date */
+            date: string;
+        };
+        PurposeUsage: components["schemas"]["UsageTotals"] & {
+            /** @description turn (conversation), task (scheduled/app-event runs), compaction, subagent */
+            purpose: string;
+        };
+        AgentUsage: components["schemas"]["UsageTotals"] & {
+            agentId: string;
+        };
+        UsageReport: {
+            today: components["schemas"]["UsageTotals"];
+            total: components["schemas"]["UsageTotals"];
+            /** @description Oldest first, one per day (empty days included) */
+            days: components["schemas"]["DayUsage"][];
+            byPurpose: components["schemas"]["PurposeUsage"][];
+            /** @description Per agent, most used first (all-agents report; one entry for an agent's report) */
+            byAgent: components["schemas"]["AgentUsage"][];
+            /** @description The agent's context right now (agent reports only) */
+            context?: {
+                /** @description Input size of its latest request */
+                tokens: number;
+                /** @description Its model's context window */
+                window: number;
+                /** @description When older context gets summarized */
+                compactAt: number;
+            } | null;
         };
         SecretRequest: {
             /** @description Environment variable name, e.g. "GITHUB_TOKEN" */
@@ -3156,6 +3232,57 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    getAgentUsage: {
+        parameters: {
+            query?: {
+                /** @description How many days back, including today, in the user's time zone */
+                days?: number;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageReport"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getUsage: {
+        parameters: {
+            query?: {
+                /** @description How many days back, including today, in the user's time zone */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageReport"];
+                };
+            };
+            401: components["responses"]["Error"];
         };
     };
     listAgentSecrets: {

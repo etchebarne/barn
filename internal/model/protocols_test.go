@@ -189,3 +189,32 @@ func TestChatPicksAndRemembersProtocol(t *testing.T) {
 		t.Fatalf("expected the working protocol to be remembered, hits %v", h)
 	}
 }
+
+func TestUsage(t *testing.T) {
+	var chat chatUsage
+	json.Unmarshal([]byte(`{"prompt_tokens":1000,"completion_tokens":50,"prompt_tokens_details":{"cached_tokens":800},
+		"completion_tokens_details":{"reasoning_tokens":20}}`), &chat)
+	if u := chat.usage(); u != (Usage{PromptTokens: 1000, CachedTokens: 800, CompletionTokens: 50, ReasoningTokens: 20}) {
+		t.Fatalf("chat: %+v", u)
+	}
+	var deepseek chatUsage
+	json.Unmarshal([]byte(`{"prompt_tokens":1000,"completion_tokens":5,"prompt_cache_hit_tokens":900,"prompt_cache_miss_tokens":100}`), &deepseek)
+	if u := deepseek.usage(); u.CachedTokens != 900 {
+		t.Fatalf("deepseek: %+v", u)
+	}
+
+	var resp responsesResponse
+	json.Unmarshal([]byte(`{"status":"completed","output":[],"usage":{"input_tokens":400,"output_tokens":30,
+		"input_tokens_details":{"cached_tokens":300},"output_tokens_details":{"reasoning_tokens":10}}}`), &resp)
+	if u := fromResponsesResponse(resp).Usage; u != (Usage{PromptTokens: 400, CachedTokens: 300, CompletionTokens: 30, ReasoningTokens: 10}) {
+		t.Fatalf("responses: %+v", u)
+	}
+
+	var anth anthropicResponse
+	json.Unmarshal([]byte(`{"content":[],"stop_reason":"end_turn","usage":{"input_tokens":50,"output_tokens":7,
+		"cache_read_input_tokens":900,"cache_creation_input_tokens":100}}`), &anth)
+	// Anthropic's input_tokens excludes the cache; the total counts it.
+	if u := fromAnthropicResponse(anth).Usage; u != (Usage{PromptTokens: 1050, CachedTokens: 900, CacheWriteTokens: 100, CompletionTokens: 7}) {
+		t.Fatalf("anthropic: %+v", u)
+	}
+}

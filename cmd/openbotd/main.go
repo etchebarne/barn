@@ -71,6 +71,9 @@ func run() error {
 	rt := runtime.New(st, b, llm)
 	rt.CompactAtTokens = cfg.CompactAtTokens
 	rt.MaxSteps = cfg.MaxSteps
+	windows := model.NewWindows(model.ModelsDevURL)
+	go windows.Refresh()
+	rt.ContextWindow = windows.Get
 	rt.SecretBox = box
 	rt.Timezone = set.Location
 	if cfg.Sandboxes == "docker" {

@@ -11,10 +11,10 @@ import (
 	"github.com/etchebarne/openbot/internal/view"
 )
 
-// DefaultCompactAtTokens is when an agent's context gets compacted. Models served by OpenCode Go
-// have context windows of 128k tokens or more; compacting well before that keeps requests fast
-// and cheap and leaves room for long tool results.
-const DefaultCompactAtTokens = 80_000
+// DefaultCompactAtTokens caps when an agent's context gets compacted. OpenCode Go's models have
+// windows of 128k to 1M tokens, but every step resends the whole context, so compacting well
+// before that keeps steps fast and cheap.
+const DefaultCompactAtTokens = 64_000
 
 // keepFraction of the compaction threshold stays verbatim (the most recent turns).
 const keepFraction = 0.3
@@ -42,7 +42,7 @@ func estimateTokens(req model.Request) int {
 // maybeCompact summarizes the oldest part of the agent's context when its next request would be
 // too large. Failures are logged and the turn continues with the full context.
 func (l *loop) maybeCompact(ctx context.Context, agent store.Agent) {
-	limit := l.m.compactAt()
+	limit := l.m.compactAt(agent.Model)
 	req, err := l.request(ctx, agent)
 	if err != nil || estimateTokens(req) < limit {
 		return
@@ -84,7 +84,7 @@ func (l *loop) compact(ctx context.Context, agent store.Agent, limit int) error 
 	}
 
 	l.m.setActivity(agent.ID, view.Working("tidying up my notes"))
-	resp, err := l.m.llm.Chat(ctx, model.Request{
+	resp, err := l.m.chat(ctx, agent.ID, "compaction", model.Request{
 		Session:   "openbot-agent-" + agent.ID,
 		Model:     agent.Model,
 		Messages:  []model.Message{model.Text("system", compactorPrompt), model.Text("user", transcript.String())},

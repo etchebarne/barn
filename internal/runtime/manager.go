@@ -53,6 +53,8 @@ type Manager struct {
 	MaxSteps int
 	// Sandboxes runs agents' commands; nil means no sandbox tools (set before Start).
 	Sandboxes Sandboxer
+	// ContextWindow returns a model's context window in tokens (0 if unknown; set before Start).
+	ContextWindow func(model string) int
 	// SecretBox encrypts the secrets users give agents; nil means agents can't ask for them.
 	SecretBox *secrets.Box
 	// Timezone is the user's time zone for schedules and prompts (set before Start).
@@ -119,11 +121,14 @@ func (m *Manager) maxSteps() int {
 	return DefaultMaxSteps
 }
 
-func (m *Manager) compactAt() int {
+// compactAt is when a model's context gets compacted: half its window, but no more than the cap
+// (every step resends the whole context, so a smaller one is cheaper).
+func (m *Manager) compactAt(modelID string) int {
+	limit := DefaultCompactAtTokens
 	if m.CompactAtTokens > 0 {
-		return m.CompactAtTokens
+		limit = m.CompactAtTokens
 	}
-	return DefaultCompactAtTokens
+	return min(limit, m.contextWindow(modelID)/2)
 }
 
 // Wait blocks until all loops have exited.

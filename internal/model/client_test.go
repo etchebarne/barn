@@ -108,3 +108,16 @@ func TestChatRetriesTransientFailures(t *testing.T) {
 		t.Fatalf("a 400 isn't retried: %d calls", calls.Load())
 	}
 }
+
+func TestWindows(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"opencode":{"models":{"kimi":{"limit":{"context":200000}},"glm":{"limit":{"context":64000}}}},
+			"opencode-go":{"models":{"kimi":{"limit":{"context":262144}}}},"other":{"models":{"x":{"limit":{"context":5}}}}}`))
+	}))
+	defer srv.Close()
+	w := NewWindows(srv.URL)
+	w.Refresh()
+	if w.Get("kimi") != 262144 || w.Get("glm") != 64000 || w.Get("x") != 0 {
+		t.Fatalf("windows: kimi=%d glm=%d x=%d", w.Get("kimi"), w.Get("glm"), w.Get("x"))
+	}
+}

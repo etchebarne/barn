@@ -523,6 +523,23 @@ type AgentSecret struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
+// AgentUsage defines model for AgentUsage.
+type AgentUsage struct {
+	AgentId          string `json:"agentId"`
+	CacheWriteTokens int    `json:"cacheWriteTokens"`
+
+	// CachedTokens Input read from the provider's cache (cheaper)
+	CachedTokens     int `json:"cachedTokens"`
+	Calls            int `json:"calls"`
+	CompletionTokens int `json:"completionTokens"`
+
+	// PromptTokens All input
+	PromptTokens int `json:"promptTokens"`
+
+	// ReasoningTokens Part of completionTokens
+	ReasoningTokens int `json:"reasoningTokens"`
+}
+
 // Attachment defines model for Attachment.
 type Attachment struct {
 	// Height Pixels
@@ -733,6 +750,23 @@ type CreateTaskRequest struct {
 type Credentials struct {
 	Password string `json:"password"`
 	Username string `json:"username"`
+}
+
+// DayUsage defines model for DayUsage.
+type DayUsage struct {
+	CacheWriteTokens int `json:"cacheWriteTokens"`
+
+	// CachedTokens Input read from the provider's cache (cheaper)
+	CachedTokens     int                `json:"cachedTokens"`
+	Calls            int                `json:"calls"`
+	CompletionTokens int                `json:"completionTokens"`
+	Date             openapi_types.Date `json:"date"`
+
+	// PromptTokens All input
+	PromptTokens int `json:"promptTokens"`
+
+	// ReasoningTokens Part of completionTokens
+	ReasoningTokens int `json:"reasoningTokens"`
 }
 
 // Error defines model for Error.
@@ -987,6 +1021,25 @@ type ProviderSettings struct {
 
 // ProviderSettingsProvider defines model for ProviderSettings.Provider.
 type ProviderSettingsProvider string
+
+// PurposeUsage defines model for PurposeUsage.
+type PurposeUsage struct {
+	CacheWriteTokens int `json:"cacheWriteTokens"`
+
+	// CachedTokens Input read from the provider's cache (cheaper)
+	CachedTokens     int `json:"cachedTokens"`
+	Calls            int `json:"calls"`
+	CompletionTokens int `json:"completionTokens"`
+
+	// PromptTokens All input
+	PromptTokens int `json:"promptTokens"`
+
+	// Purpose turn (conversation), task (scheduled/app-event runs), compaction, subagent
+	Purpose string `json:"purpose"`
+
+	// ReasoningTokens Part of completionTokens
+	ReasoningTokens int `json:"reasoningTokens"`
+}
 
 // PushConfig defines model for PushConfig.
 type PushConfig struct {
@@ -1245,6 +1298,46 @@ type UpdateTaskRequest struct {
 	Purpose *string `json:"purpose,omitempty"`
 }
 
+// UsageReport defines model for UsageReport.
+type UsageReport struct {
+	// ByAgent Per agent, most used first (all-agents report; one entry for an agent's report)
+	ByAgent   []AgentUsage   `json:"byAgent"`
+	ByPurpose []PurposeUsage `json:"byPurpose"`
+
+	// Context The agent's context right now (agent reports only)
+	Context *struct {
+		// CompactAt When older context gets summarized
+		CompactAt int `json:"compactAt"`
+
+		// Tokens Input size of its latest request
+		Tokens int `json:"tokens"`
+
+		// Window Its model's context window
+		Window int `json:"window"`
+	} `json:"context,omitempty"`
+
+	// Days Oldest first, one per day (empty days included)
+	Days  []DayUsage  `json:"days"`
+	Today UsageTotals `json:"today"`
+	Total UsageTotals `json:"total"`
+}
+
+// UsageTotals defines model for UsageTotals.
+type UsageTotals struct {
+	CacheWriteTokens int `json:"cacheWriteTokens"`
+
+	// CachedTokens Input read from the provider's cache (cheaper)
+	CachedTokens     int `json:"cachedTokens"`
+	Calls            int `json:"calls"`
+	CompletionTokens int `json:"completionTokens"`
+
+	// PromptTokens All input
+	PromptTokens int `json:"promptTokens"`
+
+	// ReasoningTokens Part of completionTokens
+	ReasoningTokens int `json:"reasoningTokens"`
+}
+
 // User defines model for User.
 type User struct {
 	Id       string `json:"id"`
@@ -1383,6 +1476,12 @@ type SandboxTerminalParams struct {
 	Rows *int `form:"rows,omitempty" json:"rows,omitempty"`
 }
 
+// GetAgentUsageParams defines parameters for GetAgentUsage.
+type GetAgentUsageParams struct {
+	// Days How many days back, including today, in the user's time zone
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
+}
+
 // GetAttachmentParams defines parameters for GetAttachment.
 type GetAttachmentParams struct {
 	// Download Send as a download even if the browser could show it
@@ -1399,6 +1498,12 @@ type ListMessagesParams struct {
 	// Before Return messages older than this message id
 	Before *string `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetUsageParams defines parameters for GetUsage.
+type GetUsageParams struct {
+	// Days How many days back, including today, in the user's time zone
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
 }
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
@@ -1952,6 +2057,9 @@ type ServerInterface interface {
 	// (POST /agents/{agentId}/tasks)
 	CreateTask(w http.ResponseWriter, r *http.Request, agentId string)
 
+	// (GET /agents/{agentId}/usage)
+	GetAgentUsage(w http.ResponseWriter, r *http.Request, agentId string, params GetAgentUsageParams)
+
 	// (GET /attachments/{attachmentId})
 	GetAttachment(w http.ResponseWriter, r *http.Request, attachmentId string, params GetAttachmentParams)
 
@@ -2071,6 +2179,9 @@ type ServerInterface interface {
 
 	// (PATCH /tasks/{taskId})
 	UpdateTask(w http.ResponseWriter, r *http.Request, taskId string)
+
+	// (GET /usage)
+	GetUsage(w http.ResponseWriter, r *http.Request, params GetUsageParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2836,6 +2947,48 @@ func (siw *ServerInterfaceWrapper) CreateTask(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTask(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentUsage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAgentUsageParams
+
+	// ------------- Optional query parameter "days" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "days", r.URL.Query(), &params.Days, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "days"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "days", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentUsage(w, r, agentId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3654,6 +3807,39 @@ func (siw *ServerInterfaceWrapper) UpdateTask(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetUsage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUsageParams
+
+	// ------------- Optional query parameter "days" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "days", r.URL.Query(), &params.Days, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "days"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "days", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUsage(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -3830,6 +4016,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/timezone", wrapper.SetTimezone)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agentId}/retry", wrapper.RetryAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{messageId}/secret", wrapper.ProvideSecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/usage", wrapper.GetAgentUsage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/usage", wrapper.GetUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agentId}/secrets", wrapper.ListAgentSecrets)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{agentId}/secrets/{name}", wrapper.DeleteAgentSecret)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{agentId}/secrets/{name}", wrapper.SetAgentSecret)

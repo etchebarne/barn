@@ -131,7 +131,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			log.Error("build request", "err", err)
 			return
 		}
-		resp, err := l.m.llm.Chat(ctx, req)
+		resp, err := l.m.chat(ctx, agent.ID, "turn", req)
 		if err != nil {
 			if ctx.Err() == nil {
 				log.Warn("model call failed", "err", err)
@@ -221,7 +221,7 @@ func (l *loop) wrapUp(ctx context.Context, agent store.Agent) {
 	if err != nil {
 		return
 	}
-	resp, err := l.m.llm.Chat(ctx, req)
+	resp, err := l.m.chat(ctx, agent.ID, "turn", req)
 	if err != nil {
 		return
 	}

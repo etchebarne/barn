@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/etchebarne/openbot/internal/attachments"
 	"github.com/etchebarne/openbot/internal/bus"
@@ -984,5 +985,38 @@ func TestSecretsAPI(t *testing.T) {
 	}
 	if resp, _ := c.do("DELETE", base+"/API_KEY", "", true); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("delete twice: %d", resp.StatusCode)
+	}
+}
+
+func TestUsageAPI(t *testing.T) {
+	c, st := setupWithKey(t)
+	ctx := context.Background()
+	a, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "a", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	b, _, _ := st.CreateAgentWithDM(ctx, store.Agent{Name: "b", Instructions: "x", Model: "model-a", Language: "auto", TrustMode: "ask"})
+	for _, u := range []store.UsageRecord{
+		{AgentID: a.ID, Model: "model-a", Purpose: "turn", PromptTokens: 1000, CachedTokens: 800, CompletionTokens: 50},
+		{AgentID: a.ID, Model: "model-a", Purpose: "task", PromptTokens: 300, CompletionTokens: 20},
+		{AgentID: b.ID, Model: "model-a", Purpose: "turn", PromptTokens: 5000, CompletionTokens: 10},
+		{AgentID: a.ID, Model: "model-a", Purpose: "turn", PromptTokens: 9, CreatedAt: time.Now().AddDate(0, 0, -30).UnixMilli()},
+	} {
+		if err := st.RecordUsage(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, r := c.do("GET", "/api/agents/"+a.ID+"/usage?days=7", "", false)
+	today, _ := r["today"].(map[string]any)
+	days, _ := r["days"].([]any)
+	ctxInfo, _ := r["context"].(map[string]any)
+	if resp.StatusCode != http.StatusOK || today["calls"] != float64(2) || today["promptTokens"] != float64(1300) ||
+		today["cachedTokens"] != float64(800) || len(days) != 7 || ctxInfo["tokens"] != float64(1000) || ctxInfo["window"] == nil {
+		t.Fatalf("agent usage: %d %v", resp.StatusCode, r)
+	}
+	_, all := c.do("GET", "/api/usage", "", false)
+	byAgent, _ := all["byAgent"].([]any)
+	if len(byAgent) != 2 || byAgent[0].(map[string]any)["agentId"] != b.ID || all["context"] != nil {
+		t.Fatalf("all usage: %v", all)
+	}
+	if resp, _ := c.do("GET", "/api/agents/nope/usage", "", false); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown agent: %d", resp.StatusCode)
 	}
 }

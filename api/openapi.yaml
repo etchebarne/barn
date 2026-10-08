@@ -1092,6 +1092,48 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /agents/{agentId}/usage:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAgentUsage
+      tags: [agents]
+      description: Tokens the agent used (as providers reported them), and how full its context is.
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 90, default: 7 }
+          description: How many days back, including today, in the user's time zone
+      responses:
+        "200":
+          description: Usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageReport" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /usage:
+    get:
+      operationId: getUsage
+      tags: [settings]
+      description: Tokens all agents used, per day and per agent.
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 90, default: 7 }
+          description: How many days back, including today, in the user's time zone
+      responses:
+        "200":
+          description: Usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageReport" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /agents/{agentId}/secrets:
     parameters:
       - name: agentId
@@ -2035,6 +2077,70 @@ components:
           allOf: [{ $ref: "#/components/schemas/SecretRequest" }]
           nullable: true
           description: The secret asked for (secret prompts only)
+
+    UsageTotals:
+      type: object
+      required: [calls, promptTokens, cachedTokens, cacheWriteTokens, completionTokens, reasoningTokens]
+      properties:
+        calls: { type: integer }
+        promptTokens: { type: integer, description: All input, including cached }
+        cachedTokens: { type: integer, description: Input read from the provider's cache (cheaper) }
+        cacheWriteTokens: { type: integer }
+        completionTokens: { type: integer }
+        reasoningTokens: { type: integer, description: Part of completionTokens }
+
+    DayUsage:
+      allOf:
+        - $ref: "#/components/schemas/UsageTotals"
+        - type: object
+          required: [date]
+          properties:
+            date: { type: string, format: date }
+
+    PurposeUsage:
+      allOf:
+        - $ref: "#/components/schemas/UsageTotals"
+        - type: object
+          required: [purpose]
+          properties:
+            purpose:
+              type: string
+              description: turn (conversation), task (scheduled/app-event runs), compaction, subagent
+
+    AgentUsage:
+      allOf:
+        - $ref: "#/components/schemas/UsageTotals"
+        - type: object
+          required: [agentId]
+          properties:
+            agentId: { type: string }
+
+    UsageReport:
+      type: object
+      required: [today, total, days, byPurpose, byAgent]
+      properties:
+        today: { $ref: "#/components/schemas/UsageTotals" }
+        total: { $ref: "#/components/schemas/UsageTotals" }
+        days:
+          type: array
+          description: Oldest first, one per day (empty days included)
+          items: { $ref: "#/components/schemas/DayUsage" }
+        byPurpose:
+          type: array
+          items: { $ref: "#/components/schemas/PurposeUsage" }
+        byAgent:
+          type: array
+          description: Per agent, most used first (all-agents report; one entry for an agent's report)
+          items: { $ref: "#/components/schemas/AgentUsage" }
+        context:
+          type: object
+          nullable: true
+          description: The agent's context right now (agent reports only)
+          required: [tokens, window, compactAt]
+          properties:
+            tokens: { type: integer, description: Input size of its latest request }
+            window: { type: integer, description: Its model's context window }
+            compactAt: { type: integer, description: When older context gets summarized }
 
     SecretRequest:
       type: object

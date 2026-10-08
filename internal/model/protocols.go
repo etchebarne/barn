@@ -58,7 +58,7 @@ func sendChatCompletions(ctx context.Context, c *Client, key string, req Request
 			Message      Message `json:"message"`
 			FinishReason string  `json:"finish_reason"`
 		} `json:"choices"`
-		Usage Usage `json:"usage"`
+		Usage chatUsage `json:"usage"`
 	}
 	if err := c.do(ctx, key, req.Session, http.MethodPost, "/chat/completions", nil, toChatRequest(req), &out); err != nil {
 		return Response{}, err
@@ -67,7 +67,7 @@ func sendChatCompletions(ctx context.Context, c *Client, key string, req Request
 		return Response{}, errors.New("provider returned no choices")
 	}
 	ch := out.Choices[0]
-	return Response{Message: ch.Message, FinishReason: ch.FinishReason, Usage: out.Usage}, nil
+	return Response{Message: ch.Message, FinishReason: ch.FinishReason, Usage: out.Usage.usage()}, nil
 }
 
 // chatRequest is Request on the wire: user messages with images send their content as parts.
@@ -194,8 +194,14 @@ type responsesResponse struct {
 		Arguments string `json:"arguments"`
 	} `json:"output"`
 	Usage struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		InputTokens        int `json:"input_tokens"`
+		OutputTokens       int `json:"output_tokens"`
+		InputTokensDetails struct {
+			CachedTokens int `json:"cached_tokens"`
+		} `json:"input_tokens_details"`
+		OutputTokensDetails struct {
+			ReasoningTokens int `json:"reasoning_tokens"`
+		} `json:"output_tokens_details"`
 	} `json:"usage"`
 }
 
@@ -227,7 +233,10 @@ func fromResponsesResponse(r responsesResponse) Response {
 	return Response{
 		Message:      msg,
 		FinishReason: finish,
-		Usage:        Usage{PromptTokens: r.Usage.InputTokens, CompletionTokens: r.Usage.OutputTokens},
+		Usage: Usage{
+			PromptTokens: r.Usage.InputTokens, CachedTokens: r.Usage.InputTokensDetails.CachedTokens,
+			CompletionTokens: r.Usage.OutputTokens, ReasoningTokens: r.Usage.OutputTokensDetails.ReasoningTokens,
+		},
 	}
 }
 
@@ -345,8 +354,10 @@ type anthropicResponse struct {
 	} `json:"content"`
 	StopReason string `json:"stop_reason"`
 	Usage      struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		InputTokens              int `json:"input_tokens"` // excludes cache reads and writes
+		OutputTokens             int `json:"output_tokens"`
+		CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 	} `json:"usage"`
 }
 
@@ -379,7 +390,12 @@ func fromAnthropicResponse(r anthropicResponse) Response {
 	return Response{
 		Message:      msg,
 		FinishReason: finish,
-		Usage:        Usage{PromptTokens: r.Usage.InputTokens, CompletionTokens: r.Usage.OutputTokens},
+		Usage: Usage{
+			PromptTokens:     r.Usage.InputTokens + r.Usage.CacheReadInputTokens + r.Usage.CacheCreationInputTokens,
+			CachedTokens:     r.Usage.CacheReadInputTokens,
+			CacheWriteTokens: r.Usage.CacheCreationInputTokens,
+			CompletionTokens: r.Usage.OutputTokens,
+		},
 	}
 }
 

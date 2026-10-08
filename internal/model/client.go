@@ -85,9 +85,45 @@ type Request struct {
 	MaxTokens int       `json:"max_tokens,omitempty"`
 }
 
+// Usage is what a call cost, as the provider reported it.
 type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
+	// PromptTokens is all input, including what was read from or written to the cache.
+	PromptTokens int
+	// CachedTokens of the input were read from the provider's prompt cache (billed cheaper).
+	CachedTokens int
+	// CacheWriteTokens of the input were written to the cache (Anthropic-style caching).
+	CacheWriteTokens int
+	CompletionTokens int
+	// ReasoningTokens of the output were the model's hidden reasoning.
+	ReasoningTokens int
+}
+
+// chatUsage is usage in the Chat Completions format, with the cache fields providers add.
+type chatUsage struct {
+	PromptTokens        int `json:"prompt_tokens"`
+	CompletionTokens    int `json:"completion_tokens"`
+	PromptTokensDetails struct {
+		CachedTokens     int `json:"cached_tokens"`
+		CacheWriteTokens int `json:"cache_write_tokens"`
+	} `json:"prompt_tokens_details"`
+	CompletionTokensDetails struct {
+		ReasoningTokens int `json:"reasoning_tokens"`
+	} `json:"completion_tokens_details"`
+	// DeepSeek reports cache hits separately.
+	PromptCacheHitTokens int `json:"prompt_cache_hit_tokens"`
+	// Some gateways pass Anthropic's fields through.
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+}
+
+func (u chatUsage) usage() Usage {
+	return Usage{
+		PromptTokens:     u.PromptTokens,
+		CachedTokens:     max(u.PromptTokensDetails.CachedTokens, u.PromptCacheHitTokens, u.CacheReadInputTokens),
+		CacheWriteTokens: max(u.PromptTokensDetails.CacheWriteTokens, u.CacheCreationInputTokens),
+		CompletionTokens: u.CompletionTokens,
+		ReasoningTokens:  u.CompletionTokensDetails.ReasoningTokens,
+	}
 }
 
 type Response struct {
