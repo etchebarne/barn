@@ -71,6 +71,7 @@ func run() error {
 	rt := runtime.New(st, b, llm)
 	rt.CompactAtTokens = cfg.CompactAtTokens
 	rt.MaxSteps = cfg.MaxSteps
+	rt.SecretBox = box
 	rt.Timezone = set.Location
 	if cfg.Sandboxes == "docker" {
 		sbx := sandbox.New(sandbox.Options{Image: cfg.SandboxImage, SharedDir: filepath.Join(cfg.DataDir, "shared")})
