@@ -445,6 +445,37 @@ All frontend work follows Martin's design guidelines
     flavor of shadcn where it matters).
   - Metric-matched fallback fonts (`size-adjust`, ascent/descent overrides) for zero layout shift.
   - Reveal per-message actions (copy, reply) on hover or focus, not always visible.
+- **Visual foundation** (tokens in `web/src/index.css`):
+  - Three layers of depth instead of lines: the **frame** (window chrome; the sidebar sits on
+    it), the **panel** (the main pane, inset in the frame with a 12px radius), and
+    **surfaces** on the panel (bubbles, composer, cards). Borders are faint (6–8% of the text
+    color).
+  - Primary is neutral (light on dark, dark on light). `brand` is the one hue, kept for focus,
+    links, unread counts and the "New" divider; `warning` marks things waiting on the user.
+  - Pressable controls scale to 0.97 on press; hover feedback is instant.
+- **Chat layout**:
+  - The user's messages are bubbles on the right. An agent's plain replies are soft bubbles on
+    the left; replies with code, tables or headings render flat at the column's width, with
+    their actions in a footer row.
+  - DMs show no avatar or name per message (the header says who it is). Groups head each run
+    with the author's avatar and name, and keep a gutter so the run lines up.
+  - Replies quote inside their own bubble. Prompts are standalone cards with a "Waiting for
+    you" chip while pending.
+  - What an agent is doing shows at the end of the transcript, where its reply will land:
+    working avatar, shimmering label, elapsed time after 5s (`AgentActivity.since`). It
+    appears after 120ms and lingers 500ms, so quick turns don't flicker.
+  - The composer is one line until the text wraps, then grows a toolbar row; what it's
+    attached to (a reply) sits on a slab tucked under its top edge.
+  - Settings are a few real pages (General, Models & usage, Account; `?section=`), not one
+    long scroll. The agent sheet is a header (model, status, Open chat, Computer) over tabs of
+    settings grouped in cards.
+  - Connectors is a card grid with the apps' own logos (`brand-logos.tsx`, Simple Icons):
+    Yours and Discover, search, and Add for your own servers and webhooks. A card opens the
+    add flow at that app.
+  - The command palette groups Chats, Create, Go to and Preferences; agents' settings and
+    computers appear once you type.
+  - Sidebar rows: avatar with a status badge (working dots in DMs, amber dot when a question
+    waits), name and time, preview, then "Waiting" or the unread count.
 
 ## 11. Auth and networking
 

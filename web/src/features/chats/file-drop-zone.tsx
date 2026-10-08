@@ -19,7 +19,7 @@ export function FileDropZone({
 
   return (
     <div
-      className="relative flex h-svh min-w-0 flex-1 flex-col"
+      className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
       onDragEnter={(event) => {
         if (!hasFiles(event)) return
         event.preventDefault()

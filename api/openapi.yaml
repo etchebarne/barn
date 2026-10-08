@@ -1866,6 +1866,11 @@ components:
           type: string
           nullable: true
           description: What the agent is doing, e.g. "thinking" or "running npm test"
+        since:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the agent started working (unchanged while the label changes); null when idle
 
     ChatMember:
       type: object

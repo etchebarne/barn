@@ -508,7 +508,10 @@ type AgentTrustMode string
 // AgentActivity defines model for AgentActivity.
 type AgentActivity struct {
 	// Label What the agent is doing, e.g. "thinking" or "running npm test"
-	Label *string            `json:"label"`
+	Label *string `json:"label"`
+
+	// Since When the agent started working (unchanged while the label changes); null when idle
+	Since *time.Time         `json:"since,omitempty"`
 	State AgentActivityState `json:"state"`
 }
 

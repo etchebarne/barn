@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 
 import {
@@ -12,6 +13,8 @@ import { AddConnection, type AddStep } from "./add-connection"
 import { useConnectors, useConnectorTypes } from "./api"
 import { ConnectorDetail } from "./connector-detail"
 import { ConnectorIcon } from "./connector-icon"
+import { connectionApp, parseAddSelection } from "./discover"
+import { catalogQueryOptions } from "./signin"
 
 const ADD_TITLES: Record<AddStep["step"], { title: string; description: string }> = {
   type: { title: "Add connection", description: "Pick an app to connect." },
@@ -36,13 +39,19 @@ export function ConnectorSheet({
 }) {
   const { data: connectors } = useConnectors()
   const { data: types } = useConnectorTypes()
-  const [addStep, setAddStep] = useState<AddStep["step"]>("type")
+  const { data: catalog } = useQuery(catalogQueryOptions)
+  const [stepChange, setAddStep] = useState<AddStep["step"] | null>(null)
   const connector = connectors?.find((c) => c.id === selection)
   const type = types?.find((t) => t.type === connector?.type)
-  const adding = selection === "new"
+  const app = connector ? connectionApp(connector, catalog) : undefined
+  const add = parseAddSelection(selection)
+  const adding = add !== null
+  // Until the flow moves, the title follows where it started.
+  const addStep: AddStep["step"] =
+    stepChange ?? (add?.start ? (add.start.kind === "app" ? "signin" : "form") : "type")
   const open = adding || connector !== undefined
   function close() {
-    setAddStep("type")
+    setAddStep(null)
     onSelect(undefined)
   }
 
@@ -64,21 +73,22 @@ export function ConnectorSheet({
           </SheetHeader>
         ) : connector ? (
           <SheetHeader className="flex-row items-center gap-3 border-b pr-12">
-            <ConnectorIcon type={connector.type} className="size-10" />
+            <ConnectorIcon type={app?.id ?? connector.type} size="md" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <SheetTitle className="truncate">{connector.name}</SheetTitle>
-              <SheetDescription>{type?.name ?? connector.type}</SheetDescription>
+              <SheetDescription>{app?.name ?? type?.name ?? connector.type}</SheetDescription>
             </div>
           </SheetHeader>
         ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
           {adding ? (
             <AddConnection
-              key="add"
+              key={selection}
+              start={add?.start ?? null}
               onStepChange={setAddStep}
               onDone={close}
               onOpen={(id) => {
-                setAddStep("type")
+                setAddStep(null)
                 onSelect(id)
               }}
             />

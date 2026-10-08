@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { cn } from "cn"
+import { ArrowDownIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,7 @@ import { Spinner } from "@/components/ui/spinner"
 import type { Agent, Chat } from "@/lib/api-client"
 import { flattenMessages } from "@/lib/chat-cache"
 
+import { ActivityIndicator } from "./activity-line"
 import { messagesQueryOptions, useSendMessage } from "./api"
 import { toRows } from "./grouping"
 import { DaySeparator, MessageRow, PendingRow } from "./message-row"
@@ -28,16 +30,63 @@ const LOAD_OLDER_THRESHOLD_PX = 400
 
 function ListSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6" aria-hidden="true">
-      <Skeleton className="h-10 w-2/3 rounded-xl" />
-      <Skeleton className="h-10 w-1/2 self-end rounded-xl" />
-      <Skeleton className="h-20 w-3/4 rounded-xl" />
+    <div
+      className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-end gap-4 px-5 py-6"
+      aria-hidden="true"
+    >
+      <Skeleton className="h-10 w-1/2 self-end rounded-[20px]" />
+      <Skeleton className="h-16 w-3/4 rounded-[20px]" />
+      <Skeleton className="h-10 w-2/5 self-end rounded-[20px]" />
+      <Skeleton className="h-24 w-2/3 rounded-[20px]" />
     </div>
   )
 }
 
+/** Where the user's unread messages start, as of opening the chat. */
+function UnreadDivider() {
+  return (
+    <div
+      className="my-3 flex items-center gap-3 text-[11px] font-semibold tracking-wide text-brand-foreground uppercase select-none"
+      role="separator"
+      aria-label="New messages"
+    >
+      <span className="h-px flex-1 bg-brand/40" />
+      New
+      <span className="h-px flex-1 bg-brand/40" />
+    </div>
+  )
+}
+
+/**
+ * The first unread message: walking back from the newest, past `unread` messages the user
+ * didn't write. null when nothing is unread (or it's further back than what's loaded).
+ */
+export function firstUnreadId(
+  messages: { id: string; author: { kind: string } }[],
+  unread: number,
+) {
+  if (unread <= 0) return null
+  let left = unread
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message.author.kind === "user") continue
+    left--
+    if (left === 0) return message.id
+  }
+  return null
+}
+
 /** Must be rendered inside a MessageScrollerProvider keyed by chat id. */
-export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, Agent> }) {
+export function MessageList({
+  chat,
+  agents,
+  members,
+}: {
+  chat: Chat
+  agents: Map<string, Agent>
+  /** The chat's agents, for what they're doing right now. */
+  members: Agent[]
+}) {
   const query = useInfiniteQuery(messagesQueryOptions(chat.id))
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query
   const messages = useMemo(() => flattenMessages(query.data), [query.data])
@@ -52,6 +101,13 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
   // Only the newest user turn is a scroll anchor; older ones never need re-anchoring.
   const lastUserId = messages.findLast((m) => m.author.kind === "user")?.id
   const { retry, discard } = useSendMessage(chat.id)
+
+  // The "New" divider stays where the unread messages started when the chat was opened, even
+  // after they're marked read.
+  const [unreadFrom, setUnreadFrom] = useState<string | null | undefined>(undefined)
+  if (unreadFrom === undefined && !query.isPending) {
+    setUnreadFrom(firstUnreadId(messages, chat.unreadCount))
+  }
 
   // Jumping to a quoted message: load older pages until it's there, scroll to it, flash it.
   const { scrollToMessage } = useMessageScroller()
@@ -142,11 +198,16 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
     <JumpToMessageContext value={(id) => void jumpTo(id)}>
       <MessageScroller className="min-h-0 flex-1">
         <MessageScrollerViewport onScroll={onScroll}>
-          <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-1 px-4 pt-6 pb-2">
+          <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-1 px-5 pt-4 pb-3">
             {!hasNextPage && messages.length === 0 && pending.length === 0 && (
-              <p className="m-auto text-sm text-muted-foreground select-none">
-                Say hi to {chat.name}.
-              </p>
+              <div className="m-auto flex flex-col items-center gap-1 text-center select-none">
+                <p className="text-[15px] font-medium">Say hi to {chat.name}</p>
+                <p className="max-w-72 text-[13px] text-muted-foreground">
+                  {isGroup
+                    ? "Everyone here sees the chat. @mention an agent to ask it directly."
+                    : "Ask for anything. It remembers what matters and can work on its own."}
+                </p>
+              </div>
             )}
             {rows.map((row, i) => (
               <MessageScrollerItem
@@ -154,11 +215,12 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
                 messageId={rowKey(row.message.id)}
                 scrollAnchor={pending.length === 0 && row.message.id === lastUserId}
                 className={cn(
-                  row.startsRun && i > 0 && "mt-4",
+                  row.startsRun && i > 0 && "mt-5",
                   flashId === row.message.id && "reply-flash",
                 )}
               >
                 {row.startsDay && <DaySeparator iso={row.message.createdAt} />}
+                {row.message.id === unreadFrom && <UnreadDivider />}
                 <MessageRow
                   row={row}
                   agents={agents}
@@ -172,7 +234,7 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
                 key={p.clientId}
                 messageId={p.clientId}
                 scrollAnchor={i === pending.length - 1}
-                className={cn((i > 0 || rows.length > 0) && "mt-4")}
+                className={cn((i > 0 || rows.length > 0) && "mt-5")}
               >
                 <PendingRow
                   pending={p}
@@ -182,6 +244,9 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
                 />
               </MessageScrollerItem>
             ))}
+            <div className="mt-3 empty:mt-0">
+              <ActivityIndicator agents={members} named={isGroup} />
+            </div>
           </MessageScrollerContent>
         </MessageScrollerViewport>
         {isFetchingNextPage && (
@@ -195,7 +260,23 @@ export function MessageList({ chat, agents }: { chat: Chat; agents: Map<string, 
             </span>
           </div>
         )}
-        <MessageScrollerButton direction="end" />
+        {/* With unread messages below, it says how many. */}
+        <MessageScrollerButton
+          direction="end"
+          className={cn(
+            "rounded-full border bg-popover shadow-[0_6px_20px_rgb(0_0_0/18%)] hover:bg-accent",
+            chat.unreadCount > 0
+              ? "h-8 w-auto gap-1.5 border-transparent bg-brand px-3 text-xs font-medium text-white hover:bg-brand/90"
+              : "size-9",
+          )}
+        >
+          <ArrowDownIcon className="size-4" />
+          {chat.unreadCount > 0 ? (
+            <span className="tabular-nums">{chat.unreadCount} new</span>
+          ) : (
+            <span className="sr-only">Scroll to end</span>
+          )}
+        </MessageScrollerButton>
       </MessageScroller>
     </JumpToMessageContext>
   )

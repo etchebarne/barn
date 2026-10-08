@@ -3,11 +3,48 @@ import ReactMarkdown, { type Components, type Options } from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 import remarkGfm from "remark-gfm"
 
+import { CopyButton } from "@/components/copy-button"
 import type { MentionTarget } from "@/lib/mentions"
 
 import { rehypeMentions } from "./rehype-mentions"
 
+type HastNode = {
+  type: string
+  value?: string
+  children?: HastNode[]
+  properties?: Record<string, unknown>
+}
+
+/** The plain text under a hast node (what a code block copies). */
+function hastText(node: HastNode | undefined): string {
+  if (!node) return ""
+  if (node.type === "text") return node.value ?? ""
+  return (node.children ?? []).map(hastText).join("")
+}
+
+/** "go" from a `language-go` class on the block's <code>. */
+function codeLanguage(node: HastNode | undefined): string | null {
+  const code = node?.children?.find((c) => c.type === "element")
+  const classes = code?.properties?.className
+  const list = Array.isArray(classes) ? classes.map(String) : []
+  return list.find((c) => c.startsWith("language-"))?.slice("language-".length) ?? null
+}
+
 const components: Components = {
+  // Fenced code: a header with the language and a copy button above the scrolling block.
+  pre: ({ node, ...props }) => {
+    const hast = node as HastNode | undefined
+    const language = codeLanguage(hast)
+    return (
+      <div className="code-block">
+        <div className="code-block-header">
+          <span>{language ?? "text"}</span>
+          <CopyButton text={hastText(hast).replace(/\n$/, "")} label="Copy code" />
+        </div>
+        <pre {...props} />
+      </div>
+    )
+  },
   // Wide tables scroll inside the bubble instead of overflowing it.
   table: ({ node: _node, ...props }) => (
     <div className="table-scroll">

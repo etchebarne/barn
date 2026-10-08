@@ -2,19 +2,23 @@
 .markdown {
   display: flex;
   flex-direction: column;
-  gap: 0.6em;
+  gap: 0.75em;
   min-width: 0;
   overflow-wrap: anywhere;
 
   & :where(h1, h2, h3, h4) {
     font-weight: 600;
-    line-height: 1.3;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+  & :where(h1, h2, h3, h4):not(:first-child) {
+    margin-top: 0.4em;
   }
   & h1 {
-    font-size: 1.2em;
+    font-size: 1.25em;
   }
   & h2 {
-    font-size: 1.1em;
+    font-size: 1.125em;
   }
   & :where(ul, ol) {
     padding-left: 1.4em;
@@ -26,11 +30,21 @@
     list-style: decimal;
   }
   & li + li {
-    margin-top: 0.2em;
+    margin-top: 0.25em;
+  }
+  & li::marker {
+    color: var(--muted-foreground);
   }
   & a {
+    color: var(--brand-foreground);
+    font-weight: 500;
     text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in oklch, var(--brand-foreground) 40%, transparent);
     text-underline-offset: 3px;
+  }
+  & a:hover {
+    text-decoration-color: currentColor;
   }
   & blockquote {
     border-left: 2px solid var(--border);
@@ -41,23 +55,42 @@
     border-color: var(--border);
   }
   & :not(pre) > code {
-    border-radius: calc(var(--radius) * 0.5);
-    background: var(--muted);
-    padding: 0.1em 0.35em;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: color-mix(in oklch, var(--foreground) 6%, transparent);
+    padding: 0.05em 0.35em;
     font-family: var(--font-mono);
-    font-size: 0.9em;
+    font-size: 0.875em;
+  }
+  /* Fenced code: header (language, copy) over a scrolling block. Darker than the panel in dark
+     mode, a touch tinted in light mode. */
+  & .code-block {
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: color-mix(in oklch, var(--frame) 70%, var(--background));
+  }
+  & .code-block-header {
+    display: flex;
+    height: 2rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.25rem 0 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    user-select: none;
   }
   & pre {
-    overflow-x: auto;
-    /* Nested radius: the bubble's radius minus its padding. */
-    border-radius: max(4px, calc(var(--radius) * 1.4 - 0.5rem));
-    border: 1px solid var(--border);
-    background: var(--background);
+    max-height: 26rem;
+    overflow: auto;
     padding: 0.75em 0.9em;
     font-family: var(--font-mono);
-    font-size: 0.85em;
-    line-height: 1.55;
-    overscroll-behavior-x: contain;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
   }
   & .table-scroll {
     max-width: 100%;

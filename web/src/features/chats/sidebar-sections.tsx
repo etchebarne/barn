@@ -45,8 +45,9 @@ import type { Agent, Chat } from "@/lib/api-client"
 import { readStorage, writeStorage } from "@/lib/storage"
 
 import { ClearHistoryDialog } from "./clear-history-dialog"
+import { formatListTime } from "./grouping"
 import { usePaletteStore } from "./palette-store"
-import { chatPreview, dmAgent } from "./preview"
+import { chatPreview, dmAgent, waitingOnYou } from "./preview"
 import {
   useCreateCategory,
   useDeleteCategory,
@@ -83,7 +84,7 @@ function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
     <span
-      className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground tabular-nums"
+      className="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-white tabular-nums"
       aria-label={`${count} unread`}
     >
       {count > 99 ? "99+" : count}
@@ -91,37 +92,100 @@ function UnreadBadge({ count }: { count: number }) {
   )
 }
 
-function ChatAvatar({ chat, agent }: { chat: Chat; agent: Agent | undefined }) {
-  if (chat.kind === "dm") {
+/**
+ * What the chat's agents are up to, as a badge on the avatar's corner: three pulsing dots while
+ * one works, an amber dot while a question waits for you. Ringed in the sidebar color so it reads
+ * as cut out of the avatar.
+ */
+function AvatarStatus({ working, waiting }: { working: boolean; waiting: boolean }) {
+  if (working) {
     return (
-      <AgentAvatar
-        id={agent?.id}
-        name={agent?.name ?? chat.name}
-        active={agent?.activity.state === "working"}
+      <span
+        className="absolute -right-1 -bottom-0.5 flex h-3.5 items-center rounded-full bg-foreground px-1 text-background ring-2 ring-sidebar"
+        aria-label="Working"
+      >
+        <span className="working-dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+      </span>
+    )
+  }
+  if (waiting) {
+    return (
+      <span
+        className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full bg-warning ring-2 ring-sidebar"
+        aria-label="Waiting for you"
       />
     )
   }
-  return <GroupAvatar memberIds={chat.members.map((m) => m.agentId)} />
+  return null
 }
 
-/** A chat row's content: avatar, name, last message, unread badge. Also the drag overlay. */
+function ChatAvatar({ chat, agents }: { chat: Chat; agents: Map<string, Agent> }) {
+  const agent = dmAgent(chat, agents)
+  // Only DMs: an agent's activity isn't tied to a chat, so a group would light up whenever any
+  // member works anywhere.
+  const working = chat.kind === "dm" && agent?.activity.state === "working"
+  return (
+    <span className="relative flex shrink-0">
+      {chat.kind === "dm" ? (
+        <AgentAvatar id={agent?.id} name={agent?.name ?? chat.name} size="md" active={working} />
+      ) : (
+        <GroupAvatar memberIds={chat.members.map((m) => m.agentId)} size="md" />
+      )}
+      <AvatarStatus working={working} waiting={waitingOnYou(chat)} />
+    </span>
+  )
+}
+
+/**
+ * A chat row's content: avatar (with status), name and time, last message, then what needs you:
+ * "Waiting" when a question is unanswered, otherwise the unread count. Also the drag overlay.
+ */
 function ChatRowContent({ chat, agents }: { chat: Chat; agents: Map<string, Agent> }) {
   const unread = chat.unreadCount > 0
+  const waiting = waitingOnYou(chat)
+  const at = chat.lastMessage?.createdAt
   return (
     <>
-      <ChatAvatar chat={chat} agent={dmAgent(chat, agents)} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium">{chat.name}</span>
-        <span
-          className={cn(
-            "truncate text-xs",
-            unread ? "text-sidebar-foreground" : "text-muted-foreground",
+      <ChatAvatar chat={chat} agents={agents} />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-baseline gap-2">
+          <span className={cn("min-w-0 flex-1 truncate font-medium", unread && "font-semibold")}>
+            {chat.name}
+          </span>
+          {at && (
+            <time
+              dateTime={at}
+              className={cn(
+                "shrink-0 text-[11px] tabular-nums group-hover/menu-item:invisible group-has-[[data-popup-open]]/menu-item:invisible",
+                unread ? "text-brand-foreground" : "text-muted-foreground",
+              )}
+            >
+              {formatListTime(at)}
+            </time>
           )}
-        >
-          {chatPreview(chat, agents)}
+        </span>
+        <span className="flex items-center gap-2">
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-[13px] leading-[18px]",
+              unread ? "text-sidebar-foreground/85" : "text-muted-foreground",
+            )}
+          >
+            {chatPreview(chat, agents)}
+          </span>
+          {waiting ? (
+            <span className="shrink-0 rounded-full bg-warning-soft px-1.5 text-[11px] leading-4.5 font-medium text-warning-foreground">
+              Waiting
+            </span>
+          ) : (
+            <UnreadBadge count={chat.unreadCount} />
+          )}
         </span>
       </div>
-      <UnreadBadge count={chat.unreadCount} />
     </>
   )
 }
@@ -151,7 +215,12 @@ function ChatRowMenu({
               variant="ghost"
               size="icon-xs"
               aria-label={`More for ${chat.name}`}
-              className="absolute top-1/2 right-2 -translate-y-1/2 opacity-100 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-popup-open:opacity-100 md:opacity-0 [@media(hover:none)]:opacity-100"
+              className={cn(
+                // Mouse: revealed on hover in the time's spot (the time hides meanwhile).
+                // Touch: always there, centered on the row's right edge, which makes room.
+                "absolute top-1.5 right-1.5 opacity-100 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-popup-open:opacity-100 md:opacity-0",
+                "[@media(hover:none)]:top-1/2 [@media(hover:none)]:-translate-y-1/2 [@media(hover:none)]:opacity-100",
+              )}
             />
           }
         >
@@ -231,7 +300,11 @@ function SortableChatRow({
       <SidebarMenuButton
         size="lg"
         isActive={active}
-        className={cn("h-auto gap-3 py-2 select-none", menu !== null && "pr-8")}
+        // The active row takes the panel's color, so it reads as attached to the open chat.
+        className={cn(
+          "h-auto gap-3 rounded-lg px-2 py-2 select-none data-active:bg-background data-active:font-normal data-active:shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/4%)] data-active:hover:bg-background",
+          menu !== null && "[@media(hover:none)]:pr-9",
+        )}
         render={<Link to="/chats/$chatId" params={{ chatId: chat.id }} onClick={onNavigate} />}
         {...a11y}
         {...listeners}
@@ -732,7 +805,7 @@ export function SidebarSections({
       )}
       <DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(0.23, 1, 0.32, 1)" }}>
         {activeChat ? (
-          <div className="flex items-center gap-3 rounded-md bg-sidebar p-2 text-sm shadow-lg ring-1 ring-sidebar-border">
+          <div className="group/menu-item flex items-center gap-3 rounded-lg bg-background p-2 text-sm shadow-lg ring-1 ring-sidebar-border">
             <ChatRowContent chat={activeChat} agents={agents} />
           </div>
         ) : activeSection ? (

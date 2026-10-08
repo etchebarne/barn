@@ -24,7 +24,7 @@ import {
 } from "./preview"
 
 /*
- * Radii follow the nested rule: the bubble (radius-xl) pads the card by 0.5rem, so the panel
+ * Radii follow the nested rule: the card frame (radius-xl) pads the card by 0.5rem, so the panel
  * gets radius-xl - 0.5rem; the panel pads nested blocks by 0.625rem, so they get what's left.
  */
 const PANEL_RADIUS = "rounded-[calc(var(--radius-xl)-0.5rem)]"

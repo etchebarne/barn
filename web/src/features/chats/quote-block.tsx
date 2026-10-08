@@ -32,17 +32,22 @@ export function QuoteBlock({
   quote,
   agents,
   align,
+  inBubble = false,
   className,
 }: {
   quote: QuotedMessage
   agents: Map<string, Agent>
   align: "start" | "end"
+  /** At the top of the reply's own bubble (tinted against it), rather than standing alone. */
+  inBubble?: boolean
   className?: string
 }) {
   const jump = useContext(JumpToMessageContext)
   const base = cn(
-    "flex max-w-[min(80%,24rem)] min-w-0 items-center gap-2 rounded-md border-l-2 bg-muted/60 py-1 pr-2 pl-2 text-left text-xs",
-    align === "end" ? "self-end" : "self-start",
+    "flex min-w-0 items-center gap-2 rounded-lg border-l-2 py-1 pr-2.5 pl-2 text-left text-xs whitespace-normal",
+    inBubble
+      ? "-mx-1 mt-0.5 mb-1.5 w-[calc(100%+0.5rem)] bg-foreground/[0.05]"
+      : cn("max-w-[min(80%,24rem)] bg-muted", align === "end" ? "self-end" : "self-start"),
     className,
   )
 
@@ -65,7 +70,7 @@ export function QuoteBlock({
       type="button"
       className={cn(
         base,
-        "border-primary/50 outline-none select-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50",
+        "border-foreground/30 outline-none select-none hover:bg-foreground/[0.08] focus-visible:ring-2 focus-visible:ring-ring/50",
       )}
       aria-label={`Reply to ${name}${excerpt ? `: “${excerpt}”` : ""}. Show the original message`}
       onClick={() => jump(quote.id)}

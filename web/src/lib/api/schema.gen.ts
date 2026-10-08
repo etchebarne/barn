@@ -1346,6 +1346,11 @@ export interface components {
             state: "idle" | "working";
             /** @description What the agent is doing, e.g. "thinking" or "running npm test" */
             label: string | null;
+            /**
+             * Format: date-time
+             * @description When the agent started working (unchanged while the label changes); null when idle
+             */
+            since?: string | null;
         };
         ChatMember: {
             agentId: string;

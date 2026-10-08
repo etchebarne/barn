@@ -106,7 +106,7 @@ export function FailureNotice({
             <Button
               size="sm"
               variant="outline"
-              render={<Link to="/settings" hash="model-provider" />}
+              render={<Link to="/settings" search={{ section: "models" }} hash="model-provider" />}
               nativeButton={false}
             >
               Open settings

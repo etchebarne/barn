@@ -15,6 +15,8 @@ type ReplyState = {
   focusRequest: number
   startReply: (message: Message) => void
   cancelReply: (chatId: string) => void
+  /** Ask the open chat's composer to take focus (e.g. after starting a draft for the user). */
+  requestFocus: () => void
 }
 
 export const useReplyStore = create<ReplyState>()((set) => ({
@@ -26,6 +28,7 @@ export const useReplyStore = create<ReplyState>()((set) => ({
       focusRequest: s.focusRequest + 1,
     })),
   cancelReply: (chatId) => set((s) => ({ byChat: { ...s.byChat, [chatId]: null } })),
+  requestFocus: () => set((s) => ({ focusRequest: s.focusRequest + 1 })),
 }))
 
 // A cleared chat has nothing left to reply to.

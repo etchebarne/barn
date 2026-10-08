@@ -39,15 +39,17 @@ function DialogContent({
   children,
   showCloseButton = true,
   animated = true,
+  overlayClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  overlayClassName?: string
   /** False for things opened many times a day (the command palette): no fade or zoom. */
   animated?: boolean
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay className={cn(!animated && "animate-none! duration-0!")} />
+      <DialogOverlay className={cn(!animated && "animate-none! duration-0!", overlayClassName)} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(

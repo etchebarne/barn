@@ -8,7 +8,7 @@ import { chatsQueryOptions } from "./api"
 export function ChatsEmptyState() {
   const { data: chats } = useQuery(chatsQueryOptions)
   return (
-    <div className="flex h-svh flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <PageHeader>
         <h1 className="text-sm font-medium">openbot</h1>
       </PageHeader>

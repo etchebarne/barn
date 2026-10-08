@@ -54,3 +54,8 @@ export function dmAgent(chat: Chat, agents: Map<string, Agent>): Agent | undefin
   const member = chat.members[0]
   return member ? agents.get(member.agentId) : undefined
 }
+
+/** The chat's latest message is a question or approval the user hasn't answered yet. */
+export function waitingOnYou(chat: Chat): boolean {
+  return chat.lastMessage?.prompt?.status === "pending"
+}

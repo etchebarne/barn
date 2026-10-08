@@ -41,7 +41,8 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 md:px-4",
+        // No rule under it: the transcript fades out beneath it instead.
+        "flex h-13 shrink-0 items-center gap-2 bg-background px-3 md:px-4",
         mobile && "h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]",
         className,
       )}

@@ -29,6 +29,13 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-frame: var(--frame);
+  --color-surface: var(--surface);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-success: var(--success);
   --color-warning-foreground: var(--warning-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -53,77 +60,97 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Color tokens. Three layers of depth: the frame (window chrome, the sidebar sits on it), the
+ * panel (the main pane, inset in the frame), and surfaces on the panel (bubbles, composer,
+ * cards). Borders are faint; hierarchy comes from the layers, not from lines. Primary is
+ * neutral (dark on light, light on dark); `brand` is the one hue, for focus, links and unread.
+ */
 :root {
+  --frame: oklch(0.962 0.002 286);
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.2 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.2 0 0);
+  --primary: oklch(0.2 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --warning: oklch(0.77 0.16 70);
-  --warning-foreground: oklch(0.47 0.12 55);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --secondary: oklch(0.94 0.003 286);
+  --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.965 0.002 286);
+  --muted-foreground: oklch(0.52 0.005 286);
+  --accent: oklch(0.955 0.002 286);
+  --accent-foreground: oklch(0.2 0 0);
+  --surface: oklch(0.966 0.002 286);
+  --brand: oklch(0.58 0.2 256);
+  --brand-foreground: oklch(0.5 0.19 256);
+  --brand-soft: oklch(0.58 0.2 256 / 12%);
+  --success: oklch(0.64 0.16 150);
+  --destructive: oklch(0.58 0.22 27);
+  --warning: oklch(0.75 0.16 65);
+  --warning-foreground: oklch(0.5 0.13 55);
+  --warning-soft: oklch(0.75 0.16 65 / 14%);
+  --border: oklch(0.2 0 0 / 8%);
+  --input: oklch(0.2 0 0 / 13%);
+  --ring: oklch(0.58 0.2 256);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar: var(--frame);
+  --sidebar-foreground: oklch(0.2 0 0);
+  --sidebar-primary: oklch(0.2 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.2 0 0 / 6%);
+  --sidebar-accent-foreground: oklch(0.2 0 0);
+  --sidebar-border: oklch(0.2 0 0 / 8%);
+  --sidebar-ring: oklch(0.58 0.2 256);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --warning: oklch(0.77 0.16 70);
-  --warning-foreground: oklch(0.85 0.13 85);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --frame: #131313;
+  --background: #1a1a1a;
+  --foreground: #f2f2f2;
+  --card: #1f1f1f;
+  --card-foreground: #f2f2f2;
+  --popover: #222222;
+  --popover-foreground: #f2f2f2;
+  --primary: #f0f0f0;
+  --primary-foreground: #141414;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f2f2f2;
+  --muted: #232323;
+  --muted-foreground: #9a9a9a;
+  --accent: #262626;
+  --accent-foreground: #f2f2f2;
+  --surface: #212121;
+  --brand: #1f8fff;
+  --brand-foreground: #5aaeff;
+  --brand-soft: rgb(31 143 255 / 16%);
+  --success: #31cf76;
+  --destructive: #ff5c64;
+  --warning: #ff9a1f;
+  --warning-foreground: #ffb35c;
+  --warning-soft: rgb(255 154 31 / 12%);
+  --border: rgb(255 255 255 / 6.5%);
+  --input: rgb(255 255 255 / 10%);
+  --ring: #1f8fff;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: var(--frame);
+  --sidebar-foreground: #f2f2f2;
+  --sidebar-primary: #f0f0f0;
+  --sidebar-primary-foreground: #141414;
+  --sidebar-accent: rgb(255 255 255 / 6%);
+  --sidebar-accent-foreground: #f2f2f2;
+  --sidebar-border: rgb(255 255 255 / 6.5%);
+  --sidebar-ring: #1f8fff;
 }
 
 /* Metric-matched fallback so the Geist swap doesn't shift layout. */
@@ -151,7 +178,12 @@
     color-scheme: dark;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-frame text-foreground antialiased;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--brand-soft);
   }
   button,
   [role="button"] {

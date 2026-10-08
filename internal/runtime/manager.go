@@ -261,6 +261,15 @@ func (m *Manager) Activity(agentID string) gen.AgentActivity {
 
 func (m *Manager) setActivity(agentID string, a gen.AgentActivity) {
 	m.mu.Lock()
+	// Since marks the start of a working stretch: label changes keep it, idle clears it.
+	if a.State == "working" {
+		if prev, ok := m.activity[agentID]; ok && prev.State == "working" && prev.Since != nil {
+			a.Since = prev.Since
+		} else {
+			now := time.Now().UTC()
+			a.Since = &now
+		}
+	}
 	m.activity[agentID] = a
 	m.mu.Unlock()
 	m.bus.Publish(gen.WsAgentActivity{Type: "agent.activity", AgentId: agentID, Activity: a})

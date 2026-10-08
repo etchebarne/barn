@@ -69,3 +69,24 @@ export function formatDay(iso: string, now = new Date()) {
     ? dayFormat.format(date)
     : dayWithYearFormat.format(date)
 }
+
+const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: "short" })
+const shortDayFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
+const shortDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "short" })
+
+/** Compact time for lists: "14:32" today, then "Yesterday", "Mon", "Oct 3", "3/10/24". */
+export function formatListTime(iso: string, now = new Date()) {
+  const date = new Date(iso)
+  const key = dayKey(iso)
+  if (key === dayKey(now.toISOString())) return timeFormat.format(date)
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (key === dayKey(yesterday.toISOString())) return "Yesterday"
+  const weekAgo = new Date(now)
+  weekAgo.setDate(now.getDate() - 6)
+  weekAgo.setHours(0, 0, 0, 0)
+  if (date >= weekAgo) return weekdayFormat.format(date)
+  return date.getFullYear() === now.getFullYear()
+    ? shortDayFormat.format(date)
+    : shortDateFormat.format(date)
+}

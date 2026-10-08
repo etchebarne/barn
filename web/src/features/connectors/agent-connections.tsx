@@ -1,9 +1,12 @@
+import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 
 import { Skeleton } from "@/components/ui/skeleton"
 
 import { useConnectors, useConnectorTypes } from "./api"
 import { ConnectorIcon } from "./connector-icon"
+import { connectionApp } from "./discover"
+import { catalogQueryOptions } from "./signin"
 
 /** "Connected apps" in the agent sheet: accounts this agent may use, linking to their detail. */
 export function AgentConnections({
@@ -18,6 +21,7 @@ export function AgentConnections({
 }) {
   const { data: connectors, isPending, error } = useConnectors()
   const { data: types } = useConnectorTypes()
+  const { data: catalog } = useQuery(catalogQueryOptions)
   const mine = connectors?.filter((c) => c.agentIds.includes(agentId)) ?? []
 
   return (
@@ -43,22 +47,27 @@ export function AgentConnections({
         </p>
       ) : (
         <ul className="flex flex-col gap-1" aria-label={`Apps ${agentName} can use`}>
-          {mine.map((connector) => (
-            <li key={connector.id}>
-              <Link
-                to="/connectors"
-                search={{ connector: connector.id }}
-                className="flex items-center gap-3 rounded-lg p-1.5 text-sm select-none hover:bg-muted/50"
-                onClick={onNavigate}
-              >
-                <ConnectorIcon type={connector.type} className="size-7" />
-                <span className="truncate font-medium">{connector.name}</span>
-                <span className="truncate text-muted-foreground">
-                  {types?.find((t) => t.type === connector.type)?.name ?? connector.type}
-                </span>
-              </Link>
-            </li>
-          ))}
+          {mine.map((connector) => {
+            const app = connectionApp(connector, catalog)
+            const kind =
+              app?.name ?? types?.find((t) => t.type === connector.type)?.name ?? connector.type
+            return (
+              <li key={connector.id}>
+                <Link
+                  to="/connectors"
+                  search={{ connector: connector.id }}
+                  className="flex items-center gap-3 rounded-lg p-1.5 text-sm select-none hover:bg-muted/50"
+                  onClick={onNavigate}
+                >
+                  <ConnectorIcon type={app?.id ?? connector.type} className="size-7" />
+                  <span className="truncate font-medium">{connector.name}</span>
+                  {kind !== connector.name && (
+                    <span className="truncate text-muted-foreground">{kind}</span>
+                  )}
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

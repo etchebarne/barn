@@ -63,13 +63,14 @@ export function AppShell() {
   useDesktopIntegration()
   const mobile = useIsMobile()
   return (
-    <SidebarProvider className="h-svh overflow-hidden">
+    <SidebarProvider className="h-svh min-h-0 overflow-hidden bg-frame">
       {mobile ? (
         <MobileShell />
       ) : (
         <>
           <ChatSidebar />
-          <SidebarInset className="min-w-0">
+          {/* The main pane is a panel inset in the frame the sidebar sits on. */}
+          <SidebarInset className="my-2 mr-2 h-[calc(100svh-1rem)] min-h-0 min-w-0 overflow-hidden rounded-xl border bg-background shadow-[0_1px_2px_rgb(0_0_0/4%)]">
             <Outlet />
           </SidebarInset>
         </>

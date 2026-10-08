@@ -21,6 +21,7 @@ import { useConnectorTypes, useCreateConnector } from "./api"
 import { CatalogList, CatalogSignIn } from "./catalog"
 import { ConnectorFields } from "./connector-fields"
 import { ConnectorIcon } from "./connector-icon"
+import type { AddStart } from "./discover"
 import {
   buildCreateRequest,
   buildFormFields,
@@ -254,20 +255,52 @@ export type AddStep =
   | { step: "form"; type: ConnectorType }
   | { step: "done"; type: ConnectorType; connector: Connector }
 
-/** The add flow, stepping in place inside one sheet: type → form → done, with Back. */
+/** Where `start` points, once the catalog and types are loaded (null until then). */
+function startStep(
+  start: AddStart | null,
+  catalog: CatalogApp[] | undefined,
+  types: ConnectorType[] | undefined,
+): AddStep | null {
+  if (!start) return { step: "type" }
+  if (start.kind === "app") {
+    if (!catalog) return null
+    const app = catalog.find((a) => a.id === start.id)
+    return app ? { step: "signin", app } : { step: "type" }
+  }
+  if (!types) return null
+  const type = types.find((t) => t.type === start.id)
+  return type ? { step: "form", type } : { step: "type" }
+}
+
+/**
+ * The add flow, stepping in place inside one sheet: type → form → done, with Back. `start`
+ * skips the picker (a card on the Connectors page was clicked).
+ */
 export function AddConnection({
+  start = null,
   onDone,
   onOpen,
   onStepChange,
 }: {
+  start?: AddStart | null
   onDone: () => void
   onOpen: (connectorId: string) => void
   onStepChange?: (step: AddStep["step"]) => void
 }) {
-  const [state, setState] = useState<AddStep>({ step: "type" })
+  const { data: catalog } = useQuery(catalogQueryOptions)
+  const { data: types } = useConnectorTypes()
+  const [chosen, setChosen] = useState<AddStep | null>(null)
+  const state = chosen ?? startStep(start, catalog, types)
   function go(next: AddStep) {
-    setState(next)
+    setChosen(next)
     onStepChange?.(next.step)
+  }
+
+  if (!state) return <Skeleton className="h-40 w-full rounded-xl" />
+
+  /** The API-key type for an app that also offers sign-in (Linear), if any. */
+  function keyType(app: CatalogApp): ConnectorType | undefined {
+    return types?.find((t) => t.name.toLowerCase() === app.name.toLowerCase())
   }
 
   if (state.step === "type") {
@@ -298,6 +331,18 @@ export function AddConnection({
           </div>
         </div>
         <CatalogSignIn app={state.app} />
+        {keyType(state.app) && (
+          <button
+            type="button"
+            className="w-fit text-left text-xs text-muted-foreground underline underline-offset-3 hover:text-foreground"
+            onClick={() => {
+              const type = keyType(state.app)
+              if (type) go({ step: "form", type })
+            }}
+          >
+            Or connect {state.app.name} with an API key instead (also gets events)
+          </button>
+        )}
       </div>
     )
   }

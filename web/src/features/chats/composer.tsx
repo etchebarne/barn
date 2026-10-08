@@ -1,3 +1,4 @@
+import { cn } from "cn"
 import { ArrowUpIcon, PaperclipIcon, ReplyIcon, XIcon } from "lucide-react"
 import {
   useEffect,
@@ -10,12 +11,7 @@ import {
   type SyntheticEvent,
 } from "react"
 
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@/components/ui/input-group"
+import { Button } from "@/components/ui/button"
 import {
   activeMentionQuery,
   filterMentionCandidates,
@@ -128,8 +124,17 @@ export function Composer({
   useEffect(() => {
     if (focusRequest === seenFocusRequest.current) return
     seenFocusRequest.current = focusRequest
-    textareaRef.current?.focus()
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.focus()
+    // After the draft, so a started sentence ("Make me a new agent that ") continues.
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
   }, [focusRequest])
+
+  // Compact until the text wraps (or has a newline, or files are attached); then expanded until
+  // it's cleared, so the layout doesn't flip back and forth at the wrap point.
+  const [wrapped, setWrapped] = useState(false)
+  const expanded = (value !== "" && (wrapped || value.includes("\n"))) || uploads.length > 0
 
   // Place the caret after an inserted mention as soon as the new value is in the DOM.
   const pendingCaret = useRef<number | null>(null)
@@ -179,6 +184,7 @@ export function Composer({
     }
     onSend(text)
     onChange("")
+    setWrapped(false)
     textareaRef.current?.focus()
   }
 
@@ -205,42 +211,87 @@ export function Composer({
         submit(true)
       }}
     >
-      {/* Nested radius: group radius = button radius (--radius) + addon padding (0.5rem). */}
-      <InputGroup ref={groupRef} className="rounded-[calc(var(--radius)+0.5rem)] bg-background">
-        {replyTo && (
-          <div
-            role="status"
-            aria-label={`Replying to ${replyTo.name}`}
-            className="flex w-full min-w-0 items-center gap-2 border-b px-3 py-1.5 text-xs"
+      {/* What the message is attached to sits on a slab tucked under the composer's top edge, so
+          the two read as one control. */}
+      {replyTo && (
+        <div
+          role="status"
+          aria-label={`Replying to ${replyTo.name}`}
+          className="mx-3 -mb-3.5 flex min-w-0 items-center gap-2 rounded-t-xl border border-b-0 bg-muted px-3 pt-1.5 pb-5 text-xs"
+        >
+          <ReplyIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">
+            <span className="text-muted-foreground">Replying to </span>
+            <span className="font-medium">{replyTo.name}</span>
+            {replyTo.excerpt && <span className="text-muted-foreground"> · {replyTo.excerpt}</span>}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="-mr-1.5"
+            aria-label="Cancel reply"
+            onClick={() => {
+              onCancelReply?.()
+              textareaRef.current?.focus()
+            }}
           >
-            <ReplyIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">
-              <span className="text-muted-foreground">Replying to </span>
-              <span className="font-medium">{replyTo.name}</span>
-              {replyTo.excerpt && (
-                <span className="text-muted-foreground"> · {replyTo.excerpt}</span>
-              )}
-            </span>
-            <InputGroupButton
-              type="button"
-              size="icon-xs"
-              aria-label="Cancel reply"
-              onClick={() => {
-                onCancelReply?.()
-                textareaRef.current?.focus()
-              }}
-            >
-              <XIcon />
-            </InputGroupButton>
-          </div>
+            <XIcon />
+          </Button>
+        </div>
+      )}
+      {/* Compact: one line, [attach] [text] [send]. Expanded (the text wraps, or files are
+          attached): the text gets the full width and the buttons move to a row under it. Same
+          elements either way, so focus and the caret survive the switch. Nested radius: 24px =
+          the round buttons' radius (16) + the padding (8). */}
+      <div
+        ref={groupRef}
+        role="group"
+        data-expanded={expanded || undefined}
+        className={cn(
+          "relative grid cursor-text grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-x-1 rounded-[24px] border bg-surface p-2 shadow-[0_1px_2px_rgb(0_0_0/4%)] transition-[border-color,box-shadow] duration-(--duration-press)",
+          "has-[textarea:focus-visible]:border-foreground/20 has-[textarea:focus-visible]:ring-3 has-[textarea:focus-visible]:ring-foreground/5",
+          tooLong && "border-destructive/60",
         )}
-        <AttachmentRow
-          uploads={uploads}
-          notice={uploadNotice}
-          onRemove={(id) => onRemoveUpload?.(id)}
-          onRetry={(id) => onRetryUpload?.(id)}
-        />
-        <InputGroupTextarea
+        onPointerDown={(event) => {
+          // Clicks on the padding focus the text, like a native field.
+          if (event.target === event.currentTarget) {
+            event.preventDefault()
+            textareaRef.current?.focus()
+          }
+        }}
+      >
+        <div
+          className={cn(
+            "col-span-3",
+            !expanded && uploads.length === 0 && !uploadNotice && "hidden",
+          )}
+        >
+          <AttachmentRow
+            uploads={uploads}
+            notice={uploadNotice}
+            onRemove={(id) => onRemoveUpload?.(id)}
+            onRetry={(id) => onRetryUpload?.(id)}
+          />
+        </div>
+        {onAddFiles ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "rounded-full text-muted-foreground",
+              expanded ? "row-start-3" : "row-start-2",
+            )}
+            aria-label="Attach files"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <PaperclipIcon />
+          </Button>
+        ) : (
+          <span className={expanded ? "row-start-3" : "row-start-2"} />
+        )}
+        <textarea
           ref={textareaRef}
           aria-label="Message"
           placeholder={placeholder}
@@ -248,8 +299,11 @@ export function Composer({
           value={value}
           aria-invalid={tooLong || undefined}
           onChange={(event) => {
-            onChange(event.target.value)
+            const next = event.target.value
+            onChange(next)
             setCaret(event.target.selectionStart)
+            // The DOM already holds the new text, so its height says whether it wraps.
+            setWrapped(next !== "" && (wrapped || event.target.scrollHeight > 40))
           }}
           onSelect={trackCaret}
           onFocus={() => setFocused(true)}
@@ -274,37 +328,33 @@ export function Composer({
                   : undefined,
               }
             : {})}
-          className="max-h-[40svh] min-h-11 px-3.5 pt-3"
-        />
-        <InputGroupAddon align="block-end" className="justify-between">
-          {onAddFiles && (
-            <InputGroupButton
-              type="button"
-              size="icon-sm"
-              className="text-muted-foreground"
-              aria-label="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <PaperclipIcon />
-            </InputGroupButton>
+          className={cn(
+            "field-sizing-content max-h-[40svh] min-h-8 w-full resize-none bg-transparent px-1.5 py-1.5 text-sm leading-5 outline-none placeholder:text-muted-foreground",
+            expanded ? "col-span-3 row-start-2 px-2 pb-2" : "row-start-2",
           )}
-          <span className="mr-auto text-xs text-destructive tabular-nums" aria-live="polite">
-            {tooLong
-              ? `${value.length.toLocaleString()} / ${MAX_MESSAGE_LENGTH.toLocaleString()}`
-              : ""}
-          </span>
-          <InputGroupButton
+        />
+        <div
+          className={cn(
+            "col-start-3 flex items-center gap-2",
+            expanded ? "row-start-3" : "row-start-2",
+          )}
+        >
+          {tooLong && (
+            <span className="text-xs text-destructive tabular-nums" aria-live="polite">
+              {value.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()}
+            </span>
+          )}
+          <Button
             type="submit"
-            variant="default"
-            size="icon-sm"
-            className="rounded-(--radius)"
+            size="icon"
+            className={cn("rounded-full", !canSend && "opacity-40")}
             aria-label="Send message"
             aria-disabled={!canSend || undefined}
           >
-            <ArrowUpIcon />
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
+            <ArrowUpIcon className="size-4.5" strokeWidth={2.25} />
+          </Button>
+        </div>
+      </div>
       {onAddFiles && (
         <input
           ref={fileInputRef}

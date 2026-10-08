@@ -13,11 +13,16 @@ export function initials(name: string): string {
   return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase()
 }
 
-type Size = "default" | "sm" | "lg"
+type Size = "default" | "sm" | "md" | "lg"
 
-const pixels: Record<Size, number> = { sm: 24, default: 32, lg: 40 }
+const pixels: Record<Size, number> = { sm: 24, default: 32, md: 36, lg: 40 }
 
-const frame: Record<Size, string> = { sm: "size-6", default: "size-8", lg: "size-10" }
+const frame: Record<Size, string> = {
+  sm: "size-6",
+  default: "size-8",
+  md: "size-9",
+  lg: "size-10",
+}
 
 /**
  * The one avatar used for agents everywhere (sidebar, headers, messages), seeded by the agent's

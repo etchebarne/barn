@@ -30,7 +30,7 @@ import {
 } from "./connect"
 import type { Prompt } from "./logic"
 
-/** Nested radius: the bubble (radius-xl) pads the card by 0.5rem. */
+/** Nested radius: the card frame (radius-xl) pads the card by 0.5rem. */
 const INNER_RADIUS = "rounded-[calc(var(--radius-xl)-0.5rem)]"
 
 function ConnectForm({

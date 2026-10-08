@@ -42,7 +42,7 @@ import {
 import { DECLINE_SECRET, SecretCard } from "./secret-card"
 
 /*
- * Radii follow the nested rule: the bubble (radius-xl) pads the card by 0.5rem, so rows get
+ * Radii follow the nested rule: the card frame (radius-xl) pads its content by 0.5rem, so rows get
  * radius-xl - 0.5rem; rows pad their badge by 0.375rem, so badges get what's left (min 4px).
  */
 const ROW_RADIUS = "rounded-[calc(var(--radius-xl)-0.5rem)]"
@@ -51,7 +51,7 @@ const ROW = "flex w-full min-w-0 items-center gap-2.5 px-1.5 py-1.5 text-left te
 
 /** Press feedback only: no hover transition, no entrance animation (cards are frequent). */
 const PRESSABLE =
-  "cursor-pointer select-none outline-none transition-transform duration-(--duration-press) ease-out-quint hover:bg-background/70 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.985] disabled:pointer-events-none"
+  "cursor-pointer select-none outline-none transition-transform duration-(--duration-press) ease-out-quint hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.985] disabled:pointer-events-none"
 
 function Badge({ children, active }: { children: ReactNode; active?: boolean }) {
   return (
@@ -258,7 +258,7 @@ function PendingCard({
               type="button"
               disabled={disabled}
               aria-pressed={isOn}
-              className={cn(ROW, PRESSABLE, isOn && "bg-background ring-1 ring-border")}
+              className={cn(ROW, PRESSABLE, isOn && "bg-accent ring-1 ring-border")}
               onClick={() => choose(index)}
               onKeyDown={(event) => {
                 // On a single-choice option, Enter submits rather than toggling it again.
@@ -302,7 +302,12 @@ function PendingCard({
           ))}
       </div>
       <div className="flex justify-end pt-1.5">
-        <Button size="sm" disabled={disabled || !canSubmit} onClick={submit}>
+        <Button
+          size="sm"
+          className="rounded-full px-3.5"
+          disabled={disabled || !canSubmit}
+          onClick={submit}
+        >
           Submit
         </Button>
       </div>
@@ -329,7 +334,7 @@ function ApprovalActions({
         <Button
           size="sm"
           variant="ghost"
-          className="mr-auto text-muted-foreground"
+          className="mr-auto rounded-full text-muted-foreground"
           disabled={disabled}
           onClick={() => onAnswer(alwaysAllowAnswer())}
         >
@@ -339,12 +344,18 @@ function ApprovalActions({
       <Button
         size="sm"
         variant="outline"
+        className="rounded-full px-3.5"
         disabled={disabled}
         onClick={() => onAnswer(approvalAnswer(false))}
       >
         Decline
       </Button>
-      <Button size="sm" disabled={disabled} onClick={() => onAnswer(approvalAnswer(true))}>
+      <Button
+        size="sm"
+        className="rounded-full px-3.5"
+        disabled={disabled}
+        onClick={() => onAnswer(approvalAnswer(true))}
+      >
         Approve
       </Button>
     </div>
@@ -438,20 +449,64 @@ function SecretPrompt({
   )
 }
 
+/** "Waiting for you": the card needs an answer before the agent can go on. */
+function WaitingChip() {
+  return (
+    <p className="flex items-center gap-1.5 px-1.5 pt-0.5 text-xs font-medium text-warning-foreground select-none">
+      <span className="relative flex size-2" aria-hidden="true">
+        <span className="absolute inset-0 animate-ping rounded-full bg-warning opacity-60 motion-reduce:animate-none" />
+        <span className="relative size-2 rounded-full bg-warning" />
+      </span>
+      Waiting for you
+    </p>
+  )
+}
+
+/**
+ * Every prompt sits in one card: its own surface, not a bubble, so it reads as something to act
+ * on. Pending cards get a warm edge and say they're waiting.
+ */
+function CardFrame({ pending, children }: { pending: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        // Buttons in prompts are pills, whichever card kind renders them.
+        "flex min-w-0 flex-col gap-1.5 rounded-xl border bg-card p-2 text-sm shadow-[0_1px_2px_rgb(0_0_0/4%)] [&_[data-slot=button]:not([data-size^=icon])]:rounded-full",
+        pending && "border-warning/40",
+      )}
+    >
+      {pending && <WaitingChip />}
+      {children}
+    </div>
+  )
+}
+
 /**
  * An agent's question with clickable answers. Pending: options (single answers on click, multi
  * toggles then submits), optional "type your own", or a text field. Answered: collapses to the
  * chosen answers, dimmed. Dismissed: just the question, muted. The card is the record of the
  * answer; no separate user message is shown.
  */
-export function PromptCard({
+export function PromptCard(props: {
+  message: Message
+  prompt: Prompt
+  /** The latest message in the chat: enables dismiss and letter-key shortcuts. */
+  isLatest: boolean
+}) {
+  return (
+    <CardFrame pending={props.prompt.status === "pending"}>
+      <PromptCardBody {...props} />
+    </CardFrame>
+  )
+}
+
+function PromptCardBody({
   message,
   prompt,
   isLatest,
 }: {
   message: Message
   prompt: Prompt
-  /** The latest message in the chat: enables dismiss and letter-key shortcuts. */
   isLatest: boolean
 }) {
   const answer = useAnswerPrompt(message)

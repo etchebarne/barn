@@ -16,7 +16,7 @@ export function AppearanceSection() {
   const setPreference = useThemeStore((s) => s.setPreference)
 
   return (
-    <SettingsSection title="Appearance" description="Theme for this device.">
+    <SettingsSection id="appearance" title="Appearance" description="Theme for this device.">
       <ToggleGroup
         variant="outline"
         aria-label="Theme"

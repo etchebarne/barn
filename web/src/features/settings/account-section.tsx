@@ -12,7 +12,7 @@ export function AccountSection({ onLoggedOut }: { onLoggedOut: () => Promise<voi
   const logout = useLogout(onLoggedOut)
 
   return (
-    <SettingsSection title="Account">
+    <SettingsSection id="account" title="Account">
       <div className="flex items-center justify-between gap-3">
         <p className="min-w-0 truncate text-sm">
           Signed in as <span className="font-medium">{data?.user?.username ?? "…"}</span>
