@@ -52,6 +52,39 @@ func (e AgentActivityState) Valid() bool {
 	}
 }
 
+// Defines values for AgentBackupTrustMode.
+const (
+	AgentBackupTrustModeAsk     AgentBackupTrustMode = "ask"
+	AgentBackupTrustModeTrusted AgentBackupTrustMode = "trusted"
+)
+
+// Valid indicates whether the value is a known member of the AgentBackupTrustMode enum.
+func (e AgentBackupTrustMode) Valid() bool {
+	switch e {
+	case AgentBackupTrustModeAsk:
+		return true
+	case AgentBackupTrustModeTrusted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentsBackupFormat.
+const (
+	OpenbotAgents AgentsBackupFormat = "openbot-agents"
+)
+
+// Valid indicates whether the value is a known member of the AgentsBackupFormat enum.
+func (e AgentsBackupFormat) Valid() bool {
+	switch e {
+	case OpenbotAgents:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatKind.
 const (
 	Dm    ChatKind = "dm"
@@ -286,6 +319,27 @@ func (e TaskKind) Valid() bool {
 	case TaskKindOnce:
 		return true
 	case TaskKindSignal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskBackupKind.
+const (
+	TaskBackupKindCron   TaskBackupKind = "cron"
+	TaskBackupKindOnce   TaskBackupKind = "once"
+	TaskBackupKindSignal TaskBackupKind = "signal"
+)
+
+// Valid indicates whether the value is a known member of the TaskBackupKind enum.
+func (e TaskBackupKind) Valid() bool {
+	switch e {
+	case TaskBackupKindCron:
+		return true
+	case TaskBackupKindOnce:
+		return true
+	case TaskBackupKindSignal:
 		return true
 	default:
 		return false
@@ -584,6 +638,25 @@ type AgentActivity struct {
 // AgentActivityState defines model for AgentActivity.State.
 type AgentActivityState string
 
+// AgentBackup defines model for AgentBackup.
+type AgentBackup struct {
+	Admin         bool                 `json:"admin"`
+	Approvals     []ApprovalBackup     `json:"approvals"`
+	Connections   []ConnectionRef      `json:"connections"`
+	Instructions  string               `json:"instructions"`
+	Language      string               `json:"language"`
+	Memories      []string             `json:"memories"`
+	Model         string               `json:"model"`
+	Name          string               `json:"name"`
+	Notifications bool                 `json:"notifications"`
+	Personality   string               `json:"personality"`
+	Tasks         []TaskBackup         `json:"tasks"`
+	TrustMode     AgentBackupTrustMode `json:"trustMode"`
+}
+
+// AgentBackupTrustMode defines model for AgentBackup.TrustMode.
+type AgentBackupTrustMode string
+
 // AgentSecret A secret an agent has (never its value)
 type AgentSecret struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -607,6 +680,30 @@ type AgentUsage struct {
 
 	// ReasoningTokens Part of completionTokens
 	ReasoningTokens int `json:"reasoningTokens"`
+}
+
+// AgentsBackup defines model for AgentsBackup.
+type AgentsBackup struct {
+	Agents     []AgentBackup      `json:"agents"`
+	ExportedAt time.Time          `json:"exportedAt"`
+	Format     AgentsBackupFormat `json:"format"`
+
+	// Version 1
+	Version int `json:"version"`
+}
+
+// AgentsBackupFormat defines model for AgentsBackup.Format.
+type AgentsBackupFormat string
+
+// ApprovalBackup defines model for ApprovalBackup.
+type ApprovalBackup struct {
+	// Account The connection's name
+	Account *string `json:"account,omitempty"`
+
+	// Action tool:<name>, or connector:<tool> with the connection in account
+	Action string            `json:"action"`
+	Label  string            `json:"label"`
+	Match  map[string]string `json:"match"`
 }
 
 // Attachment defines model for Attachment.
@@ -713,6 +810,12 @@ type ConnectPromptRequest struct {
 
 	// Name Overrides the proposed name
 	Name *string `json:"name,omitempty"`
+}
+
+// ConnectionRef defines model for ConnectionRef.
+type ConnectionRef struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // Connector defines model for Connector.
@@ -1173,6 +1276,21 @@ type Reaction struct {
 	Emoji string          `json:"emoji"`
 }
 
+// RestoreResult defines model for RestoreResult.
+type RestoreResult struct {
+	Agents []RestoredAgent `json:"agents"`
+}
+
+// RestoredAgent defines model for RestoredAgent.
+type RestoredAgent struct {
+	AgentId *string `json:"agentId,omitempty"`
+	Name    string  `json:"name"`
+
+	// Notes What was left out, and why
+	Notes    []string `json:"notes"`
+	Restored bool     `json:"restored"`
+}
+
 // Sandbox defines model for Sandbox.
 type Sandbox struct {
 	// SharedWith Other agents using the same computer
@@ -1373,6 +1491,29 @@ type Task struct {
 
 // TaskKind defines model for Task.Kind.
 type TaskKind string
+
+// TaskBackup defines model for TaskBackup.
+type TaskBackup struct {
+	At      *time.Time        `json:"at,omitempty"`
+	Check   *string           `json:"check,omitempty"`
+	Cron    *string           `json:"cron,omitempty"`
+	Enabled bool              `json:"enabled"`
+	Kind    TaskBackupKind    `json:"kind"`
+	Name    string            `json:"name"`
+	Purpose string            `json:"purpose"`
+	Signal  *TaskBackupSignal `json:"signal,omitempty"`
+}
+
+// TaskBackupKind defines model for TaskBackup.Kind.
+type TaskBackupKind string
+
+// TaskBackupSignal defines model for TaskBackupSignal.
+type TaskBackupSignal struct {
+	// Account The connection's name
+	Account string            `json:"account"`
+	Match   map[string]string `json:"match"`
+	Type    string            `json:"type"`
+}
 
 // TaskRun defines model for TaskRun.
 type TaskRun struct {
@@ -1727,6 +1868,9 @@ type LoginJSONRequestBody = Credentials
 
 // SetupAccountJSONRequestBody defines body for SetupAccount for application/json ContentType.
 type SetupAccountJSONRequestBody = Credentials
+
+// RestoreAgentsJSONRequestBody defines body for RestoreAgents for application/json ContentType.
+type RestoreAgentsJSONRequestBody = AgentsBackup
 
 // UploadAttachmentMultipartRequestBody defines body for UploadAttachment for multipart/form-data ContentType.
 type UploadAttachmentMultipartRequestBody UploadAttachmentMultipartBody
@@ -2311,6 +2455,12 @@ type ServerInterface interface {
 
 	// (GET /auth/status)
 	GetAuthStatus(w http.ResponseWriter, r *http.Request)
+
+	// (GET /backup/agents)
+	ExportAgents(w http.ResponseWriter, r *http.Request)
+
+	// (POST /backup/agents)
+	RestoreAgents(w http.ResponseWriter, r *http.Request)
 
 	// (GET /chats)
 	ListChats(w http.ResponseWriter, r *http.Request)
@@ -3374,6 +3524,34 @@ func (siw *ServerInterfaceWrapper) GetAuthStatus(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAuthStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportAgents operation middleware
+func (siw *ServerInterfaceWrapper) ExportAgents(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportAgents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreAgents operation middleware
+func (siw *ServerInterfaceWrapper) RestoreAgents(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreAgents(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4520,6 +4698,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/skills/{name}", wrapper.DeleteSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/skills/{name}", wrapper.GetSkill)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/skills/{name}", wrapper.SaveSkill)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/backup/agents", wrapper.ExportAgents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/backup/agents", wrapper.RestoreAgents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/config", wrapper.GetPushConfig)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/push/subscriptions", wrapper.UnsubscribePush)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)

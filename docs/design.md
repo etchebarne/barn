@@ -425,6 +425,14 @@ Messages in a group are visible to every participant; DMs are visible only to th
   account, auth, appearance, and system config. Agents, tasks, memories, connectors, and
   sandboxes are managed by talking to agents, not with forms (read-only inspection views are fine).
 - Composer supports `@` autocomplete of group participants; mentions render as chips.
+- **Backup** (Settings → Back up agents): "Download backup" saves one JSON file
+  (`openbot-agents`, version 1; `GET /backup/agents`) with every agent's settings, instructions,
+  personality, memories, tasks (with their checks), the connections it may use and its standing
+  approvals. Connections are named, not referred to by id, so a backup restores on another
+  server. Secrets, chats, files and skills aren't in it. "Restore from a backup…" previews what
+  will happen, then `POST /backup/agents` adds the agents whose names are free (it never
+  overwrites one) and reports what it left out: a connection or signal task for an app that
+  isn't connected there, a one-off task already past, a model that can't be used.
 - **Search** (the command palette, Ctrl/⌘+K): besides chats, agents and actions, typing two or
   more characters searches every chat's messages (`GET /search`: SQLite FTS5 over message
   bodies, every word as a prefix, accents folded, best matches first, system notices left out),

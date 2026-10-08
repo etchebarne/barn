@@ -3,6 +3,7 @@ import { isDesktop } from "@/lib/desktop"
 
 import { AccountSection } from "./account-section"
 import { AppearanceSection } from "./appearance-section"
+import { BackupSection } from "./backup-section"
 import { DesktopAppSection, DesktopNotificationsSection } from "./desktop-sections"
 import { NotificationsSection } from "./notifications-section"
 import { ProviderSection } from "./provider-section"
@@ -22,6 +23,7 @@ export function SettingsPage({ onLoggedOut }: { onLoggedOut: () => Promise<void>
           <DesktopAppSection />
           <ProviderSection />
           <UsageSection />
+          <BackupSection />
           <AccountSection onLoggedOut={onLoggedOut} />
         </div>
       </div>

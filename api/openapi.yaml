@@ -971,6 +971,43 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /backup/agents:
+    get:
+      operationId: exportAgents
+      tags: [settings]
+      description: |
+        Every agent's configuration as one file: settings, instructions and personality, memories,
+        tasks, the connections it may use (by name) and its standing approvals. No secrets,
+        messages, files or skills.
+      responses:
+        "200":
+          description: The backup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentsBackup" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: restoreAgents
+      tags: [settings]
+      description: |
+        Restore agents from a backup. Agents whose name is already taken are skipped, so nothing
+        is overwritten. Connections are matched by name; tasks and approvals that need a
+        connection this server doesn't have, and one-off tasks already past, are left out (the
+        result says which).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentsBackup" }
+      responses:
+        "200":
+          description: What was restored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RestoreResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /push/config:
     get:
       operationId: getPushConfig
@@ -1840,6 +1877,105 @@ components:
       properties:
         description: { type: string, minLength: 1, maxLength: 1024 }
         instructions: { type: string, minLength: 1 }
+
+    AgentsBackup:
+      type: object
+      required: [format, version, exportedAt, agents]
+      properties:
+        format: { type: string, enum: [openbot-agents] }
+        version: { type: integer, description: "1" }
+        exportedAt: { type: string, format: date-time }
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/AgentBackup" }
+
+    AgentBackup:
+      type: object
+      required: [name, instructions, personality, model, language, notifications, trustMode, admin, memories, tasks, connections, approvals]
+      properties:
+        name: { type: string }
+        instructions: { type: string }
+        personality: { type: string }
+        model: { type: string }
+        language: { type: string }
+        notifications: { type: boolean }
+        trustMode: { type: string, enum: [ask, trusted] }
+        admin: { type: boolean }
+        memories:
+          type: array
+          items: { type: string }
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/TaskBackup" }
+        connections:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectionRef" }
+        approvals:
+          type: array
+          items: { $ref: "#/components/schemas/ApprovalBackup" }
+
+    TaskBackup:
+      type: object
+      required: [name, purpose, kind, enabled]
+      properties:
+        name: { type: string }
+        purpose: { type: string }
+        kind: { type: string, enum: [cron, once, signal] }
+        cron: { type: string }
+        at: { type: string, format: date-time }
+        check: { type: string }
+        enabled: { type: boolean }
+        signal: { $ref: "#/components/schemas/TaskBackupSignal" }
+
+    TaskBackupSignal:
+      type: object
+      required: [account, type, match]
+      properties:
+        account: { type: string, description: The connection's name }
+        type: { type: string }
+        match:
+          type: object
+          additionalProperties: { type: string }
+
+    ConnectionRef:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+
+    ApprovalBackup:
+      type: object
+      required: [action, label, match]
+      properties:
+        action:
+          type: string
+          description: "tool:<name>, or connector:<tool> with the connection in account"
+        account: { type: string, description: The connection's name, for connector actions }
+        label: { type: string }
+        match:
+          type: object
+          additionalProperties: { type: string }
+
+    RestoreResult:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/RestoredAgent" }
+
+    RestoredAgent:
+      type: object
+      required: [name, restored, notes]
+      properties:
+        name: { type: string }
+        agentId: { type: string }
+        restored: { type: boolean }
+        notes:
+          type: array
+          items: { type: string }
+          description: What was left out, and why
 
     ConnectorField:
       type: object

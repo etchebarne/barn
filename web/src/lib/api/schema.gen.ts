@@ -735,6 +735,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backup/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every agent's configuration as one file: settings, instructions and personality, memories,
+         *     tasks, the connections it may use (by name) and its standing approvals. No secrets,
+         *     messages, files or skills.
+         */
+        get: operations["exportAgents"];
+        put?: never;
+        /**
+         * @description Restore agents from a backup. Agents whose name is already taken are skipped, so nothing
+         *     is overwritten. Connections are matched by name; tasks and approvals that need a
+         *     connection this server doesn't have, and one-off tasks already past, are left out (the
+         *     result says which).
+         */
+        post: operations["restoreAgents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/config": {
         parameters: {
             query?: never;
@@ -1368,6 +1395,74 @@ export interface components {
         SaveSkillRequest: {
             description: string;
             instructions: string;
+        };
+        AgentsBackup: {
+            /** @enum {string} */
+            format: "openbot-agents";
+            /** @description 1 */
+            version: number;
+            /** Format: date-time */
+            exportedAt: string;
+            agents: components["schemas"]["AgentBackup"][];
+        };
+        AgentBackup: {
+            name: string;
+            instructions: string;
+            personality: string;
+            model: string;
+            language: string;
+            notifications: boolean;
+            /** @enum {string} */
+            trustMode: "ask" | "trusted";
+            admin: boolean;
+            memories: string[];
+            tasks: components["schemas"]["TaskBackup"][];
+            connections: components["schemas"]["ConnectionRef"][];
+            approvals: components["schemas"]["ApprovalBackup"][];
+        };
+        TaskBackup: {
+            name: string;
+            purpose: string;
+            /** @enum {string} */
+            kind: "cron" | "once" | "signal";
+            cron?: string;
+            /** Format: date-time */
+            at?: string;
+            check?: string;
+            enabled: boolean;
+            signal?: components["schemas"]["TaskBackupSignal"];
+        };
+        TaskBackupSignal: {
+            /** @description The connection's name */
+            account: string;
+            type: string;
+            match: {
+                [key: string]: string;
+            };
+        };
+        ConnectionRef: {
+            name: string;
+            type: string;
+        };
+        ApprovalBackup: {
+            /** @description tool:<name>, or connector:<tool> with the connection in account */
+            action: string;
+            /** @description The connection's name */
+            account?: string;
+            label: string;
+            match: {
+                [key: string]: string;
+            };
+        };
+        RestoreResult: {
+            agents: components["schemas"]["RestoredAgent"][];
+        };
+        RestoredAgent: {
+            name: string;
+            agentId?: string;
+            restored: boolean;
+            /** @description What was left out, and why */
+            notes: string[];
         };
         ConnectorField: {
             key: string;
@@ -3285,6 +3380,53 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    exportAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The backup */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentsBackup"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    restoreAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentsBackup"];
+            };
+        };
+        responses: {
+            /** @description What was restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
         };
     };
     getPushConfig: {
