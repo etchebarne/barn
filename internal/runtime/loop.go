@@ -42,7 +42,11 @@ type loop struct {
 	fresh   map[string]bool   // messages the agent was shown in the current turn
 	sent    map[string]string // chat + text + files → message id, for messages sent this turn
 	aside   []model.Message   // shown to the model on its next call only, never stored
-	images  []string          // image attachments of the event being rendered
+	// turnChars adds up the current turn's tool results, to keep them within maxTurnResults.
+	turnChars int
+	// reads remembers the parts of files the agent has read since its last compaction.
+	reads  map[string]readState
+	images []string // image attachments of the event being rendered
 }
 
 func (l *loop) poke() {
@@ -126,6 +130,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 	l.fresh = map[string]bool{}
 	l.sent = map[string]string{}
 	l.aside = nil
+	l.turnChars = 0
 
 	added, err := l.consume(ctx, events)
 	if err != nil {
@@ -186,7 +191,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 				spoke = spoke || ok
 			} else {
 				result, ok = l.runTool(ctx, agent, call)
-				result = l.maskSecrets(ctx, agent.ID, result)
+				result = l.limitResult(ctx, agent, call, l.maskSecrets(ctx, agent.ID, result))
 			}
 			asks := call.Function.Name == toolAskUser || call.Function.Name == toolConnectApp || call.Function.Name == toolRequestSecret
 			if ok && (asks || call.Function.Name == toolSendMessage || call.Function.Name == toolReact) {

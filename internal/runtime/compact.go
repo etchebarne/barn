@@ -101,6 +101,8 @@ func (l *loop) compact(ctx context.Context, agent store.Agent, limit int) error 
 	if err := l.m.store.Compact(ctx, agent.ID, entries[cut].ID, summary); err != nil {
 		return err
 	}
+	// What the agent read may have been summarized away: let it read files again.
+	l.reads = nil
 	// The cache restarts here anyway: a good moment to bring memories in the prompt up to date.
 	return l.m.store.InvalidatePrompt(ctx, agent.ID)
 }

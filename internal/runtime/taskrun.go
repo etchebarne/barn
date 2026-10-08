@@ -88,7 +88,7 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 
 	l.m.setActivity(agent.ID, view.Working("running "+task.Name))
 	defer l.m.setActivity(agent.ID, view.Idle())
-	l.fresh, l.sent, l.aside = map[string]bool{}, map[string]string{}, nil
+	l.fresh, l.sent, l.aside, l.turnChars = map[string]bool{}, map[string]string{}, nil, 0
 
 	msgs, err := l.head(ctx, agent)
 	if err != nil {
@@ -134,7 +134,7 @@ func (l *loop) runTask(ctx context.Context, taskID string, events []store.Event)
 				}
 			} else {
 				result, ok = l.runTool(ctx, agent, call)
-				result = l.maskSecrets(ctx, agent.ID, result)
+				result = l.limitResult(ctx, agent, call, l.maskSecrets(ctx, agent.ID, result))
 				if ok {
 					if line := l.reportLine(ctx, agent, call); line != "" {
 						report = append(report, line)

@@ -71,14 +71,14 @@ const (
 
 	defaultCommandTimeout = 2 * time.Minute
 	maxCommandTimeout     = 15 * time.Minute
-	maxReadBytes          = 200_000
 )
 
 var (
 	runCommandTool = function(toolRunCommand,
 		"Run a shell command (bash) on your own Linux computer: a Debian sandbox where you're root. "+
 			"Install what you need (apt, pip, npm). Output (stdout and stderr) is returned; very long "+
-			"output is clipped in the middle, so redirect to a file when you need all of it. For "+
+			"output is clipped in the middle and the whole of it saved to a file you can grep or read "+
+			"in pages, so don't rerun a command to see more, and don't pipe through head/tail. For "+
 			"long-running jobs, start them in the background (nohup … &) and check on them later.",
 		`{
 			"type": "object",
@@ -92,10 +92,16 @@ var (
 		}`)
 
 	readFileTool = function(toolReadFile,
-		"Read a text file from your sandbox (up to 200 KB).",
+		"Read a text file from your sandbox, a page at a time: up to 2,000 lines or 100k characters "+
+			"per call (lines over 2,000 characters are cut). The result says when there's more and the "+
+			"offset to continue from. Search big files with run_command (grep -n) first, then read the part you need.",
 		`{
 			"type": "object",
-			"properties": {"path": {"type": "string", "description": "Absolute, or relative to /home/agent."}},
+			"properties": {
+				"path": {"type": "string", "description": "Absolute, or relative to /home/agent."},
+				"offset": {"type": "integer", "description": "Line to start from (1-based). Default 1."},
+				"limit": {"type": "integer", "description": "How many lines. Default and max 2000."}
+			},
 			"required": ["path"],
 			"additionalProperties": false
 		}`)
@@ -151,8 +157,12 @@ func (l *loop) sandboxExec(ctx context.Context, agent store.Agent, command, work
 	return l.m.Sandboxes.Exec(ctx, id, command, workdir, stdin, timeout, env)
 }
 
-func commandResult(res sandbox.Result) string {
+func commandResult(res sandbox.Result, fullOutput string) string {
 	out := map[string]any{"exit_code": res.ExitCode, "output": res.Output}
+	if fullOutput != "" {
+		out["full_output"] = fullOutput
+		out["full_note"] = "The output was clipped in the middle; all of it is in that file. Search it (grep -n) or read it in pages instead of rerunning."
+	}
 	if res.TimedOut {
 		out["timed_out"] = true
 		out["note"] = "The command hit its timeout and was killed."
@@ -189,27 +199,22 @@ func (l *loop) runSandboxTool(ctx context.Context, agent store.Agent, name strin
 		if err != nil {
 			return toolError("%v", err), false
 		}
-		return commandResult(res), true
+		full := ""
+		if res.Dropped > 0 {
+			full = l.saveFullOutput(ctx, agent, res.Full)
+		}
+		return commandResult(res, full), true
 
 	case toolReadFile:
 		var a struct {
-			Path string `json:"path"`
+			Path   string `json:"path"`
+			Offset int    `json:"offset"`
+			Limit  int    `json:"limit"`
 		}
 		if err := json.Unmarshal(raw, &a); err != nil || a.Path == "" {
 			return toolError("path is required"), false
 		}
-		p := sandboxPath(a.Path)
-		res, err := l.sandboxExec(ctx, agent, fmt.Sprintf("head -c %d -- %s", maxReadBytes, shellQuote(p)), "", nil, 30*time.Second, nil)
-		if err != nil {
-			return toolError("%v", err), false
-		}
-		if res.ExitCode != 0 {
-			return toolError("couldn't read %s: %s", p, strings.TrimSpace(res.Output)), false
-		}
-		if !utf8.ValidString(res.Output) {
-			return toolError("%s isn't a text file; inspect it with run_command (e.g. file, xxd)", p), false
-		}
-		return toolOK(map[string]any{"path": p, "content": res.Output}), true
+		return l.readFile(ctx, agent, sandboxPath(a.Path), a.Offset, a.Limit)
 
 	case toolWriteFile:
 		var a struct {

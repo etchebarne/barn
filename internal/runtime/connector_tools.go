@@ -86,10 +86,7 @@ func (l *loop) callConnector(ctx context.Context, agent store.Agent, name string
 	if err != nil {
 		return toolError("couldn't encode the result"), false
 	}
-	if len(b) > 60_000 {
-		return toolError("the result is too large (%d bytes); ask for less (filters, fewer items)", len(b)), false
-	}
-	return string(b), true
+	return string(b), true // big results are kept out of the context by limitResult
 }
 
 // writeConnectedApps lists the agent's connected accounts and what can trigger signal tasks.

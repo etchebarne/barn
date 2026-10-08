@@ -175,7 +175,12 @@ type Result struct {
 	Output   string // stdout and stderr, interleaved
 	TimedOut bool
 	Dropped  int // bytes of output dropped from the middle to fit maxOutput
+	// Full is the whole output (up to maxFullOutput) when some was dropped, to save elsewhere.
+	Full []byte
 }
+
+// maxFullOutput bounds how much output a command keeps in memory.
+const maxFullOutput = 10 << 20
 
 // maxOutput is how much command output goes back to the agent (head and tail are kept).
 const maxOutput = 16 << 10
@@ -211,7 +216,8 @@ func (m *Manager) Exec(ctx context.Context, sandboxID, command, workdir string, 
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
 	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
+	capped := &limitWriter{w: &out, max: maxFullOutput}
+	cmd.Stdout, cmd.Stderr = capped, capped
 	start := time.Now()
 	err := cmd.Run()
 	elapsed := time.Since(start)
@@ -231,7 +237,23 @@ func (m *Manager) Exec(ctx context.Context, sandboxID, command, workdir string, 
 		return res, err
 	}
 	res.Output, res.Dropped = clip(out.Bytes())
+	if res.Dropped > 0 {
+		res.Full = out.Bytes()
+	}
 	return res, nil
+}
+
+// limitWriter keeps the first max bytes written to it and discards the rest.
+type limitWriter struct {
+	w   *bytes.Buffer
+	max int
+}
+
+func (l *limitWriter) Write(p []byte) (int, error) {
+	if room := l.max - l.w.Len(); room > 0 {
+		l.w.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
 }
 
 func clip(b []byte) (string, int) {
