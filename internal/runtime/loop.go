@@ -185,6 +185,7 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 
 		asked := false
 		for _, call := range reply.ToolCalls {
+			call = unwrapAppCall(call)
 			call.Function.Arguments = l.fixProse(ctx, agent, call)
 			l.m.setActivity(agent.ID, view.Working(l.activity(ctx, agent, call)))
 			var result string
@@ -357,7 +358,11 @@ func (l *loop) tools(ctx context.Context, agent store.Agent) []model.Tool {
 	if l.m.Connectors != nil {
 		tools = append(tools, connectAppTool())
 	}
-	return append(tools, asModelTools(ctx, l.m, l.connectorTools(ctx, agent))...)
+	apps := asModelTools(ctx, l.m, l.connectorTools(ctx, agent))
+	if lazyApps(apps) {
+		return append(tools, appToolInfoTool, appToolCallTool)
+	}
+	return append(tools, apps...)
 }
 
 // reportError tells the user, in the agent's DM, that the agent couldn't finish its turn. The

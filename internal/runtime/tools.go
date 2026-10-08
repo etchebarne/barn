@@ -277,6 +277,12 @@ func (l *loop) runTool(ctx context.Context, agent store.Agent, call model.ToolCa
 	if call.Function.Name == toolConnectApp && l.m.Connectors != nil {
 		return l.connectApp(ctx, agent, args)
 	}
+	switch call.Function.Name {
+	case toolAppToolInfo:
+		return l.appToolInfo(ctx, agent, args)
+	case toolAppToolCall:
+		return toolError("app_tool_call needs the name of an app tool (like linear__list_issues) and its arguments"), false
+	}
 	if !slices.ContainsFunc(toolsFor(agent, l.m.sandboxesAvailable()), func(t model.Tool) bool { return t.Function.Name == call.Function.Name }) {
 		if _, ok := l.connectorTool(ctx, agent, call.Function.Name); ok {
 			return l.callConnector(ctx, agent, call.Function.Name, args)

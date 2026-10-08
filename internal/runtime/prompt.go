@@ -113,6 +113,7 @@ func (l *loop) buildSystemPrompt(ctx context.Context, agent store.Agent) (prompt
 	if err := l.writeTasks(ctx, &b, agent); err != nil {
 		return "", "", err
 	}
+	l.writeAppCatalog(ctx, &b, agent)
 	if err := l.writeConnectedApps(ctx, &b, agent); err != nil {
 		return "", "", err
 	}
