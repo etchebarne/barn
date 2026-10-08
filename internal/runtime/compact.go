@@ -16,21 +16,37 @@ import (
 // before that keeps steps fast and cheap.
 const DefaultCompactAtTokens = 64_000
 
-// keepFraction of the compaction threshold stays verbatim (the most recent turns).
-const keepFraction = 0.3
+// The most recent part of the context stays verbatim: a share of the model's window, between
+// tailMinTokens and tailMaxTokens, and at least tailMinEntries entries.
+const (
+	tailWindowShare = 0.025
+	tailMinTokens   = 10_000
+	tailMaxTokens   = 25_000
+	tailMinEntries  = 8
+)
+
+// prunable is how big an old tool result must be to be trimmed before summarizing.
+const prunable = 1_000
 
 const compactorPrompt = `You maintain the long-term working memory of an AI agent. You'll get the
 agent's previous summary (if any) and the oldest part of its conversation log, which is about to be
-removed from its context. Write the new summary that replaces both.
+removed from its context. Write the new summary that replaces both: keep everything from the
+previous summary that still matters, and fold the new log in.
 
-Keep, per chat (name the chat and its chat_id):
-- what was discussed and decided, and why
-- open questions, promises the agent made, and work in progress
-- facts about the people and their preferences that matter later
-- prompts the agent asked that are still unanswered
+Use these sections (skip empty ones), as compact Markdown bullets in the agent's own voice
+("I told Martin…"):
+- **Goals**: what the user wants from me, ongoing.
+- **Done**: what I finished, as dated past-tense facts ("Oct 8: posted the release notes to
+  #general"), so I don't redo it.
+- **In progress**: work started but not finished, and what's next.
+- **Promises and open questions**: what I said I'd do, questions I asked that are still
+  unanswered, per chat (name the chat and its chat_id).
+- **Decisions**: what was decided, and why.
+- **People and preferences**: facts about the people that matter later.
+- **Errors and fixes**: what went wrong and what worked.
+- **Files and places**: paths, URLs, ids I'll need again.
 
-Drop greetings, filler, and anything superseded. Write compact Markdown bullets, under 1,200 words,
-in the agent's own voice ("I told Martin…"). Output only the summary.`
+Drop greetings, filler, and anything superseded. Stay under 1,500 words. Output only the summary.`
 
 // estimateTokens approximates a request's prompt size. JSON overhead makes this an overestimate,
 // which errs on the side of compacting early.
@@ -44,12 +60,35 @@ func estimateTokens(req model.Request) int {
 func (l *loop) maybeCompact(ctx context.Context, agent store.Agent) {
 	limit := l.m.compactAt(agent.Model)
 	req, err := l.request(ctx, agent)
-	if err != nil || estimateTokens(req) < limit {
+	if err != nil || l.tokens(req) < limit {
 		return
 	}
 	if err := l.compact(ctx, agent, limit); err != nil && ctx.Err() == nil {
 		logger(agent.ID).Warn("compaction failed; continuing with the full context", "err", err)
 	}
+}
+
+// tokens estimates a request's prompt size, corrected by how the last estimate compared to
+// what the provider actually reported.
+func (l *loop) tokens(req model.Request) int {
+	est := estimateTokens(req)
+	if l.calibration > 0 {
+		return int(float64(est) * l.calibration)
+	}
+	return est
+}
+
+// calibrate records how a request's estimate compared to the provider's real count.
+func (l *loop) calibrate(req model.Request, real int) {
+	if est := estimateTokens(req); real > 0 && est > 0 {
+		l.calibration = float64(real) / float64(est)
+	}
+}
+
+// tailTokens is how much of the most recent context stays verbatim.
+func (l *loop) tailTokens(agent store.Agent, limit int) int {
+	tail := int(float64(l.m.contextWindow(agent.Model)) * tailWindowShare)
+	return min(max(tail, tailMinTokens), tailMaxTokens, limit/2)
 }
 
 func (l *loop) compact(ctx context.Context, agent store.Agent, limit int) error {
@@ -65,9 +104,36 @@ func (l *loop) compact(ctx context.Context, agent store.Agent, limit int) error 
 		}
 		sizes[i] = len(e.Entry) / 4
 	}
-	cut := compactionCut(msgs, sizes, int(float64(limit)*keepFraction))
+	cut := compactionCut(msgs, sizes, l.tailTokens(agent, limit))
 	if cut <= 0 {
 		return nil // nothing old enough to compact
+	}
+
+	// First the cheap way: trim old big tool results. If that frees enough, no summary needed.
+	if pruned := pruneToolResults(msgs[:cut]); len(pruned) > 0 {
+		replace := map[string]json.RawMessage{}
+		total := 0
+		for i := range msgs {
+			if i < cut {
+				if _, ok := pruned[i]; ok {
+					b, err := json.Marshal(msgs[i])
+					if err != nil {
+						return err
+					}
+					replace[entries[i].ID] = b
+					sizes[i] = len(b) / 4
+				}
+			}
+			total += sizes[i]
+		}
+		if err := l.m.store.ReplaceContextEntries(ctx, agent.ID, replace); err != nil {
+			return err
+		}
+		l.reads = nil
+		logger(agent.ID).Info("trimmed old tool results", "count", len(replace), "context_tokens", total)
+		if float64(total)*max(l.calibration, 0.5) < float64(limit)*0.7 {
+			return nil
+		}
 	}
 
 	previous, err := l.m.store.ContextSummary(ctx, agent.ID)
@@ -82,18 +148,19 @@ func (l *loop) compact(ctx context.Context, agent store.Agent, limit int) error 
 	for _, m := range msgs[:cut] {
 		renderForSummary(&transcript, m)
 	}
+	text := l.maskSecrets(ctx, agent.ID, transcript.String())
 
 	l.m.setActivity(agent.ID, view.Working("tidying up my notes"))
 	resp, err := l.m.chat(ctx, agent.ID, "compaction", model.Request{
 		Session:   "openbot-agent-" + agent.ID,
 		Model:     agent.Model,
-		Messages:  []model.Message{model.Text("system", compactorPrompt), model.Text("user", transcript.String())},
-		MaxTokens: 4000,
+		Messages:  []model.Message{model.Text("system", compactorPrompt), model.Text("user", text)},
+		MaxTokens: 6000,
 	})
 	if err != nil {
 		return err
 	}
-	summary := strings.TrimSpace(resp.Message.Text())
+	summary := l.maskSecrets(ctx, agent.ID, strings.TrimSpace(resp.Message.Text()))
 	if summary == "" {
 		return fmt.Errorf("compactor returned an empty summary")
 	}
@@ -120,6 +187,8 @@ func compactionCut(msgs []model.Message, sizes []int, keep int) int {
 		}
 		cut = i
 	}
+	// Keep at least a few entries, however big.
+	cut = min(cut, max(len(msgs)-tailMinEntries, 0))
 	// Move forward to the next turn boundary (an incoming event); if none, back to the last one.
 	for i := cut; i < len(msgs); i++ {
 		if msgs[i].Role == "user" {
@@ -156,4 +225,53 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// pruneToolResults replaces big tool results with a one-line stub (the call they answer stays,
+// so the context remains valid) and returns which ones it changed.
+func pruneToolResults(msgs []model.Message) map[int]bool {
+	calls := map[string]model.ToolCall{}
+	changed := map[int]bool{}
+	for i, m := range msgs {
+		for _, tc := range m.ToolCalls {
+			calls[tc.ID] = tc
+		}
+		if m.Role != "tool" || len(m.Text()) <= prunable {
+			continue
+		}
+		stub := toolResultStub(calls[m.ToolCallID], m.Text())
+		msgs[i].Content = &stub
+		changed[i] = true
+	}
+	return changed
+}
+
+// toolResultStub sums up a trimmed tool result.
+func toolResultStub(call model.ToolCall, result string) string {
+	name := call.Function.Name
+	if name == "" {
+		name = "tool"
+	}
+	var parsed struct {
+		Result struct {
+			ExitCode   *int   `json:"exit_code"`
+			FullOutput string `json:"full_output"`
+			FullResult string `json:"full_result"`
+			Path       string `json:"path"`
+		} `json:"result"`
+	}
+	_ = json.Unmarshal([]byte(result), &parsed)
+	var b strings.Builder
+	fmt.Fprintf(&b, "[trimmed to save space: %s result, %d characters", name, len(result))
+	if args := strings.TrimSpace(call.Function.Arguments); args != "" && args != "{}" {
+		fmt.Fprintf(&b, "; called with %s", truncate(args, 200))
+	}
+	if r := parsed.Result; r.ExitCode != nil {
+		fmt.Fprintf(&b, "; exit %d", *r.ExitCode)
+	}
+	if p := parsed.Result.FullOutput + parsed.Result.FullResult; p != "" {
+		fmt.Fprintf(&b, "; saved in %s", p)
+	}
+	b.WriteString(". Run it again if you need it.]")
+	return b.String()
 }

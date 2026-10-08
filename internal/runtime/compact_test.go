@@ -18,13 +18,21 @@ func TestCompactionCut(t *testing.T) {
 	msgs := []model.Message{user, call, res, reply, user, call, res, reply, user, reply}
 	sizes := []int{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}
 
-	// Keeping ~25 tokens lands mid-turn (index 7); the cut moves forward to the next turn start.
-	if got := compactionCut(msgs, sizes, 25); got != 8 {
-		t.Fatalf("cut = %d, want 8", got)
+	// Keeping ~25 tokens would land mid-turn (index 7), but at least 8 entries stay, so the cut
+	// can't pass index 2; it moves forward to the next turn start, 4.
+	if got := compactionCut(msgs, sizes, 25); got != 4 {
+		t.Fatalf("cut = %d, want 4", got)
 	}
-	// Keeping ~45 tokens lands on index 5 (a tool call); next turn start is 8.
-	if got := compactionCut(msgs, sizes, 45); got != 8 {
-		t.Fatalf("cut = %d, want 8", got)
+	// In a longer history, a budget worth more than 8 entries decides: ~125 tokens keeps 12
+	// entries, so the cut is index 8, a turn start.
+	long := append(append([]model.Message{}, msgs...), msgs...)
+	longSizes := append(append([]int{}, sizes...), sizes...)
+	if got := compactionCut(long, longSizes, 125); got != 8 {
+		t.Fatalf("long: cut = %d, want 8", got)
+	}
+	// A smaller budget still keeps 8 entries: the cut can't pass 12, and moves on to 14.
+	if got := compactionCut(long, longSizes, 25); got != 14 {
+		t.Fatalf("long, small budget: cut = %d, want 14", got)
 	}
 	// Keeping everything means nothing to compact.
 	if got := compactionCut(msgs, sizes, 1000); got != 0 {
@@ -151,5 +159,30 @@ func TestMemories(t *testing.T) {
 	f.waitIdle(t)
 	if mems, _ := f.store.Memories(context.Background(), f.agent.ID); len(mems) != 0 {
 		t.Fatalf("expected the memory to be forgotten, have %+v", mems)
+	}
+}
+
+func TestPruneToolResults(t *testing.T) {
+	call := toolCall(toolRunCommand, map[string]string{"command": "npm test"})
+	call.ToolCalls[0].ID = "c1"
+	big := `{"ok":true,"result":{"exit_code":1,"output":"` + strings.Repeat("FAIL ", 400) + `","full_output":"/tmp/openbot/out-1.log"}}`
+	small := `{"ok":true,"result":{"exit_code":0,"output":"ok"}}`
+	msgs := []model.Message{
+		model.Text("user", "run the tests"), call,
+		{Role: "tool", Content: &big, ToolCallID: "c1"},
+		{Role: "tool", Content: &small, ToolCallID: "c2"},
+	}
+	changed := pruneToolResults(msgs)
+	if len(changed) != 1 || !changed[2] {
+		t.Fatalf("only the big result should be trimmed: %v", changed)
+	}
+	stub := msgs[2].Text()
+	for _, want := range []string{"run_command", "npm test", "exit 1", "/tmp/openbot/out-1.log", "Run it again"} {
+		if !strings.Contains(stub, want) {
+			t.Fatalf("stub %q should mention %q", stub, want)
+		}
+	}
+	if msgs[2].ToolCallID != "c1" || len(msgs[1].ToolCalls) != 1 || msgs[3].Text() != small {
+		t.Fatal("calls and small results must stay as they are")
 	}
 }

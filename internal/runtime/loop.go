@@ -45,8 +45,10 @@ type loop struct {
 	// turnChars adds up the current turn's tool results, to keep them within maxTurnResults.
 	turnChars int
 	// reads remembers the parts of files the agent has read since its last compaction.
-	reads  map[string]readState
-	images []string // image attachments of the event being rendered
+	reads map[string]readState
+	// calibration is the provider's real prompt size over openbot's estimate, from the last call.
+	calibration float64
+	images      []string // image attachments of the event being rendered
 }
 
 func (l *loop) poke() {
@@ -152,6 +154,9 @@ func (l *loop) turn(ctx context.Context, events []store.Event) {
 			return
 		}
 		resp, err := l.m.chat(ctx, agent.ID, "turn", req)
+		if err == nil {
+			l.calibrate(req, resp.Usage.PromptTokens)
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				log.Warn("model call failed", "err", err)

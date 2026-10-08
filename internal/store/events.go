@@ -137,3 +137,16 @@ func (s *Store) DropPendingEvents(ctx context.Context, agentID string, drop func
 	}
 	return nil
 }
+
+// ReplaceContextEntries rewrites some of an agent's context entries in place (by id).
+func (s *Store) ReplaceContextEntries(ctx context.Context, agentID string, entries map[string]json.RawMessage) error {
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		for id, entry := range entries {
+			if _, err := tx.ExecContext(ctx, `UPDATE context_entries SET entry = ? WHERE agent_id = ? AND id = ?`,
+				string(entry), agentID, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
