@@ -61,7 +61,6 @@ func TestBackupRoundTrip(t *testing.T) {
 	if _, err := dst.store.CreateAccount(ctx, store.ConnectorAccount{Type: "slack", Name: "work slack", Config: json.RawMessage(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
-	dst.rt.Timezone = func(context.Context) *time.Location { return time.UTC }
 	res, err := dst.rt.RestoreAgents(ctx, backup)
 	if err != nil {
 		t.Fatal(err)

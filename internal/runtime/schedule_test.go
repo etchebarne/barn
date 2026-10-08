@@ -123,7 +123,6 @@ func TestUnchangedChecksAreRecorded(t *testing.T) {
 func TestUpcoming(t *testing.T) {
 	ctx := context.Background()
 	f := setup(t)
-	f.rt.Timezone = func(context.Context) *time.Location { return time.UTC }
 	now := time.Now()
 	mk := func(task store.Task) store.Task {
 		next, err := nextFire(task, now, time.UTC)
